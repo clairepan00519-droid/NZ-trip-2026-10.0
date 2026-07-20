@@ -109,7 +109,7 @@ function applyStoreUpdate(key, jsonStr){
     case 'nz_order': orderStore = parsed; break;
     case 'nz_block_order': blockOrderStore = parsed; break;
     case 'nz_route_maps': routeMapStore = parsed; break;
-    case 'nz_pack': packData = parsed; if (typeof renderPackList === 'function') renderPackList(); return;
+    case 'nz_pack': packData = migratePackCategoryNames(parsed); persistPack(); if (typeof renderPackList === 'function') renderPackList(); return;
     case 'nz_shop': shopData = parsed; if (typeof renderShopList === 'function') renderShopList(); return;
     case 'nz_rules': rulesData = parsed; if (typeof renderRulesList === 'function') renderRulesList(); return;
     case 'nz_docs': docsData = parsed; if (typeof renderDocsList === 'function') renderDocsList(); return;
@@ -1152,12 +1152,15 @@ const defaultPackData = {
   '👜 手提行李':[{name:'Sony A7C2 相機', qty:1, checked:false},{name:'大光圈風景鏡頭／變焦鏡', qty:2, checked:false},{name:'大容量記憶卡', qty:2, checked:false},{name:'機上保暖薄毯/外套', qty:1, checked:false}],
   '🧳 託運行李':[{name:'Gore-Tex 防風防水外套', qty:1, checked:false},{name:'刷毛／羽絨保暖中層', qty:2, checked:false},{name:'防潑水保暖登山長褲', qty:3, checked:false},{name:'抓地力登山鞋（需清潔）', qty:1, checked:false},{name:'保暖毛帽＋厚手套＋圍巾', qty:1, checked:false}]
 };
-let packData = JSON.parse(localStorage.getItem('nz_pack')) || defaultPackData;
-// 相容舊資料：把舊版類別名稱「🧳 托運行李（衣物防寒）」自動搬到新的簡化名稱「🧳 託運行李」
-if (packData['🧳 托運行李（衣物防寒）'] && !packData['🧳 託運行李']) {
-  packData['🧳 託運行李'] = packData['🧳 托運行李（衣物防寒）'];
-  delete packData['🧳 托運行李（衣物防寒）'];
+function migratePackCategoryNames(data){
+  // 相容舊資料：把舊版類別名稱「🧳 托運行李（衣物防寒）」自動搬到新的簡化名稱「🧳 託運行李」
+  if (data && data['🧳 托運行李（衣物防寒）']) {
+    if (!data['🧳 託運行李']) data['🧳 託運行李'] = data['🧳 托運行李（衣物防寒）'];
+    delete data['🧳 托運行李（衣物防寒）'];
+  }
+  return data;
 }
+let packData = migratePackCategoryNames(JSON.parse(localStorage.getItem('nz_pack')) || defaultPackData);
 function persistPack(){ safeSetItem('nz_pack', packData); }
 
 const defaultShopData = [{name:'Manuka 麥蘆卡蜂蜜', qty:1, checked:false, img:null, cat:'supermarket', location:''},{name:'美麗諾羊毛製品', qty:1, checked:false, img:null, cat:'souvenir', location:''},{name:'Whittaker\'s 巧克力', qty:1, checked:false, img:null, cat:'supermarket', location:''}];
