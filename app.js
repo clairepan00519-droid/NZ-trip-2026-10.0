@@ -1,3 +1,4 @@
+
 /* ============ 家人即時共享同步（Supabase，選用功能，免信用卡）============
    這個網頁預設仍是純前端靜態頁面，資料只存在「這台裝置的這個瀏覽器」。
    若想讓一起旅行的家人打開同一個網址，就能「即時」看到你新增的筆記、
@@ -1024,7 +1025,7 @@ async function refreshRainRadar(){
     if(timeEl) timeEl.textContent = '⚠️ 目前離線，無法取得最新衛星雲圖；地圖底圖若先前瀏覽過，離線時仍可能可用。';
     return;
   }
-  if(timeEl) timeEl.textContent = '衛星雲圖抓取中...';
+  if(timeEl) timeEl.textContent = '衛星雲圖資料抓取中...';
   try{
     const res = await fetch('https://api.rainviewer.com/public/weather-maps.json');
     if(!res.ok) throw new Error('HTTP '+res.status);
@@ -1152,12 +1153,15 @@ const defaultPackData = {
   '🧳 託運行李':[{name:'Gore-Tex 防風防水外套', qty:1, checked:false},{name:'刷毛／羽絨保暖中層', qty:2, checked:false},{name:'防潑水保暖登山長褲', qty:3, checked:false},{name:'抓地力登山鞋（需清潔）', qty:1, checked:false},{name:'保暖毛帽＋厚手套＋圍巾', qty:1, checked:false}]
 };
 let packData = JSON.parse(localStorage.getItem('nz_pack')) || defaultPackData;
+// 相容舊資料：把舊版類別名稱「🧳 托運行李（衣物防寒）」自動搬到新的簡化名稱「🧳 託運行李」
+if (packData['🧳 托運行李（衣物防寒）'] && !packData['🧳 託運行李']) {
+  packData['🧳 託運行李'] = packData['🧳 托運行李（衣物防寒）'];
+  delete packData['🧳 托運行李（衣物防寒）'];
+}
 function persistPack(){ safeSetItem('nz_pack', packData); }
 
-const defaultShopData = [{name:'Manuka 麥蘆卡蜂蜜', qty:1, checked:false, imgs:[], cat:'supermarket', location:''},{name:'美麗諾羊毛製品', qty:1, checked:false, imgs:[], cat:'souvenir', location:''},{name:'Whittaker\'s 巧克力', qty:1, checked:false, imgs:[], cat:'supermarket', location:''}];
+const defaultShopData = [{name:'Manuka 麥蘆卡蜂蜜', qty:1, checked:false, img:null, cat:'supermarket', location:''},{name:'美麗諾羊毛製品', qty:1, checked:false, img:null, cat:'souvenir', location:''},{name:'Whittaker\'s 巧克力', qty:1, checked:false, img:null, cat:'supermarket', location:''}];
 let shopData = JSON.parse(localStorage.getItem('nz_shop')) || defaultShopData;
-/* 相容舊資料：舊版每個項目只有單一 img 欄位，改版後改為 imgs 陣列（可放多張照片，例如想比較不同牌子的優格）*/
-shopData.forEach(it=>{ if(!it.imgs){ it.imgs = it.img ? [it.img] : []; } });
 function persistShop(){ safeSetItem('nz_shop', shopData); }
 const SHOP_CATS = {supermarket:{label:'🛒 超市', color:'#2f8a52'}, souvenir:{label:'🎁 紀念品', color:'#c1502f'}};
 
@@ -1171,61 +1175,71 @@ function changeQty(cat,i,delta){ packData[cat][i].qty = Math.max(1, packData[cat
 function delPack(cat,i){ packData[cat].splice(i,1); persistPack(); renderPackList(); }
 function addPackItem(){ const cat = document.getElementById('packCatSelect').value; const input = document.getElementById('newPackItem'); if(input && input.value.trim()){ packData[cat].push({name:input.value.trim(), qty:1, checked:false}); persistPack(); renderPackList(); } }
 
+function shopImgs(it){
+  // 相容舊資料：舊格式是單張 img 欄位，這裡統一轉成 imgs 陣列
+  if(Array.isArray(it.imgs)) return it.imgs;
+  return it.img ? [it.img] : [];
+}
 function renderShopList(){
   const wrap = document.getElementById('shopListWrap');
   if(!wrap) return;
-  wrap.innerHTML = Object.keys(SHOP_CATS).map(catKey=>{
-    const catInfo = SHOP_CATS[catKey];
-    const rows = shopData.map((it,i)=>({it,i})).filter(({it})=>(it.cat||'supermarket')===catKey);
-    const itemsHTML = rows.map(({it,i})=>{
-      const imgs = it.imgs || [];
-      const thumbsHTML = imgs.map((img,ii)=>`<div style="position:relative; display:inline-block;"><img src="${img}" style="width:36px; height:36px; object-fit:cover; border-radius:6px; margin-right:4px;" onclick="openAttachModal('${img}')"><button onclick="removeShopImg(${i},${ii})" style="position:absolute; top:-4px; right:-2px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:16px; height:16px; font-size:8px; cursor:pointer;">✕</button></div>`).join('');
-      return `<div class="pack-item ${it.checked?'checked':''}" style="flex-wrap:wrap; align-items:center;"><input type="checkbox" ${it.checked?'checked':''} onchange="toggleShop(${i})">${thumbsHTML}<div class="name">${it.name}</div><div class="qty"><button onclick="document.getElementById('shopFile-${i}').click()" style="background:transparent; font-size:14px; margin-right:4px; border:none; cursor:pointer;">📷</button><button onclick="changeShopQty(${i},-1)">－</button><span>${it.qty}</span><button onclick="changeShopQty(${i},1)">＋</button></div><button class="del" onclick="delShop(${i})">✕</button><input type="file" id="shopFile-${i}" accept="image/*" multiple style="display:none" onchange="handleShopPhoto(event, ${i})"><div style="flex-basis:100%; display:flex; gap:6px; align-items:center; margin-top:6px; padding-left:28px;"><input type="text" value="${(it.location||'').replace(/"/g,'&quot;')}" placeholder="建議購買位置或其他資訊..." onchange="setShopLocation(${i}, this.value)" style="flex:1; border:1.5px solid var(--line); border-radius:999px; padding:4px 10px; font-size:11px; font-family:inherit; min-width:120px;"></div></div>`;
-    }).join('');
-    return `<div class="pack-cat" style="margin-bottom:16px;"><div class="cat-title" style="color:${catInfo.color};">${catInfo.label}購買清單</div>${itemsHTML || `<div class="source-note" style="margin-bottom:8px;">尚無項目</div>`}<div class="add-row"><input type="text" id="newShopItem-${catKey}" placeholder="新增項目..."><button onclick="addShopItem('${catKey}')">＋</button></div></div>`;
-  }).join('');
+  wrap.innerHTML = shopData.map((it,i)=>{
+    const cat = SHOP_CATS[it.cat] || SHOP_CATS.supermarket;
+    const imgs = shopImgs(it);
+    const photosHTML = imgs.length ? `<div style="flex-basis:100%; display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; padding-left:28px;">${imgs.map((src,pi)=>`<div style="position:relative; display:inline-block;"><img src="${src}" style="width:44px; height:44px; object-fit:cover; border-radius:6px;" onclick="openAttachModal('${src}')"><button onclick="removeShopImg(${i},${pi})" style="position:absolute; top:-4px; right:-4px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:16px; height:16px; font-size:8px; cursor:pointer;">✕</button></div>`).join('')}</div>` : '';
+    return `<div class="pack-item ${it.checked?'checked':''}" style="flex-wrap:wrap; align-items:center;"><input type="checkbox" ${it.checked?'checked':''} onchange="toggleShop(${i})"><div class="name">${it.name}</div><div class="qty"><button onclick="document.getElementById('shopFile-${i}').click()" style="background:transparent; font-size:14px; margin-right:4px; border:none; cursor:pointer;">📷</button><button onclick="changeShopQty(${i},-1)">－</button><span>${it.qty}</span><button onclick="changeShopQty(${i},1)">＋</button></div><button class="del" onclick="delShop(${i})">✕</button><input type="file" id="shopFile-${i}" accept="image/*" multiple style="display:none" onchange="handleShopPhoto(event, ${i})"><div style="flex-basis:100%; display:flex; gap:6px; align-items:center; margin-top:6px; padding-left:28px;"><select onchange="setShopCat(${i}, this.value)" style="border:1.5px solid var(--line); border-radius:999px; padding:4px 8px; font-size:11px; font-family:inherit; color:${cat.color}; font-weight:700;">${Object.keys(SHOP_CATS).map(k=>`<option value="${k}" ${it.cat===k?'selected':''}>${SHOP_CATS[k].label}</option>`).join('')}</select><input type="text" value="${(it.location||'').replace(/"/g,'&quot;')}" placeholder="建議購買位置或其他資訊..." onchange="setShopLocation(${i}, this.value)" style="flex:1; border:1.5px solid var(--line); border-radius:999px; padding:4px 10px; font-size:11px; font-family:inherit; min-width:120px;"></div>${photosHTML}</div>`;
+  }).join('') + `<div class="add-row"><input type="text" id="newShopItem" placeholder="新增購物項目..."><button onclick="addShopItem()">＋</button></div>`;
 }
 function handleShopPhoto(e, i){
   const files = Array.from(e.target.files || []);
-  if(files.length){
-    if(!shopData[i].imgs) shopData[i].imgs = [];
-    Promise.all(files.map(fileToDataURL)).then(dataUrls=>{ shopData[i].imgs.push(...dataUrls); persistShop(); renderShopList(); });
-  }
+  if(!files.length) return;
+  if(!Array.isArray(shopData[i].imgs)) shopData[i].imgs = shopImgs(shopData[i]);
+  shopData[i].img = null; // 舊欄位不再使用，統一用 imgs 陣列
+  Promise.all(files.map(f=>fileToDataURL(f))).then(dataUrls=>{
+    shopData[i].imgs.push(...dataUrls);
+    persistShop(); renderShopList();
+  });
   e.target.value='';
 }
-function removeShopImg(i, imgIdx){ shopData[i].imgs.splice(imgIdx,1); persistShop(); renderShopList(); }
+function removeShopImg(i, photoIdx){
+  const imgs = shopImgs(shopData[i]);
+  imgs.splice(photoIdx,1);
+  shopData[i].imgs = imgs;
+  shopData[i].img = null;
+  persistShop(); renderShopList();
+}
 function toggleShop(i){ shopData[i].checked = !shopData[i].checked; persistShop(); renderShopList(); }
 function changeShopQty(i,delta){ shopData[i].qty = Math.max(1, shopData[i].qty+delta); persistShop(); renderShopList(); }
 function delShop(i){ shopData.splice(i,1); persistShop(); renderShopList(); }
-function addShopItem(catKey){ const input = document.getElementById('newShopItem-'+catKey); if(input && input.value.trim()){ shopData.push({name:input.value.trim(), qty:1, checked:false, imgs:[], cat:catKey, location:''}); persistShop(); renderShopList(); } }
+function addShopItem(){ const input = document.getElementById('newShopItem'); if(input && input.value.trim()){ shopData.push({name:input.value.trim(), qty:1, checked:false, imgs:[], cat:'supermarket', location:''}); persistShop(); renderShopList(); } }
+function setShopCat(i, val){ shopData[i].cat = val; persistShop(); }
 function setShopLocation(i, val){ shopData[i].location = val; persistShop(); }
 
 /* ============ CUSTOM TRAVEL RULES ============ */
 const defaultRulesData = [
-  { title: '生物安全申報', desc: '入境卡需誠實申報戶外裝備、登山鞋，鞋底務必清潔。', img: null },
-  { title: '靠左行駛', desc: '右駕靠左通行，山路多彎、單線橋需禮讓標誌方向。', img: null },
-  { title: '國際駕照', desc: '需攜帶台灣駕照＋國際駕照（IDP）。', img: null }
+  { title: '生物安全申報', text: '入境卡需誠實申報戶外裝備、登山鞋，鞋底務必清潔。', img: null },
+  { title: '靠左行駛', text: '右駕靠左通行，山路多彎、單線橋需禮讓標誌方向。', img: null },
+  { title: '國際駕照', text: '需攜帶台灣駕照＋國際駕照（IDP）。', img: null }
 ];
 let rulesData = JSON.parse(localStorage.getItem('nz_rules')) || defaultRulesData;
-/* 相容舊資料：舊版是單一 text 欄位（標題用 <b> 包在文字前面），改版後拆成 title／desc 兩個獨立欄位 */
-rulesData.forEach(r=>{
-  if(r.text !== undefined && r.title === undefined){
-    const m = /^<b>(.*?)<\/b>[：:]?\s*(.*)$/s.exec(r.text || '');
-    if(m){ r.title = m[1]; r.desc = m[2]; } else { r.title = ''; r.desc = r.text || ''; }
-    delete r.text;
-  }
-});
 function persistRules(){ safeSetItem('nz_rules', rulesData); }
 
 function renderRulesList() {
   const wrap = document.getElementById('rulesListWrap');
   if(!wrap) return;
-  wrap.innerHTML = rulesData.map((r, i) => `
+  wrap.innerHTML = rulesData.map((r, i) => {
+    // 相容舊資料：舊格式把標題用 <b>...</b> 包在 text 開頭，這裡拆出來當標題
+    let title = r.title, body = r.text;
+    if(!title && body){
+      const m = body.match(/^<b>(.*?)<\/b>\s*[：:]?\s*/);
+      if(m){ title = m[1]; body = body.slice(m[0].length); }
+    }
+    return `
     <div class="rule-item" style="align-items:flex-start; background:#f9f9f9; padding:10px; border-radius:8px; border:1px solid #eee;">
       <span class="dot" style="margin-top:2px;">●</span>
       <div style="flex:1;">
-        ${r.title ? `<div style="font-weight:900; font-size:13px; margin-bottom:3px; color:var(--ink);">${r.title}</div>` : ''}
-        <span>${r.desc}</span>
+        ${title ? `<div style="font-weight:900; font-size:13.5px; color:var(--ink); margin-bottom:3px;">${title}</div>` : ''}
+        <div style="font-size:12.5px; color:var(--ink-soft); line-height:1.6;">${body}</div>
         <div style="margin-top:8px; display:flex; gap:8px;">
           ${r.img ? `<button onclick="openAttachModal('${r.img}')" style="background:var(--teal); color:#fff; border:none; padding:6px 12px; border-radius:6px; font-size:11.5px; font-weight:700; cursor:pointer; box-shadow:var(--shadow-sm);">🖼️ 檢視附圖</button>
                      <button onclick="removeRuleImg(${i})" style="background:#f2f3ec; color:var(--ink); border:none; padding:6px 12px; border-radius:6px; font-size:11.5px; font-weight:700; cursor:pointer;">✕ 移除</button>` 
@@ -1235,13 +1249,14 @@ function renderRulesList() {
       </div>
       <button class="del" onclick="delRule(${i})" style="margin-top:2px;">✕</button>
     </div>
-  `).join('') + `
-    <div class="add-row" style="margin-bottom:6px;">
+  `;
+  }).join('') + `
+    <div class="add-row" style="flex-direction:column; align-items:stretch; gap:8px;">
       <input type="text" id="newRuleTitle" placeholder="標題（例如：行李限重）...">
-    </div>
-    <div class="add-row">
-      <input type="text" id="newRuleItem" placeholder="內文說明...">
-      <button onclick="addRuleItem()">＋</button>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="newRuleItem" placeholder="內文說明...">
+        <button onclick="addRuleItem()">＋</button>
+      </div>
     </div>
   `;
 }
@@ -1252,7 +1267,7 @@ function addRuleItem() {
   const titleInput = document.getElementById('newRuleTitle');
   const input = document.getElementById('newRuleItem');
   if(input && input.value.trim()){
-    rulesData.push({title: (titleInput && titleInput.value.trim()) || '', desc: input.value.trim(), img: null});
+    rulesData.push({ title: titleInput ? titleInput.value.trim() : '', text: input.value.trim(), img: null });
     persistRules(); renderRulesList();
   }
 }
@@ -1386,7 +1401,7 @@ renderDayContent();
 renderPackList();
 renderShopList();
 
-/* ===== 頁面就緒後的初始化呼叫 (原第二段 inline script) ===== */
+/* ============ 頁面初始化 ============ */
 renderRulesList();
 renderDocsList();
 updateNetStatus();
