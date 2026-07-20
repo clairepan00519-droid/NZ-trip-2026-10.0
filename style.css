@@ -275,3 +275,47 @@ button, .tab-btn, .day-chip, .btn, .guide-header, .sub-spot-header, .spot-subtab
 .bottom-nav button.active{background:linear-gradient(135deg,var(--blue),#7fa0f0); color:#fff; box-shadow:var(--shadow-sm);}
 .empty{text-align:center; padding:24px 10px; color:var(--ink-soft); font-size:12.5px;}
 .svg-map-container { border-radius: var(--r-md); padding: 0; margin-bottom: 12px; overflow: hidden; text-align: center; }
+
+/* ---------- Collapsible packing & shopping groups ---------- */
+.checklist-group{border:1px solid var(--line); border-radius:14px; overflow:hidden; margin-bottom:10px; background:#fff; box-shadow:var(--shadow-sm);}
+.checklist-group-head{width:100%; border:0; padding:12px 14px; display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:10px; font-family:inherit; font-size:13px; font-weight:900; text-align:left; cursor:pointer; color:var(--ink); background:linear-gradient(135deg,#f8faf7,#eef4ff);}
+.checklist-group-head small{font-size:10px; color:var(--ink-soft); background:rgba(255,255,255,.75); padding:3px 7px; border-radius:999px;}
+.checklist-group-head b{font-size:15px; color:var(--blue);}
+.checklist-group-body{display:none; padding:10px 10px 6px;}
+.checklist-group-body.open{display:block; animation:fade .22s ease;}
+.pack-group-0 .checklist-group-head{background:linear-gradient(135deg,#eaf4ff,#f8fbff);}
+.pack-group-1 .checklist-group-head{background:linear-gradient(135deg,#fff2e8,#fffaf4);}
+.pack-group-2 .checklist-group-head{background:linear-gradient(135deg,#f2ecff,#fbf8ff);}
+.shop-supermarket .checklist-group-head{background:linear-gradient(135deg,#e8f7ee,#f7fff9);}
+.shop-souvenir .checklist-group-head{background:linear-gradient(135deg,#fff0e8,#fff9f5);}
+.pill-select{border:1.5px solid var(--line); border-radius:999px; padding:9px 10px; font-size:12px; font-family:inherit; background:#fff; max-width:42%;}
+.shop-item{flex-wrap:wrap; align-items:center;}
+.camera-btn{background:transparent!important; font-size:14px!important; margin-right:4px; border:none!important; cursor:pointer;}
+.shop-extra{flex-basis:100%; padding-left:28px; margin-top:6px;}
+.shop-extra input{width:100%; border:1.5px solid var(--line); border-radius:999px; padding:6px 10px; font-size:11px; font-family:inherit;}
+.shop-photo-row{flex-basis:100%; display:flex; gap:7px; flex-wrap:wrap; margin-top:8px; padding-left:28px;}
+.shop-photo{position:relative; display:inline-block;}
+.shop-photo img{width:58px; height:58px; object-fit:cover; border-radius:9px; cursor:zoom-in; box-shadow:var(--shadow-sm);}
+.shop-photo button{position:absolute; top:-5px; right:-5px; background:rgba(0,0,0,.58); color:#fff; border:none; border-radius:50%; width:18px; height:18px; font-size:9px; cursor:pointer;}
+.empty.compact{padding:10px; font-size:11px;}
+
+/* ---------- Large daily route maps ---------- */
+.route-map-gallery{display:flex; flex-direction:column; gap:12px; margin-bottom:14px;}
+.route-map-item{position:relative; width:100%; border-radius:14px; overflow:hidden; background:#eef1e6; box-shadow:var(--shadow-sm);}
+.route-map-item img{display:block; width:100%; height:auto; max-height:620px; object-fit:contain; cursor:zoom-in; background:#f7f8f2;}
+.route-map-remove{position:absolute; top:8px; right:8px; background:rgba(20,27,38,.68); color:#fff; border:none; border-radius:50%; width:28px; height:28px; font-size:12px; cursor:pointer; backdrop-filter:blur(4px);}
+
+/* ---------- Different backgrounds for 食／購／住 cards ---------- */
+.sub-spot-food{background:linear-gradient(145deg,#fff7f2,#fff); border-color:#ffd9cb;}
+.sub-spot-shopping{background:linear-gradient(145deg,#f7f9df,#fff); border-color:#e5e7a4;}
+.sub-spot-hotel{background:linear-gradient(145deg,#f7f0ff,#fff); border-color:#ddc8f2;}
+.sub-spot-food .sub-spot-header{background:rgba(255,235,225,.55);}
+.sub-spot-shopping .sub-spot-header{background:rgba(241,243,188,.5);}
+.sub-spot-hotel .sub-spot-header{background:rgba(232,216,248,.48);}
+.sub-spot-food .sub-spot-details,.sub-spot-shopping .sub-spot-details,.sub-spot-hotel .sub-spot-details{background:rgba(255,255,255,.72);}
+
+@media (max-width:390px){
+  .add-row{flex-wrap:wrap;}
+  .pill-select{max-width:100%; flex:1 1 100%;}
+  .shop-add-row input{min-width:0;}
+}

@@ -785,7 +785,7 @@ function spotCardHTML(spot, key, isMainSpot, customMeta, orderInfo){
     </div>` : '';
 
   if (!isMainSpot) {
-    return `<div class="sub-spot-card" id="spot-card-${idx}"><div class="sub-spot-header" onclick="toggleSpotDetails('${idx}')"><div class="sub-spot-header-content"><h4>${spot.name}</h4><p class="short-desc">${spot.desc}</p>${miniStripHTML}</div><div class="chevron">▼</div></div><div class="sub-spot-details-wrap"><div class="sub-spot-details" onclick="event.stopPropagation()">${customBar}${editSpotAreaHTML}<p class="full-desc">${spot.fullDesc || spot.desc}</p>${spot.recDishes ? `<div class="dish-tag">🍲 必點推薦：${spot.recDishes}</div>` : ''}${reorderableBlocksHTML}<div class="action-row" style="margin-top:10px;"><a class="btn btn-map" href="${mapsLink(spot.name)}" target="_blank" rel="noopener">🗺️ 導航</a>${spot.link ? `<a class="btn btn-photo" href="${spot.link}" target="_blank" rel="noopener">🔗 ${spot.linkLabel}</a>` : ''}<button class="btn btn-photo" onclick="document.getElementById('file-${idx}').click()">📷 上傳照片</button></div><input type="file" accept="image/*" id="file-${idx}" style="display:none" multiple onchange="handlePhoto(event, '${idx}')">${pStrip}</div></div></div>`;
+    return `<div class="sub-spot-card sub-spot-${spot.cat || 'other'}" id="spot-card-${idx}"><div class="sub-spot-header" onclick="toggleSpotDetails('${idx}')"><div class="sub-spot-header-content"><h4>${spot.name}</h4><p class="short-desc">${spot.desc}</p>${miniStripHTML}</div><div class="chevron">▼</div></div><div class="sub-spot-details-wrap"><div class="sub-spot-details" onclick="event.stopPropagation()">${customBar}${editSpotAreaHTML}<p class="full-desc">${spot.fullDesc || spot.desc}</p>${spot.recDishes ? `<div class="dish-tag">🍲 必點推薦：${spot.recDishes}</div>` : ''}${reorderableBlocksHTML}<div class="action-row" style="margin-top:10px;"><a class="btn btn-map" href="${mapsLink(spot.name)}" target="_blank" rel="noopener">🗺️ 導航</a>${spot.link ? `<a class="btn btn-photo" href="${spot.link}" target="_blank" rel="noopener">🔗 ${spot.linkLabel}</a>` : ''}<button class="btn btn-photo" onclick="document.getElementById('file-${idx}').click()">📷 上傳照片</button></div><input type="file" accept="image/*" id="file-${idx}" style="display:none" multiple onchange="handlePhoto(event, '${idx}')">${pStrip}</div></div></div>`;
   }
 
   return `<div class="guide-card" id="spot-card-${idx}"><div class="guide-header" style="background-image:url('${bg}');" onclick="toggleSpotDetails('${idx}')">${photoStore[idx] && photoStore[idx].length > 0 ? `<span class="own-badge" onclick="event.stopPropagation(); document.getElementById('file-${idx}').click()">✅ 已有你的實拍照片</span>` : `<button class="own-badge" style="border:none; cursor:pointer;" onclick="event.stopPropagation(); document.getElementById('file-${idx}').click()">📷 新增我的照片</button>`}<div class="guide-header-content"><span class="cat-label ${c.cls}">${c.emoji} ${c.label}</span><h3>${spot.name}</h3><p class="short-desc">${spot.desc}</p></div><div class="chevron">▼</div></div><div class="guide-details-wrap"><div class="guide-details" onclick="event.stopPropagation()">${customBar}${editSpotAreaHTML}<p class="full-desc">${spot.fullDesc || spot.desc}</p>${reorderableBlocksHTML}${spot.tip?`<div class="tip-box"><b>📸 拍照與自駕小解密：</b>${spot.tip}</div>`:''}${spot.docMap?`<div class="tip-box" style="background: linear-gradient(120deg,#e8f8ee,#fff); border-color:#8fd6c3; color:#22513f;"><b>🗺️ DOC 官方步道地圖與狀態：</b><a href="${spot.docMap}" target="_blank" rel="noopener" style="color:var(--blue); font-weight:700; text-decoration:underline;">點此開啟</a></div>`:''}${spot.park?`<div class="park-box"><b>🅿️ 停車＆自駕補給：</b>${spot.park}</div>`:''}<div class="action-row" style="margin-top:10px;"><a class="btn btn-map" href="${mapsLink(spot.name)}" target="_blank" rel="noopener">🗺️ 導航導出</a>${spot.link ? `<a class="btn btn-photo" href="${spot.link}" target="_blank" rel="noopener">🔗 ${spot.linkLabel}</a>` : ''}<button class="btn btn-photo" onclick="document.getElementById('file-${idx}').click()">📷 上傳照片</button></div><input type="file" accept="image/*" id="file-${idx}" style="display:none" multiple onchange="handlePhoto(event, '${idx}')">${pStrip}</div></div></div>`;
@@ -891,7 +891,7 @@ function renderDayContent(){
     </div>`;
 
   const routeMaps = routeMapStore[activeDay] || [];
-  const routeMapGalleryHTML = routeMaps.length ? `<div class="mini-photo-strip" style="margin-bottom:14px;">${routeMaps.map((u,i)=>`<div style="position:relative; display:inline-block;"><img src="${u}" onclick="openAttachModal('${u}')"><button onclick="removeRouteMap(${activeDay}, ${i})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:16px; height:16px; font-size:8px; cursor:pointer;">✕</button></div>`).join('')}</div>` : '<div class="empty">尚未上傳今天的行動路線圖。</div>';
+  const routeMapGalleryHTML = routeMaps.length ? `<div class="route-map-gallery">${routeMaps.map((u,i)=>`<div class="route-map-item"><img src="${u}" onclick="openAttachModal('${u}')" alt="Day ${d.dayNum} 路線圖"><button class="route-map-remove" onclick="removeRouteMap(${activeDay}, ${i})">✕</button></div>`).join('')}</div>` : '<div class="empty">尚未上傳今天的行動路線圖。</div>';
   const routeMapHTML = `
     <div class="section-card" style="margin-top:4px;">
       <h3 style="margin:0 0 10px;">🗺️ 我的當日行動路線圖</h3>
@@ -1030,13 +1030,24 @@ async function refreshRainRadar(){
     const res = await fetch('https://api.rainviewer.com/public/weather-maps.json');
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data = await res.json();
-    const frames = data.satellite && data.satellite.infrared;
-    if(!frames || !frames.length) throw new Error('無可用衛星雲圖影格');
+    const satelliteFrames = data.satellite && Array.isArray(data.satellite.infrared) ? data.satellite.infrared : [];
+    const radarFrames = data.radar && Array.isArray(data.radar.past) ? data.radar.past : [];
+    const useSatellite = satelliteFrames.length > 0;
+    const frames = useSatellite ? satelliteFrames : radarFrames;
+    if(!frames.length) throw new Error('RainViewer 暫無可用影格');
     const latest = frames[frames.length-1];
-    const tileUrl = `${data.host}${latest.path}/256/{z}/{x}/{y}/0/0_0.png`;
+    const tileUrl = useSatellite
+      ? `${data.host}${latest.path}/256/{z}/{x}/{y}/0/0_0.png`
+      : `${data.host}${latest.path}/256/{z}/{x}/{y}/2/1_1.png`;
     if(rainRadarLayer) rainRadarMap.removeLayer(rainRadarLayer);
-    rainRadarLayer = L.tileLayer(tileUrl, {opacity:0.75, maxZoom:12, attribution:'© RainViewer'}).addTo(rainRadarMap);
-    if(timeEl) timeEl.textContent = '衛星雲圖更新於：' + new Date(latest.time * 1000).toLocaleString('zh-TW', {hour12:false});
+    rainRadarLayer = L.tileLayer(tileUrl, {
+      opacity: useSatellite ? 0.75 : 0.68,
+      maxNativeZoom: useSatellite ? 12 : 7,
+      maxZoom: 12,
+      attribution:'Weather data © RainViewer'
+    }).addTo(rainRadarMap);
+    const label = useSatellite ? '衛星雲圖' : '降雨雷達（衛星資料暫不可用，已自動切換）';
+    if(timeEl) timeEl.textContent = `${label}更新於：` + new Date(latest.time * 1000).toLocaleString('zh-TW', {hour12:false});
   }catch(err){
     if(timeEl) timeEl.textContent = navigator.onLine ? '衛星雲圖取得失敗，請稍後點擊「重新整理雲圖」再試一次。' : '⚠️ 目前離線，無法取得最新衛星雲圖。';
   }
@@ -1168,10 +1179,27 @@ let shopData = JSON.parse(localStorage.getItem('nz_shop')) || defaultShopData;
 function persistShop(){ safeSetItem('nz_shop', shopData); }
 const SHOP_CATS = {supermarket:{label:'🛒 超市', color:'#2f8a52'}, souvenir:{label:'🎁 紀念品', color:'#c1502f'}};
 
+const listSectionOpen = { pack:{}, shop:{supermarket:true, souvenir:true} };
+function toggleListSection(type, key){
+  if(!listSectionOpen[type]) listSectionOpen[type] = {};
+  listSectionOpen[type][key] = listSectionOpen[type][key] === false;
+  if(type === 'pack') renderPackList(); else renderShopList();
+}
+function escAttr(v){ return String(v ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
 function renderPackList(){
   const wrap = document.getElementById('packListWrap');
   if(!wrap) return;
-  wrap.innerHTML = Object.keys(packData).map(cat=>`<div class="pack-cat"><div class="cat-title">🔹 ${cat}</div>${packData[cat].map((it,i)=>`<div class="pack-item ${it.checked?'checked':''}"><input type="checkbox" ${it.checked?'checked':''} onchange="togglePack('${cat}',${i})"><div class="name">${it.name}</div><div class="qty"><button onclick="changeQty('${cat}',${i},-1)">－</button><span>${it.qty}</span><button onclick="changeQty('${cat}',${i},1)">＋</button></div><button class="del" onclick="delPack('${cat}',${i})">✕</button></div>`).join('')}</div>`).join('') + `<div class="add-row"><select id="packCatSelect" style="border:1.5px solid var(--line); border-radius:999px; padding:9px 10px; font-size:12px; font-family:inherit;">${Object.keys(packData).map(c=>`<option value="${c}">${c}</option>`).join('')}</select><input type="text" id="newPackItem" placeholder="新增項目..."><button onclick="addPackItem()">＋</button></div>`;
+  wrap.innerHTML = Object.keys(packData).map((cat,catIdx)=>{
+    const isOpen = listSectionOpen.pack[cat] !== false;
+    const done = packData[cat].filter(it=>it.checked).length;
+    return `<section class="checklist-group pack-group pack-group-${catIdx}">
+      <button class="checklist-group-head" onclick="toggleListSection('pack', '${cat.replace(/'/g,"\\'")}')" aria-expanded="${isOpen}">
+        <span>${cat}</span><small>${done}/${packData[cat].length}</small><b>${isOpen?'⌃':'⌄'}</b>
+      </button>
+      <div class="checklist-group-body ${isOpen?'open':''}">${packData[cat].map((it,i)=>`<div class="pack-item ${it.checked?'checked':''}"><input type="checkbox" ${it.checked?'checked':''} onchange="togglePack('${cat.replace(/'/g,"\\'")}',${i})"><div class="name">${it.name}</div><div class="qty"><button onclick="changeQty('${cat.replace(/'/g,"\\'")}',${i},-1)">－</button><span>${it.qty}</span><button onclick="changeQty('${cat.replace(/'/g,"\\'")}',${i},1)">＋</button></div><button class="del" onclick="delPack('${cat.replace(/'/g,"\\'")}',${i})">✕</button></div>`).join('')}</div>
+    </section>`;
+  }).join('') + `<div class="add-row"><select id="packCatSelect" class="pill-select">${Object.keys(packData).map(c=>`<option value="${escAttr(c)}">${c}</option>`).join('')}</select><input type="text" id="newPackItem" placeholder="新增項目..."><button onclick="addPackItem()">＋</button></div>`;
 }
 function togglePack(cat,i){ packData[cat][i].checked = !packData[cat][i].checked; persistPack(); renderPackList(); }
 function changeQty(cat,i,delta){ packData[cat][i].qty = Math.max(1, packData[cat][i].qty+delta); persistPack(); renderPackList(); }
@@ -1179,43 +1207,40 @@ function delPack(cat,i){ packData[cat].splice(i,1); persistPack(); renderPackLis
 function addPackItem(){ const cat = document.getElementById('packCatSelect').value; const input = document.getElementById('newPackItem'); if(input && input.value.trim()){ packData[cat].push({name:input.value.trim(), qty:1, checked:false}); persistPack(); renderPackList(); } }
 
 function shopImgs(it){
-  // 相容舊資料：舊格式是單張 img 欄位，這裡統一轉成 imgs 陣列
   if(Array.isArray(it.imgs)) return it.imgs;
   return it.img ? [it.img] : [];
 }
 function renderShopList(){
   const wrap = document.getElementById('shopListWrap');
   if(!wrap) return;
-  wrap.innerHTML = shopData.map((it,i)=>{
-    const cat = SHOP_CATS[it.cat] || SHOP_CATS.supermarket;
-    const imgs = shopImgs(it);
-    const photosHTML = imgs.length ? `<div style="flex-basis:100%; display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; padding-left:28px;">${imgs.map((src,pi)=>`<div style="position:relative; display:inline-block;"><img src="${src}" style="width:44px; height:44px; object-fit:cover; border-radius:6px;" onclick="openAttachModal('${src}')"><button onclick="removeShopImg(${i},${pi})" style="position:absolute; top:-4px; right:-4px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:16px; height:16px; font-size:8px; cursor:pointer;">✕</button></div>`).join('')}</div>` : '';
-    return `<div class="pack-item ${it.checked?'checked':''}" style="flex-wrap:wrap; align-items:center;"><input type="checkbox" ${it.checked?'checked':''} onchange="toggleShop(${i})"><div class="name">${it.name}</div><div class="qty"><button onclick="document.getElementById('shopFile-${i}').click()" style="background:transparent; font-size:14px; margin-right:4px; border:none; cursor:pointer;">📷</button><button onclick="changeShopQty(${i},-1)">－</button><span>${it.qty}</span><button onclick="changeShopQty(${i},1)">＋</button></div><button class="del" onclick="delShop(${i})">✕</button><input type="file" id="shopFile-${i}" accept="image/*" multiple style="display:none" onchange="handleShopPhoto(event, ${i})"><div style="flex-basis:100%; display:flex; gap:6px; align-items:center; margin-top:6px; padding-left:28px;"><select onchange="setShopCat(${i}, this.value)" style="border:1.5px solid var(--line); border-radius:999px; padding:4px 8px; font-size:11px; font-family:inherit; color:${cat.color}; font-weight:700;">${Object.keys(SHOP_CATS).map(k=>`<option value="${k}" ${it.cat===k?'selected':''}>${SHOP_CATS[k].label}</option>`).join('')}</select><input type="text" value="${(it.location||'').replace(/"/g,'&quot;')}" placeholder="建議購買位置或其他資訊..." onchange="setShopLocation(${i}, this.value)" style="flex:1; border:1.5px solid var(--line); border-radius:999px; padding:4px 10px; font-size:11px; font-family:inherit; min-width:120px;"></div>${photosHTML}</div>`;
-  }).join('') + `<div class="add-row"><input type="text" id="newShopItem" placeholder="新增購物項目..."><button onclick="addShopItem()">＋</button></div>`;
+  const groups = Object.keys(SHOP_CATS).map(catKey=>{
+    const meta = SHOP_CATS[catKey];
+    const entries = shopData.map((it,i)=>({it,i})).filter(x=>(x.it.cat || 'supermarket') === catKey);
+    const isOpen = listSectionOpen.shop[catKey] !== false;
+    const done = entries.filter(x=>x.it.checked).length;
+    const itemsHTML = entries.length ? entries.map(({it,i})=>{
+      const imgs = shopImgs(it);
+      const photosHTML = imgs.length ? `<div class="shop-photo-row">${imgs.map((src,pi)=>`<div class="shop-photo"><img src="${src}" onclick="openAttachModal('${src}')"><button onclick="removeShopImg(${i},${pi})">✕</button></div>`).join('')}</div>` : '';
+      return `<div class="pack-item shop-item ${it.checked?'checked':''}"><input type="checkbox" ${it.checked?'checked':''} onchange="toggleShop(${i})"><div class="name">${it.name}</div><div class="qty"><button onclick="document.getElementById('shopFile-${i}').click()" class="camera-btn">📷</button><button onclick="changeShopQty(${i},-1)">－</button><span>${it.qty}</span><button onclick="changeShopQty(${i},1)">＋</button></div><button class="del" onclick="delShop(${i})">✕</button><input type="file" id="shopFile-${i}" accept="image/*" multiple style="display:none" onchange="handleShopPhoto(event, ${i})"><div class="shop-extra"><input type="text" value="${escAttr(it.location||'')}" placeholder="建議購買位置或其他資訊..." onchange="setShopLocation(${i}, this.value)"></div>${photosHTML}</div>`;
+    }).join('') : '<div class="empty compact">此清單目前沒有項目。</div>';
+    return `<section class="checklist-group shop-group shop-${catKey}"><button class="checklist-group-head" onclick="toggleListSection('shop','${catKey}')" aria-expanded="${isOpen}"><span>${meta.label}</span><small>${done}/${entries.length}</small><b>${isOpen?'⌃':'⌄'}</b></button><div class="checklist-group-body ${isOpen?'open':''}">${itemsHTML}</div></section>`;
+  }).join('');
+  wrap.innerHTML = groups + `<div class="add-row shop-add-row"><select id="newShopCat" class="pill-select">${Object.keys(SHOP_CATS).map(k=>`<option value="${k}">${SHOP_CATS[k].label}</option>`).join('')}</select><input type="text" id="newShopItem" placeholder="新增購物項目..."><button onclick="addShopItem()">＋</button></div>`;
 }
 function handleShopPhoto(e, i){
   const files = Array.from(e.target.files || []);
   if(!files.length) return;
   if(!Array.isArray(shopData[i].imgs)) shopData[i].imgs = shopImgs(shopData[i]);
-  shopData[i].img = null; // 舊欄位不再使用，統一用 imgs 陣列
-  Promise.all(files.map(f=>fileToDataURL(f))).then(dataUrls=>{
-    shopData[i].imgs.push(...dataUrls);
-    persistShop(); renderShopList();
-  });
+  shopData[i].img = null;
+  Promise.all(files.map(f=>fileToDataURL(f))).then(dataUrls=>{ shopData[i].imgs.push(...dataUrls); persistShop(); renderShopList(); });
   e.target.value='';
 }
-function removeShopImg(i, photoIdx){
-  const imgs = shopImgs(shopData[i]);
-  imgs.splice(photoIdx,1);
-  shopData[i].imgs = imgs;
-  shopData[i].img = null;
-  persistShop(); renderShopList();
-}
+function removeShopImg(i, photoIdx){ const imgs = shopImgs(shopData[i]); imgs.splice(photoIdx,1); shopData[i].imgs = imgs; shopData[i].img = null; persistShop(); renderShopList(); }
 function toggleShop(i){ shopData[i].checked = !shopData[i].checked; persistShop(); renderShopList(); }
 function changeShopQty(i,delta){ shopData[i].qty = Math.max(1, shopData[i].qty+delta); persistShop(); renderShopList(); }
 function delShop(i){ shopData.splice(i,1); persistShop(); renderShopList(); }
-function addShopItem(){ const input = document.getElementById('newShopItem'); if(input && input.value.trim()){ shopData.push({name:input.value.trim(), qty:1, checked:false, imgs:[], cat:'supermarket', location:''}); persistShop(); renderShopList(); } }
-function setShopCat(i, val){ shopData[i].cat = val; persistShop(); }
+function addShopItem(){ const input = document.getElementById('newShopItem'); const cat = document.getElementById('newShopCat')?.value || 'supermarket'; if(input && input.value.trim()){ shopData.push({name:input.value.trim(), qty:1, checked:false, imgs:[], cat, location:''}); persistShop(); listSectionOpen.shop[cat] = true; renderShopList(); } }
+function setShopCat(i, val){ shopData[i].cat = val; persistShop(); renderShopList(); }
 function setShopLocation(i, val){ shopData[i].location = val; persistShop(); }
 
 /* ============ CUSTOM TRAVEL RULES ============ */
