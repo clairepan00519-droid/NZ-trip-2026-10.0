@@ -1062,22 +1062,123 @@ async function fetchWeatherFor(k, attempt){
   renderOneLiveCity(k);
 }
 
-/* ============ 即時衛星雲圖（Windy 衛星圖） ============
-   RainViewer 已於 2026-01-01 停止公開 Satellite IR 資料，因此改用 Windy 官方嵌入圖。
-   此區需要連線；離線時會保留明確提示，不再用降雨雷達冒充衛星雲圖。 */
-function initRainRadar(){ refreshRainRadar(); }
-function refreshRainRadar(){
-  const el = document.getElementById('rainRadarMap');
-  const timeEl = document.getElementById('rainRadarTime');
-  if(!el) return;
+
+function renderWeatherFromCache(){
+  const wrap = document.getElementById('liveWeatherList');
+  if(!wrap) return false;
+  const cache = loadWeatherCache();
+  const hasAny = Object.keys(CITIES).some(k=>cache[k] && cache[k].data);
+  wrap.innerHTML = Object.keys(CITIES).map(k=>`<div class="weather-day" id="live-${k}"><div class="date" style="width:auto;text-align:left"><b>${CITIES[k].label}</b></div><div class="mid"><div class="out">讀取中…</div></div></div>`).join('');
+  Object.keys(CITIES).forEach(k=>{
+    if(cache[k] && cache[k].data){
+      liveWeatherCache[k] = {data:cache[k].data,error:null,stale:true,fetchedAt:cache[k].fetchedAt};
+      renderOneLiveCity(k);
+    }
+  });
+  const timeEl=document.getElementById('liveWeatherTime');
+  if(timeEl && hasAny){
+    const times=Object.values(cache).map(v=>v&&v.fetchedAt).filter(Boolean);
+    const latest=times.length?new Date(Math.max(...times)).toLocaleString('zh-TW',{hour12:false}):'—';
+    timeEl.textContent=navigator.onLine?`顯示上次資料（${latest}），正在更新…`:`目前離線，顯示上次資料（${latest}）`;
+  }
+  return hasAny;
+}
+
+async function loadLiveWeather(){
+  const wrap=document.getElementById('liveWeatherList');
+  if(!wrap) return;
+  const timeEl=document.getElementById('liveWeatherTime');
   if(!navigator.onLine){
-    el.innerHTML='<div class="satellite-offline">☁️ 目前離線，無法載入即時衛星雲圖。恢復網路後按「重新整理雲圖」。</div>';
-    if(timeEl) timeEl.textContent='衛星圖需連線取得即時資料。';
+    const hasAny=renderWeatherFromCache();
+    if(!hasAny && timeEl) timeEl.textContent='目前離線，尚無可顯示的氣象快取。';
     return;
   }
-  const src='https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=5&overlay=satellite&product=satellite&level=surface&lat=-44.7&lon=169.0';
-  el.innerHTML=`<iframe class="windy-satellite-frame" src="${src}" title="紐西蘭南島即時衛星雲圖" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
-  if(timeEl) timeEl.innerHTML='Windy 即時衛星雲圖｜可拖曳、縮放與查看時間軸；若載入受阻，可 <a href="https://www.windy.com/-Satellite-satellite?satellite,-44.700,169.000,5" target="_blank" rel="noopener">開啟完整衛星圖</a>。';
+  wrap.innerHTML=Object.keys(CITIES).map(k=>`<div class="weather-day" id="live-${k}"><div class="date" style="width:auto;text-align:left"><b>${CITIES[k].label}</b></div><div class="mid"><div class="out">讀取中…</div></div></div>`).join('');
+  if(timeEl) timeEl.textContent='即時資料更新中…';
+  await Promise.all(Object.keys(CITIES).map(k=>fetchWeatherFor(k,0)));
+  const failed=Object.values(liveWeatherCache).filter(v=>v&&v.error).length;
+  if(timeEl) timeEl.textContent=failed?`更新完成，${failed} 個地點暫時無法連線。`:`更新於 ${new Date().toLocaleString('zh-TW',{hour12:false})}`;
+}
+
+function renderOneLiveCity(k){
+  const el=document.getElementById('live-'+k);
+  if(!el) return;
+  const entry=liveWeatherCache[k];
+  const data=entry&&entry.data;
+  if(!data||!data.current){
+    const reason=entry&&entry.error?entry.error:'暫時無法取得氣象資料';
+    el.innerHTML=`<div class="weather-error"><span><b>${CITIES[k].label}</b>：${reason}</span><button onclick="fetchWeatherFor('${k}',0)">重新整理</button></div>`;
+    return;
+  }
+  const cw=data.current;
+  const [ico,desc]=wmoInfo(cw.weather_code);
+  const temp=Math.round(cw.temperature_2m);
+  const wind=cw.wind_speed_10m;
+  const precip=cw.precipitation;
+  const sr=data.daily?.sunrise?.[0]?.substring(11,16)||'--:--';
+  const ss=data.daily?.sunset?.[0]?.substring(11,16)||'--:--';
+  const uv=data.daily?.uv_index_max?getUVStars(data.daily.uv_index_max[0]):'未知';
+  const tip=getDynamicTip(temp,cw.weather_code);
+  const MW_TIMES={'Wanaka':'20:00 後','Tekapo':'19:45 後','MtCook':'20:00 後','Oamaru':'視雲量','Dunedin':'視雲量','TeAnau':'20:30 後','Queenstown':'20:15 後'};
+  const badge=entry.stale?'<span class="live-badge stale"><span class="dot"></span>快取</span>':'<span class="live-badge"><span class="dot"></span>即時</span>';
+  el.innerHTML=`
+    <div class="live-weather-card">
+      <div class="live-weather-main">
+        <div class="live-weather-place"><b>${CITIES[k].label}</b>${badge}</div>
+        <div class="live-weather-icon">${ico}</div>
+        <div class="live-weather-condition"><strong>${desc}</strong><span>${temp}°C</span></div>
+        <div class="live-weather-stats"><span>風速 ${wind} km/h</span><span>降雨 ${precip} mm</span><span>UV ${uv}</span></div>
+      </div>
+      <div class="astro-box"><span>🌅 日出 ${sr}</span><span>🌇 日落 ${ss}</span><span class="mw">🌌 銀河 ${MW_TIMES[k]}</span></div>
+      <div class="live-tip-box"><b>🧥 觀星穿搭指南</b><div>${tip}</div></div>
+    </div>`;
+}
+
+/* ============ 內嵌 Windy 雲圖 ============
+   預設使用較穩定的「雲層」預報圖，避免一開啟天氣頁就觸發 satellite WebGL 錯誤。
+   使用者仍可在頁內主動切換到 Windy 衛星圖。 */
+let windyLayerMode = 'clouds';
+function initRainRadar(){ refreshRainRadar(); }
+function buildWindyEmbedUrl(mode){
+  const base='https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=5&level=surface&lat=-44.7&lon=169.0';
+  return mode === 'satellite'
+    ? `${base}&overlay=satellite&product=satellite`
+    : `${base}&overlay=clouds&product=ecmwf`;
+}
+function setWindyLayer(mode){
+  windyLayerMode = mode === 'satellite' ? 'satellite' : 'clouds';
+  refreshRainRadar();
+}
+function refreshRainRadar(){
+  const el=document.getElementById('rainRadarMap');
+  const timeEl=document.getElementById('rainRadarTime');
+  if(!el) return;
+  if(!navigator.onLine){
+    el.innerHTML='<div class="satellite-offline">☁️ 目前離線，無法載入內嵌 Windy。恢復網路後按「重新整理雲圖」。</div>';
+    if(timeEl) timeEl.textContent='Windy 即時圖層需要網路連線。';
+    return;
+  }
+  const isSatellite = windyLayerMode === 'satellite';
+  el.innerHTML=`
+    <div class="windy-embed-shell">
+      <div class="windy-layer-switch" role="group" aria-label="Windy 圖層切換">
+        <button class="${!isSatellite?'active':''}" onclick="setWindyLayer('clouds')">☁️ 雲層</button>
+        <button class="${isSatellite?'active':''}" onclick="setWindyLayer('satellite')">🛰️ 衛星</button>
+        <a href="https://www.metservice.com/maps-radar/satellite/southwest-pacific" target="_blank" rel="noopener">查看 MET</a>
+      </div>
+      <iframe class="windy-satellite-frame" src="${buildWindyEmbedUrl(windyLayerMode)}" title="紐西蘭南島 Windy ${isSatellite?'衛星':'雲層'}圖" loading="eager" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+      ${isSatellite?'<div class="windy-layer-note">部分裝置的衛星圖可能因 WebGL 支援而失敗；發生時請切回「雲層」。</div>':''}
+    </div>`;
+  if(timeEl) timeEl.textContent = isSatellite
+    ? 'Windy 衛星圖｜若裝置不支援 WebGL，請切回「雲層」。'
+    : 'Windy 雲層預報｜可在頁內拖曳、縮放與查看時間軸。';
+}
+
+function cleanMetLabels(){
+  document.querySelectorAll('a,button').forEach(el=>{
+    const t=(el.textContent||'').trim();
+    if(/^查看\s*met\b/i.test(t)) el.textContent='查看 MET';
+  });
 }
 
 /* ============ GUIDE LISTS ============ */
@@ -1141,36 +1242,42 @@ function toggleListSection(type, key){
 function escAttr(v){ return String(v ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function jsQuote(v){ return String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
 
+let packComposerOpen=false;
+let selectedPackCat=Object.keys(packData)[0];
+let selectedPackSubcat=(PACK_SUBCATS[selectedPackCat]||['其他'])[0];
+function togglePackComposer(){ packComposerOpen=!packComposerOpen; renderPackList(); }
+function selectPackCategory(cat){ selectedPackCat=cat; selectedPackSubcat=(PACK_SUBCATS[cat]||['其他'])[0]; renderPackList(); }
+function selectPackSubcategory(sub){ selectedPackSubcat=sub; renderPackList(); }
+
 function renderPackList(){
-  const wrap = document.getElementById('packListWrap');
+  const wrap=document.getElementById('packListWrap');
   if(!wrap) return;
-  wrap.innerHTML = Object.keys(packData).map((cat,catIdx)=>{
-    const isOpen = listSectionOpen.pack[cat] === true;
-    const done = packData[cat].filter(it=>it.checked).length;
-    const subcats = PACK_SUBCATS[cat] || ['其他'];
-    const subHTML = subcats.map(sub=>{
+  const groups=Object.keys(packData).map((cat,catIdx)=>{
+    const isOpen=listSectionOpen.pack[cat]===true;
+    const done=packData[cat].filter(it=>it.checked).length;
+    const subcats=PACK_SUBCATS[cat]||['其他'];
+    const subHTML=subcats.map(sub=>{
       const entries=packData[cat].map((it,i)=>({it,i})).filter(x=>(x.it.subcat||subcats[0])===sub);
       if(!entries.length) return '';
-      return `<div class="pack-subgroup"><div class="pack-subgroup-title">${sub}</div>${entries.map(({it,i})=>`<div class="pack-item ${it.checked?'checked':''}"><input type="checkbox" ${it.checked?'checked':''} onchange="togglePack('${jsQuote(cat)}',${i})"><div class="name">${it.name}</div><div class="qty"><button onclick="changeQty('${jsQuote(cat)}',${i},-1)">－</button><span>${it.qty}</span><button onclick="changeQty('${jsQuote(cat)}',${i},1)">＋</button></div><button class="del" onclick="delPack('${jsQuote(cat)}',${i})">✕</button></div>`).join('')}</div>`;
+      return `<div class="pack-subgroup"><div class="pack-subgroup-title">${sub}<span>${entries.filter(x=>x.it.checked).length}/${entries.length}</span></div>${entries.map(({it,i})=>`<div class="pack-item ${it.checked?'checked':''}"><input type="checkbox" ${it.checked?'checked':''} onchange="togglePack('${jsQuote(cat)}',${i})"><div class="name">${it.name}</div><div class="qty"><button onclick="changeQty('${jsQuote(cat)}',${i},-1)">－</button><span>${it.qty}</span><button onclick="changeQty('${jsQuote(cat)}',${i},1)">＋</button></div><button class="del" onclick="delPack('${jsQuote(cat)}',${i})">✕</button></div>`).join('')}</div>`;
     }).join('');
-    return `<section class="checklist-group pack-group pack-group-${catIdx}">
-      <button class="checklist-group-head" onclick="toggleListSection('pack', '${jsQuote(cat)}')" aria-expanded="${isOpen}">
-        <span>${cat}</span><small>${done}/${packData[cat].length}</small><b>${isOpen?'⌃':'⌄'}</b>
-      </button>
-      <div class="checklist-group-body ${isOpen?'open':''}">${subHTML || '<div class="empty compact">此分類目前沒有項目。</div>'}</div>
-    </section>`;
-  }).join('') + `<div class="add-row pack-add-row"><select id="packCatSelect" class="pill-select" onchange="syncPackSubcatOptions()">${Object.keys(packData).map(c=>`<option value="${escAttr(c)}">${c}</option>`).join('')}</select><select id="packSubcatSelect" class="pill-select"></select><input type="text" id="newPackItem" placeholder="新增項目..."><button onclick="addPackItem()">＋</button></div>`;
-  syncPackSubcatOptions();
+    return `<section class="checklist-group pack-group pack-group-${catIdx}"><button class="checklist-group-head" onclick="toggleListSection('pack','${jsQuote(cat)}')" aria-expanded="${isOpen}"><span>${cat}</span><small>${done}/${packData[cat].length}</small><b>${isOpen?'⌃':'⌄'}</b></button><div class="checklist-group-body ${isOpen?'open':''}">${subHTML||'<div class="empty compact">此分類目前沒有項目。</div>'}</div></section>`;
+  }).join('');
+  const catButtons=Object.keys(packData).map(cat=>`<button class="pack-choice ${cat===selectedPackCat?'active':''}" onclick="selectPackCategory('${jsQuote(cat)}')">${cat}</button>`).join('');
+  const subButtons=(PACK_SUBCATS[selectedPackCat]||['其他']).map(sub=>`<button class="pack-chip ${sub===selectedPackSubcat?'active':''}" onclick="selectPackSubcategory('${jsQuote(sub)}')">${sub}</button>`).join('');
+  const composer=packComposerOpen?`<div class="pack-composer"><div class="pack-composer-head"><div><b>新增行李品項</b><span>選擇放在哪裡，再輸入品項</span></div><button onclick="togglePackComposer()">✕</button></div><label>行李類型</label><div class="pack-choice-row">${catButtons}</div><label>細分類</label><div class="pack-chip-row">${subButtons}</div><label for="newPackItem">品項名稱</label><div class="pack-input-row"><input id="newPackItem" type="text" placeholder="例如：保暖襪、相機充電器" onkeydown="if(event.key==='Enter') addPackItem()"><button onclick="addPackItem()">加入清單</button></div></div>`:`<button class="pack-add-launch" onclick="togglePackComposer()"><span>＋</span><div><b>新增行李品項</b><small>選擇行李類型與細分類</small></div></button>`;
+  wrap.innerHTML=groups+composer;
 }
-function syncPackSubcatOptions(){
-  const catEl=document.getElementById('packCatSelect'), subEl=document.getElementById('packSubcatSelect');
-  if(!catEl||!subEl) return;
-  subEl.innerHTML=(PACK_SUBCATS[catEl.value]||['其他']).map(s=>`<option value="${escAttr(s)}">${s}</option>`).join('');
+function togglePack(cat,i){packData[cat][i].checked=!packData[cat][i].checked;persistPack();renderPackList();}
+function changeQty(cat,i,delta){packData[cat][i].qty=Math.max(1,packData[cat][i].qty+delta);persistPack();renderPackList();}
+function delPack(cat,i){packData[cat].splice(i,1);persistPack();renderPackList();}
+function addPackItem(){
+  const input=document.getElementById('newPackItem');
+  const name=input&&input.value.trim();
+  if(!name){input?.focus();return;}
+  packData[selectedPackCat].push({name,qty:1,checked:false,subcat:selectedPackSubcat});
+  persistPack();listSectionOpen.pack[selectedPackCat]=true;packComposerOpen=false;renderPackList();
 }
-function togglePack(cat,i){ packData[cat][i].checked = !packData[cat][i].checked; persistPack(); renderPackList(); }
-function changeQty(cat,i,delta){ packData[cat][i].qty = Math.max(1, packData[cat][i].qty+delta); persistPack(); renderPackList(); }
-function delPack(cat,i){ packData[cat].splice(i,1); persistPack(); renderPackList(); }
-function addPackItem(){ const cat = document.getElementById('packCatSelect').value; const subcat=document.getElementById('packSubcatSelect')?.value || (PACK_SUBCATS[cat]||['其他'])[0]; const input = document.getElementById('newPackItem'); if(input && input.value.trim()){ packData[cat].push({name:input.value.trim(), qty:1, checked:false, subcat}); persistPack(); listSectionOpen.pack[cat]=true; renderPackList(); } }
 
 function shopImgs(it){ if(Array.isArray(it.imgs)) return it.imgs; return it.img ? [it.img] : []; }
 function renderShopList(){
@@ -1375,7 +1482,7 @@ function setTab(tab) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-'+tab).classList.add('active');
   window.scrollTo({top:0, behavior:'smooth'});
-  if(tab === 'weather'){ setTimeout(refreshRainRadar, 100); }
+  if(tab === 'weather'){ setTimeout(()=>{ refreshRainRadar(); cleanMetLabels(); }, 100); }
 }
 
 /* ============ INIT ============ */
@@ -1393,3 +1500,4 @@ renderWeatherFromCache();
 loadLiveWeather();
 initRainRadar();
 hydrateOfflineMedia();
+cleanMetLabels();
