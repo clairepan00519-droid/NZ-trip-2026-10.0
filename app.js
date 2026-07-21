@@ -785,9 +785,26 @@ function setActiveDay(i) {
   document.getElementById('view-itinerary').scrollIntoView({behavior:'smooth', block:'start'});
 }
 
+/* 保留景點卡片展開狀態，避免背景同步重繪後自動收合。 */
+const openSpotCardKeys = new Set();
+function rememberOpenSpotCards(){
+  document.querySelectorAll('[id^="spot-card-"].open').forEach(card=>{
+    openSpotCardKeys.add(card.id.replace('spot-card-',''));
+  });
+}
+function restoreOpenSpotCards(){
+  openSpotCardKeys.forEach(key=>{
+    const card=document.getElementById('spot-card-'+key);
+    if(card) card.classList.add('open');
+  });
+}
 function toggleSpotDetails(key) {
   const card = document.getElementById('spot-card-'+key);
-  if(card) card.classList.toggle('open');
+  if(!card) return;
+  const willOpen=!card.classList.contains('open');
+  card.classList.toggle('open', willOpen);
+  if(willOpen) openSpotCardKeys.add(String(key));
+  else openSpotCardKeys.delete(String(key));
 }
 
 function spotCardHTML(spot, key, isMainSpot, customMeta, orderInfo){
@@ -985,6 +1002,8 @@ function fuelPricePanel(day){
 }
 
 function renderDayContent(){
+  rememberOpenSpotCards();
+  const previousScrollY = window.scrollY;
   const d = days[activeDay];
   const curSubTab = activeSubTabStore[activeDay] || 'main';
 
@@ -1040,6 +1059,11 @@ function renderDayContent(){
       <div class="subtab-content${curSubTab==='routemap'?' active':''}" data-type="routemap" style="background:#f4f6f0; border-radius:0 0 var(--r-lg) var(--r-lg); padding:16px 12px 16px; margin-bottom:16px;">${routeMapHTML}</div>
     </div>
   `;
+  restoreOpenSpotCards();
+  /* 背景同步重繪時維持目前閱讀位置，避免畫面突然跳到其他地方。 */
+  if(Math.abs(window.scrollY-previousScrollY)>2){
+    requestAnimationFrame(()=>window.scrollTo({top:previousScrollY, behavior:'auto'}));
+  }
 }
 
 /* ============ RENDER: ENHANCED LIVE WEATHER & OUTFIT ============ */
