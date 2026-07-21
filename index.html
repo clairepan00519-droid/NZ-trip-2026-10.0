@@ -16,7 +16,18 @@
      這支 SDK 載入後不會做任何事，網頁仍完全以純本機模式運作，不影響其他功能。 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body>
+<body class="family-locked">
+<div id="familyGate" class="family-gate" aria-hidden="false">
+  <div class="family-gate-card">
+    <div class="family-gate-icon">🌿</div>
+    <h2>南島家庭旅行</h2>
+    <p>請輸入家人共用密碼後進入。所有裝置會共用同一份景點、照片、購物與餐點資料。</p>
+    <input id="familyGateInput" type="password" inputmode="text" autocomplete="current-password" placeholder="家人共用密碼">
+    <button id="familyGateButton" type="button">進入行程</button>
+    <div id="familyGateError" class="family-gate-error" role="alert"></div>
+  </div>
+</div>
+
 <div class="app">
 
   <!-- Header -->
@@ -94,6 +105,7 @@
     <div class="section-card">
       <h3>⛽ 南島自駕建議加油策略</h3>
       <div class="sub">南島油價城鎮差異大，建議利用大城市超市優惠券或平價站點。</div>
+      <a href="https://www.gaspy.nz/" target="_blank" rel="noopener" class="fuel-live-main">⛽ 查看即時油價</a>
       <div class="rule-item" style="flex-direction:column;">
         <div style="display:flex; gap:8px;"><span class="dot">📍</span><span><b>Day 1 / 2 (Wanaka)</b>：機場取車後，於 Wanaka 的 BP 或市區加滿，備戰明日長途與山路。</span></div>
         <a href="https://www.google.com/maps/search/BP+Wanaka" target="_blank" class="btn btn-map" style="display:inline-flex; width:auto; padding:6px 12px; font-size:11px; margin-left:18px; margin-top:4px;">🗺️ 導航至 BP Wanaka</a>
@@ -138,21 +150,6 @@
       <div id="rulesListWrap"></div>
     </div>
 
-    <div style="text-align:center; margin-top:32px; margin-bottom:16px;">
-      <button onclick="window.print()" style="background:var(--ink); color:#fff; border:none; padding:12px 24px; border-radius:999px; font-weight:700; font-size:14px; cursor:pointer; box-shadow:var(--shadow-sm);">🖨️ 輸出/儲存行程 (PDF)</button>
-      <div class="source-note" style="margin-top:6px;">使用手機瀏覽器分享功能，可「加入主畫面」變為專屬 APP</div>
-    </div>
-
-    <div class="section-card" style="background:linear-gradient(135deg,#eef4ff,#f7f8f2); border:1px solid #c9e2e9;">
-      <h3>☁️ 跨裝置資料備份／同步</h3>
-      <div class="sub">這是一個純網頁檔案，您在電腦與手機上輸入的筆記、照片、清單各自保存在「該台裝置的瀏覽器」裡，並不會自動互通。請用下方按鈕把資料匯出成一個檔案，再透過 LINE／AirDrop／Email 等方式傳到另一台裝置匯入，即可同步。建議規劃期間養成習慣：每次在某台裝置編輯完，就匯出一次備份，再到另一台裝置匯入。</div>
-      <div class="add-row" style="margin-bottom:6px;">
-        <button onclick="exportBackup()" style="flex:1; background:var(--blue); color:#fff; border:none; border-radius:999px; padding:11px 0; font-family:inherit; font-weight:700; font-size:12.5px; cursor:pointer; box-shadow:var(--shadow-sm);">📤 匯出備份</button>
-        <button onclick="document.getElementById('importBackupFile').click()" style="flex:1; background:#fff; border:1.5px solid var(--blue); color:var(--blue); border-radius:999px; padding:11px 0; font-family:inherit; font-weight:700; font-size:12.5px; cursor:pointer;">📥 匯入備份</button>
-        <input type="file" id="importBackupFile" accept="application/json,.json" style="display:none" onchange="importBackupFile(event)">
-      </div>
-      <div class="source-note">匯入會覆蓋這台裝置上同名的資料（筆記、照片、清單等），建議匯入前先在這台裝置也匯出一份備份留底。</div>
-    </div>
   </div>
 
   <!-- ================= WEATHER VIEW ================= -->
@@ -173,7 +170,7 @@
       <div class="add-row" style="margin-bottom:10px;">
         <button onclick="refreshRainRadar()" style="flex:1; background:var(--blue); color:#fff; border:none; border-radius:999px; padding:10px 0; font-family:inherit; font-weight:700; font-size:12.5px; cursor:pointer; box-shadow:var(--shadow-sm);">🔄 重新整理雲圖</button>
       </div>
-      <div id="rainRadarMap" style="width:100%; height:320px; border-radius:var(--r-md); overflow:hidden; background:#e6ebe3;"></div>
+      <div id="rainRadarMap" class="windy-embed-wrap"></div>
       <div class="source-note" id="rainRadarTime">衛星雲圖尚未更新</div>
       <a href="https://www.metservice.com/maps-radar/forecast/3-days?tab=nz" target="_blank" rel="noopener" style="display:block; text-align:center; margin-top:10px; background:#fff; border:1.5px solid var(--blue); color:var(--blue); border-radius:999px; padding:10px 0; font-family:inherit; font-weight:700; font-size:12.5px; text-decoration:none;">🔗 查看 MetService 官方雷達／衛星雲圖（紐西蘭氣象局，另開新分頁）</a>
     </div>

@@ -1,4 +1,44 @@
 
+/* ============ 家人共用密碼入口 ============
+   GitHub Pages 是純前端網站，因此這是避免陌生人誤入的家庭入口，不等同銀行等級驗證。
+   密碼只以 SHA-256 雜湊值比對，不把明碼寫進程式。 */
+const FAMILY_PASS_HASH = '59f8fe9c483ba6e0096ebd2a326226e82d35240fb01d66529080caee28284bb6';
+const FAMILY_SESSION_KEY = 'nz_family_unlocked_v1';
+async function sha256Hex(text){
+  const bytes=new TextEncoder().encode(text);
+  const hash=await crypto.subtle.digest('SHA-256',bytes);
+  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function unlockFamilySite(){
+  sessionStorage.setItem(FAMILY_SESSION_KEY,'1');
+  document.body.classList.remove('family-locked');
+  const gate=document.getElementById('familyGate');
+  if(gate){ gate.hidden=true; gate.setAttribute('aria-hidden','true'); }
+}
+async function submitFamilyGate(){
+  const input=document.getElementById('familyGateInput');
+  const err=document.getElementById('familyGateError');
+  const btn=document.getElementById('familyGateButton');
+  if(!input||!btn) return;
+  btn.disabled=true;
+  if(err) err.textContent='';
+  try{
+    const ok=(await sha256Hex(input.value))===FAMILY_PASS_HASH;
+    if(ok){ unlockFamilySite(); input.value=''; }
+    else { if(err) err.textContent='密碼不正確，請再試一次。'; input.select(); }
+  }catch(e){ if(err) err.textContent='此瀏覽器無法完成密碼驗證，請改用最新版 Chrome、Safari 或 Edge。'; }
+  finally{ btn.disabled=false; }
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  const input=document.getElementById('familyGateInput');
+  const btn=document.getElementById('familyGateButton');
+  if(sessionStorage.getItem(FAMILY_SESSION_KEY)==='1') unlockFamilySite();
+  else setTimeout(()=>input&&input.focus(),80);
+  if(btn) btn.addEventListener('click',submitFamilyGate);
+  if(input) input.addEventListener('keydown',e=>{ if(e.key==='Enter') submitFamilyGate(); });
+});
+
+
 /* ============ 家人即時共享同步（Supabase） ============
    同一個 GitHub Pages 網址在手機與家人電腦開啟時，會同步筆記、照片、
    自訂景點、行李清單、購物清單、路線圖與憑證。採用「最後更新時間優先」：
@@ -24,6 +64,36 @@ function localValueForKey(key){
   const raw=localStorage.getItem(key);
   if(raw == null) return null;
   try { return JSON.parse(raw); } catch(e){ return null; }
+}
+
+const MEDIA_SYNC_KEYS = new Set(['nz_photos','nz_covers','nz_route_maps','nz_shop','nz_rules','nz_docs']);
+function isBlankSyncValue(v){
+  if(v == null || v === '') return true;
+  if(Array.isArray(v)) return v.length === 0;
+  if(typeof v === 'object') return Object.keys(v).length === 0;
+  return false;
+}
+/* 圖片資料採「保留聯集」而不是整包覆蓋。這可避免某台裝置的空資料
+   把另一台裝置原本的照片清空。陣列會去除完全相同的重複圖片。 */
+function mergePreservingLocal(local, remote){
+  if(isBlankSyncValue(local)) return remote;
+  if(isBlankSyncValue(remote)) return local;
+  if(Array.isArray(local) && Array.isArray(remote)){
+    const out=[];
+    [...local,...remote].forEach(v=>{
+      const sig=typeof v==='string' ? v : JSON.stringify(v);
+      if(!out.some(x=>(typeof x==='string'?x:JSON.stringify(x))===sig)) out.push(v);
+    });
+    return out;
+  }
+  if(typeof local==='object' && typeof remote==='object'){
+    const out={...remote};
+    Object.keys(local).forEach(k=>{
+      out[k]=k in remote ? mergePreservingLocal(local[k],remote[k]) : local[k];
+    });
+    return out;
+  }
+  return local;
 }
 
 async function initCloudSync(){
@@ -62,7 +132,16 @@ async function reconcileInitialCloudData(){
     const localTime=meta[key] ? Date.parse(meta[key]) : 0;
     const remoteTime=remote && remote.updated_at ? Date.parse(remote.updated_at) : 0;
 
-    if(remote && remoteTime >= localTime){
+    if(MEDIA_SYNC_KEYS.has(key) && localRaw != null && remote){
+      let localValue, remoteValue;
+      try { localValue=JSON.parse(localRaw); remoteValue=JSON.parse(remote.value); } catch(e){ continue; }
+      const merged=mergePreservingLocal(localValue,remoteValue);
+      const mergedAt=new Date(Math.max(localTime||0,remoteTime||0,Date.now())).toISOString();
+      cloudSync.applyingRemote=true;
+      try { localStorage.setItem(key,JSON.stringify(merged)); setSyncMeta(key,mergedAt); applyStoreUpdate(key,JSON.stringify(merged)); }
+      finally { cloudSync.applyingRemote=false; }
+      await pushCloudNow(key,merged,mergedAt,false);
+    } else if(remote && remoteTime >= localTime){
       applyRemoteRow(remote);
     } else if(localRaw != null){
       let value;
@@ -79,9 +158,15 @@ function applyRemoteRow(row){
   if(localTime && Date.parse(localTime) > Date.parse(remoteTime)) return;
   cloudSync.applyingRemote=true;
   try {
-    localStorage.setItem(row.key,row.value);
+    let valueStr=row.value;
+    if(MEDIA_SYNC_KEYS.has(row.key)){
+      const local=localValueForKey(row.key);
+      let remote; try { remote=JSON.parse(row.value); } catch(e){ remote=null; }
+      valueStr=JSON.stringify(mergePreservingLocal(local,remote));
+    }
+    localStorage.setItem(row.key,valueStr);
     setSyncMeta(row.key,remoteTime);
-    applyStoreUpdate(row.key,row.value);
+    applyStoreUpdate(row.key,valueStr);
   } catch(e){ console.error('套用家人共享資料失敗：',row.key,e); }
   finally { cloudSync.applyingRemote=false; }
 }
@@ -366,7 +451,7 @@ function safeSetItem(key, valueObj){
   // 離線快取保存，所以就算這台裝置的 localStorage 滿了也不代表資料真的保不住。
   if (!cloudSync.applyingRemote) scheduleCloudPush(key, valueObj);
   if (!localOk && !cloudSync.enabled) {
-    alert('⚠️ 這台裝置瀏覽器的儲存空間已滿，剛才的變更這次可能無法保存下來。\n\n建議：\n1. 到「指南」頁使用「📤 匯出備份」把目前資料存成檔案\n2. 刪除幾張較舊或較大的照片後再試一次\n3. 之後可用「📥 匯入備份」把資料復原');
+    alert('⚠️ 這台裝置瀏覽器的儲存空間已滿，剛才的變更可能無法保存。請先刪除幾張較舊或較大的照片，再重新上傳。');
     return false;
   }
   return true;
@@ -1137,7 +1222,7 @@ function refreshRainRadar(){
   }
   const src='https://embed.windy.com/embed.html?type=map&location=coordinates&metricRain=mm&metricTemp=%C2%B0C&metricWind=km%2Fh&zoom=5&overlay=satellite&product=satellite&level=surface&lat=-44.7&lon=169.0';
   el.innerHTML=`<iframe class="windy-satellite-frame" src="${src}" title="紐西蘭南島 Windy 即時圖" loading="lazy" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
-  if(timeEl) timeEl.textContent='Windy 即時圖｜可直接拖曳、縮放與查看時間軸。';
+  if(timeEl) timeEl.textContent='Windy 即時天氣圖';
   simplifyMetServiceButton();
 }
 function simplifyMetServiceButton(){
@@ -1358,53 +1443,6 @@ function renderDocsList() {
 function handleDocClick(i) { const d = docsData[i]; if(d.img) openAttachModal(d.img); else if(d.link) window.open(d.link, '_blank'); }
 function handleDocPhoto(e, i) { const f = e.target.files[0]; if(f){ fileToDataURL(f).then(dataUrl=>{ docsData[i].img = dataUrl; persistDocs(); renderDocsList(); }); } e.target.value=''; }
 function removeDocImg(i) { docsData[i].img = null; persistDocs(); renderDocsList(); }
-
-/* ============ 跨裝置備份／還原（匯出/匯入 JSON 檔） ============ */
-/* 這個網頁是純前端靜態檔案，沒有伺服器，資料只存在「這台裝置的這個瀏覽器」裡（localStorage），
-   所以電腦上輸入的東西手機打開同一個網址是看不到的——並非程式錯誤，而是本來就沒有雲端資料庫可以互通。
-   這裡提供匯出/匯入功能，讓使用者可以手動把資料在裝置之間搬移，達到「同步」的效果。 */
-function exportBackup(){
-  const data = {};
-  for (let i = 0; i < localStorage.length; i++) {
-    const k = localStorage.key(i);
-    if (k && k.indexOf('nz_') === 0) data[k] = localStorage.getItem(k);
-  }
-  const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  const now = new Date();
-  const pad = n => String(n).padStart(2, '0');
-  a.href = url;
-  a.download = `南島行程備份_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-function importBackupFile(e){
-  const f = e.target.files[0];
-  if (!f) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const data = JSON.parse(reader.result);
-      const keys = Object.keys(data).filter(k => k.indexOf('nz_') === 0);
-      if (!keys.length) { alert('⚠️ 這個檔案看起來不是本行程的備份檔，請確認選擇了正確的 .json 檔案。'); return; }
-      if (!confirm(`即將把備份檔中的 ${keys.length} 項資料匯入到這台裝置，並覆蓋這台裝置上同名的筆記／照片／清單資料。確定要繼續嗎？`)) return;
-      let failCount = 0;
-      keys.forEach(k => {
-        try { localStorage.setItem(k, data[k]); } catch(err) { failCount++; console.error('匯入失敗：', k, err); }
-      });
-      if (failCount > 0) alert(`⚠️ 有 ${failCount} 項資料因裝置儲存空間不足而匯入失敗，其餘資料已匯入成功。`);
-      else alert('✅ 匯入完成！頁面即將重新整理套用新資料。');
-      location.reload();
-    } catch(err) {
-      alert('⚠️ 讀取備份檔失敗，請確認選擇的是先前用「匯出備份」產生的 .json 檔。');
-    }
-  };
-  reader.readAsText(f);
-  e.target.value = '';
-}
 
 /* ============ 線上／離線狀態 ============ */
 function updateNetStatus(){

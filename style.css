@@ -353,3 +353,23 @@ button, .tab-btn, .day-chip, .btn, .guide-header, .sub-spot-header, .spot-subtab
 
 .cloud-sync-status.sync-saving{background:rgba(255,255,255,.28); animation:syncPulse 1.2s ease-in-out infinite;}
 @keyframes syncPulse{50%{opacity:.62}}
+
+/* v9：Windy 內嵌尺寸與環線油價入口 */
+.windy-embed-wrap{position:relative;width:100%;height:clamp(420px,68vh,680px);border-radius:var(--r-md);overflow:hidden;background:#e6ebe3;}
+.windy-embed-wrap .windy-satellite-frame{position:absolute;inset:0;width:100%;height:100%;min-height:0;border:0;border-radius:0;}
+.fuel-live-main{display:inline-flex;align-items:center;justify-content:center;margin:2px 0 12px;text-decoration:none;background:#f2b646;color:#37290f;border-radius:999px;padding:9px 15px;font-size:12px;font-weight:900;box-shadow:var(--shadow-sm);}
+@media(max-width:600px){.windy-embed-wrap{height:460px;}}
+
+
+/* 家人共用密碼入口 */
+body.family-locked{overflow:hidden;}
+.family-gate{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(145deg,rgba(227,238,247,.96),rgba(244,239,225,.97));backdrop-filter:blur(12px);}
+.family-gate[hidden]{display:none;}
+.family-gate-card{width:min(420px,100%);background:rgba(255,255,255,.96);border:1px solid rgba(255,255,255,.8);border-radius:24px;padding:28px 24px;box-shadow:0 24px 70px rgba(44,63,83,.18);text-align:center;}
+.family-gate-icon{font-size:38px;margin-bottom:8px;}
+.family-gate-card h2{margin:0 0 8px;font-size:24px;color:var(--ink);}
+.family-gate-card p{margin:0 0 18px;font-size:13px;line-height:1.7;color:var(--ink-soft);}
+.family-gate-card input{width:100%;box-sizing:border-box;border:1.5px solid var(--line);border-radius:14px;padding:13px 14px;font:inherit;font-size:15px;background:#fff;outline:none;}
+.family-gate-card input:focus{border-color:var(--blue);box-shadow:0 0 0 4px rgba(83,129,236,.12);}
+.family-gate-card button{width:100%;margin-top:10px;border:0;border-radius:14px;padding:13px 16px;background:linear-gradient(135deg,var(--blue),#7d9cf0);color:#fff;font:inherit;font-weight:900;cursor:pointer;box-shadow:0 10px 24px rgba(83,129,236,.22);}
+.family-gate-error{min-height:20px;margin-top:8px;font-size:12px;font-weight:800;color:#c1502f;}
