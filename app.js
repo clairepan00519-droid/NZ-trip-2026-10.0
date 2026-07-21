@@ -961,7 +961,7 @@ function switchSubTab(dayIdx, tabType) {
 const FUEL_BRANDS = ['NPD','Waitomo','Gull','Z','BP','Mobil','Caltex','Challenge'];
 function fuelPricePanel(day){
   if(!day.gas) return '';
-  return `<div class="fuel-price-panel"><div class="fuel-price-head"><span>${day.gas}</span><a href="https://www.gaspy.nz/" target="_blank" rel="noopener">⛽ 查看即時油價</a></div><div class="fuel-brand-row">${FUEL_BRANDS.map(b=>`<a href="https://www.google.com/maps/search/${encodeURIComponent(b+' petrol station New Zealand')}" target="_blank" rel="noopener">${b}</a>`).join('')}</div><small>逐站即時價格由 Gaspy 社群更新；品牌按鈕可快速搜尋沿途分店。</small></div>`;
+  return `<div class="fuel-price-panel"><div class="fuel-price-head"><span>${day.gas}</span><a href="https://www.gaspy.nz/stats.html" target="_blank" rel="noopener">⛽ 查看即時油價</a></div><div class="fuel-brand-row">${FUEL_BRANDS.map(b=>`<a href="https://www.google.com/maps/search/${encodeURIComponent(b+' petrol station New Zealand')}" target="_blank" rel="noopener">${b}</a>`).join('')}</div><small>逐站即時價格由 Gaspy 社群更新；品牌按鈕可快速搜尋沿途分店。</small></div>`;
 }
 
 function renderDayContent(){
