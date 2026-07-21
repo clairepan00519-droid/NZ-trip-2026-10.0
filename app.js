@@ -49,6 +49,43 @@ const SYNC_META_KEY = 'nz_sync_meta_v3';
 const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_pack','nz_shop','nz_rules','nz_docs'];
 const MEDIA_SYNC_KEYS = new Set(['nz_photos','nz_covers','nz_route_maps','nz_shop','nz_rules','nz_docs']);
 const cloudSync = {enabled:false, applyingRemote:false, pending:{}, timer:null, pollTimer:null, lastError:null, ready:false};
+const MEDIA_BUCKET = 'trip-media';
+
+function makeMediaPath(folder, ext='jpg'){
+  const id = (crypto.randomUUID ? crypto.randomUUID() : Date.now()+'-'+Math.random().toString(36).slice(2));
+  return `${folder}/${new Date().toISOString().slice(0,10)}/${id}.${ext}`;
+}
+function publicMediaUrl(path){
+  return `${SUPABASE_URL}/storage/v1/object/public/${MEDIA_BUCKET}/${path.split('/').map(encodeURIComponent).join('/')}`;
+}
+function storageHeaders(contentType){
+  return {'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':contentType,'x-upsert':'false'};
+}
+async function compressImageToBlob(file){
+  if(!file.type.startsWith('image/')) return file;
+  const dataUrl = await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file);});
+  const img = await new Promise((resolve,reject)=>{const i=new Image();i.onload=()=>resolve(i);i.onerror=reject;i.src=dataUrl;});
+  const MAX_DIM=1800; let w=img.naturalWidth,h=img.naturalHeight;
+  if(w>MAX_DIM||h>MAX_DIM){if(w>h){h=Math.round(h*MAX_DIM/w);w=MAX_DIM;}else{w=Math.round(w*MAX_DIM/h);h=MAX_DIM;}}
+  const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h; canvas.getContext('2d').drawImage(img,0,0,w,h);
+  return await new Promise(resolve=>canvas.toBlob(b=>resolve(b||file),'image/jpeg',0.84));
+}
+async function uploadMediaBlob(blob, folder='uploads'){
+  if(!navigator.onLine) throw new Error('目前離線，照片會在恢復網路後才能上傳');
+  const ext=blob.type==='image/png'?'png':blob.type==='image/webp'?'webp':'jpg';
+  const path=makeMediaPath(folder,ext);
+  const r=await fetch(`${SUPABASE_URL}/storage/v1/object/${MEDIA_BUCKET}/${path}`,{method:'POST',headers:storageHeaders(blob.type||'application/octet-stream'),body:blob});
+  const text=await r.text();
+  if(!r.ok){
+    if(/Bucket not found|not found/i.test(text)) throw new Error('Supabase Storage 尚未設定，請執行 SUPABASE_SETUP.sql');
+    if(/row-level security|permission denied|Unauthorized/i.test(text)) throw new Error('Supabase Storage 上傳權限尚未設定');
+    throw new Error(text||`圖片上傳失敗 HTTP ${r.status}`);
+  }
+  return publicMediaUrl(path);
+}
+async function uploadMediaFile(file, folder){ return uploadMediaBlob(await compressImageToBlob(file),folder); }
+async function uploadLegacyDataUrl(dataUrl, folder){ const blob=await (await fetch(dataUrl)).blob(); return uploadMediaBlob(blob,folder); }
+function isLegacyDataUrl(v){ return typeof v==='string' && /^data:image\//i.test(v); }
 
 function syncHeaders(extra={}){ return {'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json',...extra}; }
 function getSyncMeta(){ try{return JSON.parse(localStorage.getItem(SYNC_META_KEY))||{};}catch(e){return {};} }
@@ -71,6 +108,9 @@ function friendlySyncError(e){
   if(/Failed to fetch|NetworkError/i.test(msg)) return '無法連上雲端資料庫';
   if(/relation.*nz_sync.*does not exist|PGRST205/i.test(msg)) return '尚未建立 nz_sync 資料表';
   if(/row-level security|permission denied|42501/i.test(msg)) return 'Supabase 權限尚未設定';
+  if(/Storage 尚未設定|Bucket not found/i.test(msg)) return '圖片雲端空間尚未設定';
+  if(/Storage 上傳權限/i.test(msg)) return '圖片雲端上傳權限尚未設定';
+  if(/quota|exceed/i.test(msg)) return '舊圖片仍佔用本機容量，正在等待搬移至雲端';
   if(/JWT|apikey|401|403/i.test(msg)) return 'Supabase 金鑰或權限錯誤';
   return msg.slice(0,80);
 }
@@ -608,14 +648,15 @@ function moveBlock(spotKey, blockId, dir, hasBadges, hasInfo){
 
 let routeMapStore = JSON.parse(localStorage.getItem('nz_route_maps')) || {};
 function persistRouteMaps(){ safeSetItem('nz_route_maps', routeMapStore); }
-function handleRouteMapUpload(e, dayIdx){
-  const files = Array.from(e.target.files || []);
+async function handleRouteMapUpload(e, dayIdx){
+  const files = Array.from(e.target.files || []); e.target.value='';
+  if(!files.length) return;
   if(!routeMapStore[dayIdx]) routeMapStore[dayIdx] = [];
-  Promise.all(files.map(fileToDataURL)).then(dataUrls=>{
-    routeMapStore[dayIdx].push(...dataUrls);
-    persistRouteMaps();
-    renderDayContent();
-  });
+  updateSyncStatus(null,'saving');
+  try{
+    const urls=[]; for(const f of files) urls.push(await uploadMediaFile(f,`route-maps/day-${dayIdx}`));
+    routeMapStore[dayIdx].push(...urls); persistRouteMaps(); renderDayContent();
+  }catch(err){ alert('⚠️ '+friendlySyncError(err)+'\n'+String(err.message||err)); updateSyncStatus(err); }
 }
 function removeRouteMap(dayIdx, i){
   if(!routeMapStore[dayIdx]) return;
@@ -802,16 +843,16 @@ function fileToDataURL(file){
     reader.readAsDataURL(file);
   });
 }
-function handlePhoto(e, idx){
-  const files = Array.from(e.target.files || []);
+async function handlePhoto(e, idx){
+  const files = Array.from(e.target.files || []); e.target.value='';
+  if(!files.length) return;
   if(!photoStore[idx]) photoStore[idx] = [];
-  Promise.all(files.map(fileToDataURL)).then(dataUrls=>{
-    photoStore[idx].push(...dataUrls);
-    persistPhotos();
-    renderDayContent();
-    setTimeout(()=>{ const card = document.getElementById('spot-card-'+idx); if(card) card.classList.add('open'); }, 50);
-  });
-  e.target.value = '';
+  updateSyncStatus(null,'saving');
+  try{
+    const urls=[]; for(const f of files) urls.push(await uploadMediaFile(f,`spot-photos/${idx.replace(/[^a-zA-Z0-9_-]/g,'_')}`));
+    photoStore[idx].push(...urls); persistPhotos(); renderDayContent();
+    setTimeout(()=>{ const card=document.getElementById('spot-card-'+idx); if(card) card.classList.add('open'); },50);
+  }catch(err){ alert('⚠️ '+friendlySyncError(err)+'\n'+String(err.message||err)); updateSyncStatus(err); }
 }
 function removePhoto(e, idx, photoIdx) {
   e.stopPropagation();
@@ -1271,7 +1312,7 @@ function renderRulesList() {
     </div>
   `;
 }
-function handleRulePhoto(e, i) { const f = e.target.files[0]; if(f){ fileToDataURL(f).then(dataUrl=>{ rulesData[i].img = dataUrl; persistRules(); renderRulesList(); }); } e.target.value=''; }
+async function handleRulePhoto(e,i){const f=e.target.files[0];e.target.value='';if(!f)return;try{rulesData[i].img=await uploadMediaFile(f,'rules');persistRules();renderRulesList();}catch(err){alert('⚠️ '+friendlySyncError(err)+'\n'+String(err.message||err));updateSyncStatus(err);}}
 function removeRuleImg(i) { rulesData[i].img = null; persistRules(); renderRulesList(); }
 function delRule(i) { rulesData.splice(i, 1); persistRules(); renderRulesList(); }
 function addRuleItem() {
@@ -1324,8 +1365,38 @@ function renderDocsList() {
   `).join('');
 }
 function handleDocClick(i) { const d = docsData[i]; if(d.img) openAttachModal(d.img); else if(d.link) window.open(d.link, '_blank'); }
-function handleDocPhoto(e, i) { const f = e.target.files[0]; if(f){ fileToDataURL(f).then(dataUrl=>{ docsData[i].img = dataUrl; persistDocs(); renderDocsList(); }); } e.target.value=''; }
+async function handleDocPhoto(e,i){const f=e.target.files[0];e.target.value='';if(!f)return;try{docsData[i].img=await uploadMediaFile(f,'documents');persistDocs();renderDocsList();}catch(err){alert('⚠️ '+friendlySyncError(err)+'\n'+String(err.message||err));updateSyncStatus(err);}}
 function removeDocImg(i) { docsData[i].img = null; persistDocs(); renderDocsList(); }
+
+
+/* 舊版曾把圖片 Base64 放進 localStorage。首次載入新版時，逐張搬到 Supabase Storage，
+   成功後只保留短網址，從根本解決 QuotaExceededError。 */
+async function migrateLegacyMediaToCloud(){
+  if(!navigator.onLine) return false;
+  let changed=false, total=0;
+  const migrateArray=async(arr,folder)=>{if(!Array.isArray(arr))return arr;const out=[];for(const v of arr){if(isLegacyDataUrl(v)){total++;out.push(await uploadLegacyDataUrl(v,folder));changed=true;}else out.push(v);}return out;};
+  for(const key of Object.keys(photoStore)) photoStore[key]=await migrateArray(photoStore[key],`legacy/spot/${key.replace(/[^a-zA-Z0-9_-]/g,'_')}`);
+  for(const key of Object.keys(routeMapStore)) routeMapStore[key]=await migrateArray(routeMapStore[key],`legacy/routes/day-${key}`);
+  for(const item of shopData){ item.imgs=await migrateArray(shopImgs(item),'legacy/shopping'); if(isLegacyDataUrl(item.img)){item.img=await uploadLegacyDataUrl(item.img,'legacy/shopping');changed=true;total++;} }
+  for(const item of rulesData){if(isLegacyDataUrl(item.img)){item.img=await uploadLegacyDataUrl(item.img,'legacy/rules');changed=true;total++;}}
+  for(const item of docsData){if(isLegacyDataUrl(item.img)){item.img=await uploadLegacyDataUrl(item.img,'legacy/documents');changed=true;total++;}}
+  if(changed){
+    cloudSync.applyingRemote=true;
+    try{
+      localStorage.removeItem('nz_photos'); localStorage.removeItem('nz_route_maps'); localStorage.removeItem('nz_shop'); localStorage.removeItem('nz_rules'); localStorage.removeItem('nz_docs');
+      localStorage.setItem('nz_photos',JSON.stringify(photoStore)); localStorage.setItem('nz_route_maps',JSON.stringify(routeMapStore)); localStorage.setItem('nz_shop',JSON.stringify(shopData)); localStorage.setItem('nz_rules',JSON.stringify(rulesData)); localStorage.setItem('nz_docs',JSON.stringify(docsData));
+    }finally{cloudSync.applyingRemote=false;}
+    renderDayContent();renderShopList();renderRulesList();renderDocsList();
+  }
+  return total>0;
+}
+async function startFamilyCloud(){
+  try{
+    updateSyncStatus(null,'connecting');
+    await migrateLegacyMediaToCloud();
+    await initCloudSync();
+  }catch(err){console.error('圖片搬移／同步啟動失敗',err);updateSyncStatus(err);}
+}
 
 /* ============ 線上／離線狀態 ============ */
 function updateNetStatus(){
@@ -1385,4 +1456,4 @@ removeUnneededUtilityUI();
 renderWeatherFromCache();
 loadLiveWeather();
 initRainRadar();
-initCloudSync();
+startFamilyCloud();
