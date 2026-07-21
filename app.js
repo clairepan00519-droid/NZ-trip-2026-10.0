@@ -87,6 +87,51 @@ async function uploadMediaFile(file, folder){ return uploadMediaBlob(await compr
 async function uploadLegacyDataUrl(dataUrl, folder){ const blob=await (await fetch(dataUrl)).blob(); return uploadMediaBlob(blob,folder); }
 function isLegacyDataUrl(v){ return typeof v==='string' && /^data:image\//i.test(v); }
 
+/* 將任何深度的舊 Base64 圖片遞迴搬到 Storage。
+   這同時處理景點照片、封面、路線圖、購物、規範及憑證。 */
+async function migrateMediaTree(value, folder='legacy', progress=null){
+  if(isLegacyDataUrl(value)){
+    if(progress) progress.total++;
+    const url=await uploadLegacyDataUrl(value,folder);
+    if(progress){ progress.done++; updateMigrationStatus(progress); }
+    return url;
+  }
+  if(Array.isArray(value)){
+    const out=[];
+    for(let i=0;i<value.length;i++) out.push(await migrateMediaTree(value[i],`${folder}/${i}`,progress));
+    return out;
+  }
+  if(value && typeof value==='object'){
+    const out={};
+    for(const [k,v] of Object.entries(value)){
+      const safe=String(k).replace(/[^a-zA-Z0-9_-]/g,'_').slice(0,80)||'item';
+      out[k]=await migrateMediaTree(v,`${folder}/${safe}`,progress);
+    }
+    return out;
+  }
+  return value;
+}
+function updateMigrationStatus(progress){
+  const el=document.getElementById('cloudSyncStatus');
+  if(!el)return;
+  el.style.display='inline-flex';
+  el.classList.add('sync-saving');
+  el.textContent=`☁️ 正在搬移舊圖片 ${progress.done}/${progress.total}`;
+}
+function replaceLocalJson(key,value){
+  const json=JSON.stringify(value);
+  try{
+    localStorage.removeItem(key);
+    localStorage.setItem(key,json);
+    return true;
+  }catch(e){
+    /* 本機快取滿不應阻止雲端共用；資料仍保留在記憶體與 Supabase。 */
+    console.warn('本機快取空間不足，略過快取：',key,e);
+    try{ localStorage.removeItem(key); }catch(_e){}
+    return false;
+  }
+}
+
 function syncHeaders(extra={}){ return {'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json',...extra}; }
 function getSyncMeta(){ try{return JSON.parse(localStorage.getItem(SYNC_META_KEY))||{};}catch(e){return {};} }
 function setSyncMeta(key,timestamp){const m=getSyncMeta();m[key]=timestamp||new Date().toISOString();try{localStorage.setItem(SYNC_META_KEY,JSON.stringify(m));}catch(e){}}
@@ -110,7 +155,7 @@ function friendlySyncError(e){
   if(/row-level security|permission denied|42501/i.test(msg)) return 'Supabase 權限尚未設定';
   if(/Storage 尚未設定|Bucket not found/i.test(msg)) return '圖片雲端空間尚未設定';
   if(/Storage 上傳權限/i.test(msg)) return '圖片雲端上傳權限尚未設定';
-  if(/quota|exceed/i.test(msg)) return '舊圖片仍佔用本機容量，正在等待搬移至雲端';
+  if(/quota|exceed/i.test(msg)) return '本機快取空間不足，但雲端同步仍會繼續';
   if(/JWT|apikey|401|403/i.test(msg)) return 'Supabase 金鑰或權限錯誤';
   return msg.slice(0,80);
 }
@@ -132,18 +177,40 @@ async function initCloudSync(){
   }catch(e){cloudSync.lastError=e;console.error('家人同步初始化失敗：',e);updateSyncStatus(e);}
 }
 async function reconcileInitialCloudData(){
-  const rows=await restGetRows(); const remoteMap=new Map(rows.map(r=>[r.key,r])); const meta=getSyncMeta();
+  const rows=await restGetRows();
+  const remoteMap=new Map(rows.map(r=>[r.key,r]));
+  const meta=getSyncMeta();
   for(const key of SYNC_KEYS){
-    const remote=remoteMap.get(key), localRaw=localStorage.getItem(key), localTime=Date.parse(meta[key]||0)||0, remoteTime=Date.parse(remote&&remote.updated_at||0)||0;
-    if(MEDIA_SYNC_KEYS.has(key)&&localRaw!=null&&remote){
-      let lv,rv;try{lv=JSON.parse(localRaw);rv=JSON.parse(remote.value);}catch(e){continue;}
-      const merged=mergePreservingLocal(lv,rv), t=new Date(Math.max(localTime,remoteTime,Date.now())).toISOString();
-      cloudSync.applyingRemote=true;try{localStorage.setItem(key,JSON.stringify(merged));setSyncMeta(key,t);applyStoreUpdate(key,JSON.stringify(merged));}finally{cloudSync.applyingRemote=false;}
-      await restUpsert(key,merged,t);
-    }else if(remote&&remoteTime>=localTime){ applyRemoteRow(remote); }
-    else if(localRaw!=null){let v;try{v=JSON.parse(localRaw);}catch(e){continue;}await restUpsert(key,v,meta[key]||new Date().toISOString());}
+    const remote=remoteMap.get(key);
+    const localRaw=localStorage.getItem(key);
+    const localTime=Date.parse(meta[key]||0)||0;
+    const remoteTime=Date.parse(remote&&remote.updated_at||0)||0;
+    let localValue=null, remoteValue=null;
+    try{ if(localRaw!=null) localValue=JSON.parse(localRaw); }catch(e){}
+    try{ if(remote) remoteValue=JSON.parse(remote.value); }catch(e){}
+
+    if(MEDIA_SYNC_KEYS.has(key)){
+      const progress={done:0,total:0};
+      if(localValue!=null) localValue=await migrateMediaTree(localValue,`legacy/local/${key}`,progress);
+      if(remoteValue!=null) remoteValue=await migrateMediaTree(remoteValue,`legacy/cloud/${key}`,progress);
+      let merged;
+      if(localValue!=null && remoteValue!=null) merged=mergePreservingLocal(localValue,remoteValue);
+      else merged=localValue!=null?localValue:remoteValue;
+      if(merged!=null){
+        const t=new Date(Math.max(localTime,remoteTime,Date.now())).toISOString();
+        cloudSync.applyingRemote=true;
+        try{ replaceLocalJson(key,merged); setSyncMeta(key,t); applyStoreUpdate(key,JSON.stringify(merged)); }
+        finally{ cloudSync.applyingRemote=false; }
+        await restUpsert(key,merged,t);
+      }
+      continue;
+    }
+
+    if(remote&&remoteTime>=localTime){ applyRemoteRow(remote); }
+    else if(localValue!=null){ await restUpsert(key,localValue,meta[key]||new Date().toISOString()); }
   }
 }
+
 async function pollCloudChanges(){
   if(!navigator.onLine||cloudSync.applyingRemote)return;
   try{const rows=await restGetRows();rows.forEach(applyRemoteRow);cloudSync.lastError=null;updateSyncStatus();}
@@ -153,7 +220,7 @@ function applyRemoteRow(row){
   if(!row||typeof row.value==='undefined')return;
   const rt=row.updated_at||new Date().toISOString(), lt=getSyncMeta()[row.key]; if(lt&&Date.parse(lt)>Date.parse(rt))return;
   cloudSync.applyingRemote=true;
-  try{let valueStr=row.value;if(MEDIA_SYNC_KEYS.has(row.key)){const local=localValueForKey(row.key);let remote;try{remote=JSON.parse(row.value);}catch(e){remote=null;}valueStr=JSON.stringify(mergePreservingLocal(local,remote));}localStorage.setItem(row.key,valueStr);setSyncMeta(row.key,rt);applyStoreUpdate(row.key,valueStr);}catch(e){console.error('套用家人資料失敗',e);}finally{cloudSync.applyingRemote=false;}
+  try{let valueStr=row.value;if(MEDIA_SYNC_KEYS.has(row.key)){const local=localValueForKey(row.key);let remote;try{remote=JSON.parse(row.value);}catch(e){remote=null;}valueStr=JSON.stringify(mergePreservingLocal(local,remote));}replaceLocalJson(row.key,JSON.parse(valueStr));setSyncMeta(row.key,rt);applyStoreUpdate(row.key,valueStr);}catch(e){console.error('套用家人資料失敗',e);}finally{cloudSync.applyingRemote=false;}
 }
 function applyStoreUpdate(key,jsonStr){
   let parsed;try{parsed=JSON.parse(jsonStr);}catch(e){return;}
@@ -1373,23 +1440,34 @@ function removeDocImg(i) { docsData[i].img = null; persistDocs(); renderDocsList
    成功後只保留短網址，從根本解決 QuotaExceededError。 */
 async function migrateLegacyMediaToCloud(){
   if(!navigator.onLine) return false;
-  let changed=false, total=0;
-  const migrateArray=async(arr,folder)=>{if(!Array.isArray(arr))return arr;const out=[];for(const v of arr){if(isLegacyDataUrl(v)){total++;out.push(await uploadLegacyDataUrl(v,folder));changed=true;}else out.push(v);}return out;};
-  for(const key of Object.keys(photoStore)) photoStore[key]=await migrateArray(photoStore[key],`legacy/spot/${key.replace(/[^a-zA-Z0-9_-]/g,'_')}`);
-  for(const key of Object.keys(routeMapStore)) routeMapStore[key]=await migrateArray(routeMapStore[key],`legacy/routes/day-${key}`);
-  for(const item of shopData){ item.imgs=await migrateArray(shopImgs(item),'legacy/shopping'); if(isLegacyDataUrl(item.img)){item.img=await uploadLegacyDataUrl(item.img,'legacy/shopping');changed=true;total++;} }
-  for(const item of rulesData){if(isLegacyDataUrl(item.img)){item.img=await uploadLegacyDataUrl(item.img,'legacy/rules');changed=true;total++;}}
-  for(const item of docsData){if(isLegacyDataUrl(item.img)){item.img=await uploadLegacyDataUrl(item.img,'legacy/documents');changed=true;total++;}}
+  const progress={done:0,total:0};
+  const stores={
+    nz_photos:photoStore,
+    nz_covers:coverStore,
+    nz_route_maps:routeMapStore,
+    nz_shop:shopData,
+    nz_rules:rulesData,
+    nz_docs:docsData
+  };
+  let changed=false;
+  for(const [key,value] of Object.entries(stores)){
+    const before=JSON.stringify(value);
+    const migrated=await migrateMediaTree(value,`legacy/local/${key}`,progress);
+    if(JSON.stringify(migrated)!==before) changed=true;
+    if(key==='nz_photos') photoStore=migrated;
+    else if(key==='nz_covers') coverStore=migrated;
+    else if(key==='nz_route_maps') routeMapStore=migrated;
+    else if(key==='nz_shop') shopData=migrated;
+    else if(key==='nz_rules') rulesData=migrated;
+    else if(key==='nz_docs') docsData=migrated;
+    replaceLocalJson(key,migrated);
+  }
   if(changed){
-    cloudSync.applyingRemote=true;
-    try{
-      localStorage.removeItem('nz_photos'); localStorage.removeItem('nz_route_maps'); localStorage.removeItem('nz_shop'); localStorage.removeItem('nz_rules'); localStorage.removeItem('nz_docs');
-      localStorage.setItem('nz_photos',JSON.stringify(photoStore)); localStorage.setItem('nz_route_maps',JSON.stringify(routeMapStore)); localStorage.setItem('nz_shop',JSON.stringify(shopData)); localStorage.setItem('nz_rules',JSON.stringify(rulesData)); localStorage.setItem('nz_docs',JSON.stringify(docsData));
-    }finally{cloudSync.applyingRemote=false;}
     renderDayContent();renderShopList();renderRulesList();renderDocsList();
   }
-  return total>0;
+  return progress.done>0;
 }
+
 async function startFamilyCloud(){
   try{
     updateSyncStatus(null,'connecting');
