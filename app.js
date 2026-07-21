@@ -216,15 +216,44 @@ async function pollCloudChanges(){
   try{const rows=await restGetRows();rows.forEach(applyRemoteRow);cloudSync.lastError=null;updateSyncStatus();}
   catch(e){cloudSync.lastError=e;updateSyncStatus(e);}
 }
-function applyRemoteRow(row){
+
+/* 背景同步不得打斷任何正在輸入的表單。
+   遠端資料會先排隊，等輸入框失焦後再一次套用。 */
+const deferredRemoteRows = new Map();
+let deferredRemoteTimer = null;
+function isUserEditingForm(){
+  const a=document.activeElement;
+  if(!a) return false;
+  if(a.matches && a.matches('input:not([type=checkbox]):not([type=radio]):not([type=file]), textarea, select, [contenteditable="true"]')) return true;
+  return false;
+}
+function queueRemoteRow(row){
+  if(!row||!row.key)return;
+  const prev=deferredRemoteRows.get(row.key);
+  if(!prev || Date.parse(prev.updated_at||0)<=Date.parse(row.updated_at||0)) deferredRemoteRows.set(row.key,row);
+}
+function flushDeferredRemoteRows(){
+  clearTimeout(deferredRemoteTimer);
+  deferredRemoteTimer=setTimeout(()=>{
+    if(isUserEditingForm()||!deferredRemoteRows.size)return;
+    const rows=[...deferredRemoteRows.values()];
+    deferredRemoteRows.clear();
+    rows.forEach(r=>applyRemoteRow(r,true));
+  },280);
+}
+document.addEventListener('focusout',flushDeferredRemoteRows,true);
+document.addEventListener('keydown',e=>{if(e.key==='Escape')flushDeferredRemoteRows();},true);
+
+function applyRemoteRow(row, forceApply=false){
   if(!row||typeof row.value==='undefined')return;
+  if(!forceApply && isUserEditingForm()){ queueRemoteRow(row); return; }
   const rt=row.updated_at||new Date().toISOString(), lt=getSyncMeta()[row.key]; if(lt&&Date.parse(lt)>Date.parse(rt))return;
   cloudSync.applyingRemote=true;
   try{let valueStr=row.value;if(MEDIA_SYNC_KEYS.has(row.key)){const local=localValueForKey(row.key);let remote;try{remote=JSON.parse(row.value);}catch(e){remote=null;}valueStr=JSON.stringify(mergePreservingLocal(local,remote));}replaceLocalJson(row.key,JSON.parse(valueStr));setSyncMeta(row.key,rt);applyStoreUpdate(row.key,valueStr);}catch(e){console.error('套用家人資料失敗',e);}finally{cloudSync.applyingRemote=false;}
 }
 function applyStoreUpdate(key,jsonStr){
   let parsed;try{parsed=JSON.parse(jsonStr);}catch(e){return;}
-  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_custom_spots':customSpotsStore=parsed;break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=parsed;break;case'nz_pack':packData=migratePackCategoryNames(parsed);renderPackList();return;case'nz_shop':shopData=parsed;renderShopList();return;case'nz_rules':rulesData=parsed;renderRulesList();return;case'nz_docs':docsData=parsed;renderDocsList();return;default:return;}
+  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_custom_spots':customSpotsStore=parsed;break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=parsed;break;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=parsed;renderShopList();return;case'nz_rules':rulesData=parsed;renderRulesList();return;case'nz_docs':docsData=parsed;renderDocsList();return;default:return;}
   if(typeof renderDayContent==='function')renderDayContent();if(typeof updateSpotCount==='function')updateSpotCount();
 }
 function scheduleCloudPush(key,valueObj){
@@ -1268,9 +1297,46 @@ function toggleListSection(type, key){
 }
 function escAttr(v){ return String(v ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+function capturePackComposerState(){
+  const composer=document.getElementById('packComposer');
+  const input=document.getElementById('newPackItem');
+  return {
+    open:!!composer?.classList.contains('open'),
+    value:input?.value||'',
+    focused:document.activeElement===input,
+    start:input?.selectionStart??null,
+    end:input?.selectionEnd??null,
+    cat:window._packSelectedCat,
+    subcat:window._packSelectedSubcat
+  };
+}
+function isPackComposerEditing(){
+  const composer=document.getElementById('packComposer');
+  const input=document.getElementById('newPackItem');
+  return !!(composer?.classList.contains('open') && (document.activeElement===input || (input?.value||'').trim()));
+}
+function restorePackComposerState(state){
+  if(!state)return;
+  if(state.cat)window._packSelectedCat=state.cat;
+  if(state.subcat)window._packSelectedSubcat=state.subcat;
+  renderPackSubcatChips();
+  const input=document.getElementById('newPackItem');
+  const composer=document.getElementById('packComposer');
+  if(composer)composer.classList.toggle('open',!!state.open);
+  if(input){
+    input.value=state.value||'';
+    if(state.focused){
+      requestAnimationFrame(()=>{
+        input.focus({preventScroll:true});
+        if(state.start!=null)try{input.setSelectionRange(state.start,state.end??state.start);}catch(e){}
+      });
+    }
+  }
+}
 function renderPackList(){
   const wrap = document.getElementById('packListWrap');
   if(!wrap) return;
+  const composerState=capturePackComposerState();
   const groups = Object.keys(packData).map((cat,catIdx)=>{
     const isOpen = listSectionOpen.pack[cat] === true;
     const done = packData[cat].filter(it=>it.checked).length;
@@ -1285,9 +1351,9 @@ function renderPackList(){
   wrap.innerHTML = groups + `<button class="pack-add-trigger" onclick="togglePackComposer()">＋ 新增行李品項</button><div id="packComposer" class="pack-composer"><div class="composer-label">放在哪一類？</div><div class="pack-type-grid">${Object.keys(packData).map((c,i)=>`<button class="pack-type-btn ${i===0?'active':''}" onclick="choosePackCategory('${jsQuote(c)}',this)">${c}</button>`).join('')}</div><div class="composer-label">細分類</div><div id="packSubcatChips" class="pack-subcat-chips"></div><div class="pack-entry-row"><input type="text" id="newPackItem" placeholder="輸入品項，例如：充電線" onkeydown="if(event.key==='Enter') addPackItem()"><button onclick="addPackItem()">加入清單</button></div><button class="composer-cancel" onclick="togglePackComposer(false)">取消</button></div>`;
   window._packSelectedCat = window._packSelectedCat || Object.keys(packData)[0];
   window._packSelectedSubcat = window._packSelectedSubcat || (PACK_SUBCATS[window._packSelectedCat]||['其他'])[0];
-  renderPackSubcatChips();
+  restorePackComposerState(composerState);
 }
-function togglePackComposer(force){ const el=document.getElementById('packComposer'); if(!el)return; const show=typeof force==='boolean'?force:!el.classList.contains('open'); el.classList.toggle('open',show); if(show) setTimeout(()=>document.getElementById('newPackItem')?.focus(),80); }
+function togglePackComposer(force){ const el=document.getElementById('packComposer'); if(!el)return; const show=typeof force==='boolean'?force:!el.classList.contains('open'); el.classList.toggle('open',show); if(show){setTimeout(()=>document.getElementById('newPackItem')?.focus(),80);}else if(window._packRemoteRenderPending){window._packRemoteRenderPending=false;renderPackList();} }
 function choosePackCategory(cat,btn){ window._packSelectedCat=cat; window._packSelectedSubcat=(PACK_SUBCATS[cat]||['其他'])[0]; document.querySelectorAll('.pack-type-btn').forEach(b=>b.classList.toggle('active',b===btn)); renderPackSubcatChips(); }
 function renderPackSubcatChips(){ const el=document.getElementById('packSubcatChips'); if(!el)return; const list=PACK_SUBCATS[window._packSelectedCat]||['其他']; if(!list.includes(window._packSelectedSubcat)) window._packSelectedSubcat=list[0]; el.innerHTML=list.map(s=>`<button class="pack-subcat-chip ${s===window._packSelectedSubcat?'active':''}" onclick="choosePackSubcat('${jsQuote(s)}')">${s}</button>`).join(''); }
 function choosePackSubcat(sub){ window._packSelectedSubcat=sub; renderPackSubcatChips(); }
