@@ -1,157 +1,168 @@
 
-/* ============ 家人即時共享同步（Supabase，選用功能，免信用卡）============
-   這個網頁預設仍是純前端靜態頁面，資料只存在「這台裝置的這個瀏覽器」。
-   若想讓一起旅行的家人打開同一個網址，就能「即時」看到你新增的筆記、
-   照片、自訂景點等內容（不用重新整理頁面），請照以下步驟啟用：
-
-   1. 前往 https://supabase.com，用 Email 或 GitHub/Google 帳號免費註冊
-      （完全不需要信用卡）。
-   2. 建立一個新專案（New Project）：取名任意、資料庫密碼隨意設定
-      （記下來備用）、地區選離你近的（如 Southeast Asia / Northeast Asia）。
-      建立大約需要1-2分鐘等它初始化完成。
-   3. 左側選單「SQL Editor」→「New query」，貼上下面這段 SQL 後按 Run，
-      會建立好需要的資料表，並開啟即時同步(Realtime)：
-
-        create table nz_sync (
-          key text primary key,
-          value text not null,
-          updated_at timestamptz default now()
-        );
-        alter table nz_sync enable row level security;
-        create policy "public read" on nz_sync for select using (true);
-        create policy "public write" on nz_sync for insert with check (true);
-        create policy "public update" on nz_sync for update using (true);
-        alter publication supabase_realtime add table nz_sync;
-
-      （這代表只要知道你的專案網址與金鑰就能讀寫，適合僅供親友使用的
-      小型行程網頁；請不要把真正機密的資料放進這個共用資料表。）
-   4. 左側選單「Project Settings」（齒輪圖示）→「Data API」，會看到
-      「Project URL」；再到「API Keys」分頁，複製 anon / public 這把金鑰
-      （新版介面可能標示為 publishable key）。
-   5. 把這兩個值，分別貼到下面 SUPABASE_URL 和 SUPABASE_ANON_KEY，
-      取代 null。存檔後重新上傳到你原本放這個網頁的地方
-      （GitHub Pages／Netlify等）。
-
-   沒有設定 SUPABASE_URL / SUPABASE_ANON_KEY 的話，以下程式會自動跳過
-   雲端同步，網頁維持純本機模式，其他功能完全不受影響。
-   =================================================================== */
+/* ============ 家人即時共享同步（Supabase） ============
+   同一個 GitHub Pages 網址在手機與家人電腦開啟時，會同步筆記、照片、
+   自訂景點、行李清單、購物清單、路線圖與憑證。採用「最後更新時間優先」：
+   頁面開啟時不會再無條件用舊雲端資料覆蓋較新的本機資料。 */
 const SUPABASE_URL = "https://xkahhddatpoxuembeiwl.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrYWhoZGRhdHBveHVlbWJlaXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NDExNDksImV4cCI6MjEwMDAxNzE0OX0.Jdpxpz7rgyK_OikYkRrVQComDWZiaI4fgf5ZV_SdaII";
-/* 範例：
-const SUPABASE_URL = "https://abcdefghijk.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9......";
-*/
+const SYNC_META_KEY = 'nz_sync_meta_v2';
+const cloudSync = {
+  enabled:false, client:null, applyingRemote:false, pending:{}, timer:null,
+  channel:null, ready:false, lastError:null
+};
 
-const cloudSync = { enabled:false, client:null, applyingRemote:false, pending:{}, timer:null };
+function getSyncMeta(){
+  try { return JSON.parse(localStorage.getItem(SYNC_META_KEY)) || {}; }
+  catch(e){ return {}; }
+}
+function setSyncMeta(key, timestamp){
+  const meta=getSyncMeta();
+  meta[key]=timestamp || new Date().toISOString();
+  try { localStorage.setItem(SYNC_META_KEY, JSON.stringify(meta)); } catch(e){}
+}
+function localValueForKey(key){
+  const raw=localStorage.getItem(key);
+  if(raw == null) return null;
+  try { return JSON.parse(raw); } catch(e){ return null; }
+}
 
-(function initCloudSync(){
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || typeof supabase === 'undefined') return;
+async function initCloudSync(){
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || typeof supabase === 'undefined') {
+    updateSyncStatus(new Error('Supabase SDK 未載入'));
+    return;
+  }
   try {
-    cloudSync.client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    cloudSync.client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      realtime:{ params:{ eventsPerSecond:5 } }
+    });
     cloudSync.enabled = true;
-    loadInitialCloudData();
+    updateSyncStatus(null, 'connecting');
+    await reconcileInitialCloudData();
     startCloudListening();
+    cloudSync.ready = true;
     updateSyncStatus();
   } catch(e) {
-    console.error('Supabase 初始化失敗，將維持本機模式：', e);
-  }
-})();
-
-/* 頁面剛打開時，先把雲端目前的最新資料整批抓下來套用一次
-   （避免要等第一筆變更發生才會同步） */
-async function loadInitialCloudData(){
-  if (!cloudSync.enabled) return;
-  try {
-    const { data, error } = await cloudSync.client.from('nz_sync').select('key, value');
-    if (error) throw error;
-    (data || []).forEach(row => {
-      cloudSync.applyingRemote = true;
-      try { localStorage.setItem(row.key, row.value); } catch(e) { /* 本機空間已滿也沒關係，記憶體變數仍會更新 */ }
-      applyStoreUpdate(row.key, row.value);
-      cloudSync.applyingRemote = false;
-    });
-  } catch(e) {
-    console.error('讀取雲端初始資料失敗：', e);
+    cloudSync.lastError=e;
+    console.error('Supabase 初始化失敗，暫時維持本機模式：', e);
     updateSyncStatus(e);
   }
 }
 
-/* 監聽雲端資料變化：家人那端新增/修改任何東西，這台裝置會即時收到並更新畫面 */
-function startCloudListening(){
-  if (!cloudSync.enabled) return;
-  cloudSync.client
-    .channel('nz_sync_changes')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'nz_sync' }, (payload) => {
-      const row = payload.new && Object.keys(payload.new).length ? payload.new : payload.old;
-      if (!row || typeof row.value === 'undefined') return;
-      cloudSync.applyingRemote = true;
-      try { localStorage.setItem(row.key, row.value); } catch(e) { /* 本機空間已滿也沒關係，記憶體變數仍會更新 */ }
-      applyStoreUpdate(row.key, row.value);
-      cloudSync.applyingRemote = false;
-      updateSyncStatus();
-    })
-    .subscribe((status, err) => {
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { console.error('雲端同步監聽失敗：', err); updateSyncStatus(err || true); }
-      else if (status === 'SUBSCRIBED') { updateSyncStatus(); }
-    });
-}
+/* 開啟頁面時逐項比較 updated_at；較新的一方勝出。 */
+async function reconcileInitialCloudData(){
+  const { data, error } = await cloudSync.client.from('nz_sync').select('key,value,updated_at');
+  if(error) throw error;
+  const remoteMap=new Map((data||[]).map(row=>[row.key,row]));
+  const meta=getSyncMeta();
+  const supported=['nz_notes','nz_photos','nz_covers','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_pack','nz_shop','nz_rules','nz_docs'];
 
-/* 把某個 nz_ 開頭的 key 的最新資料，套用回對應的記憶體變數並重新渲染畫面，
-   讓家人那端不用重新整理頁面就能看到剛新增的筆記／照片／清單內容 */
-function applyStoreUpdate(key, jsonStr){
-  let parsed;
-  try { parsed = JSON.parse(jsonStr); } catch(e) { console.error('套用雲端資料失敗：', key, e); return; }
-  switch(key){
-    case 'nz_notes': notesStore = parsed; break;
-    case 'nz_photos': photoStore = parsed; break;
-    case 'nz_covers': coverStore = parsed; break;
-    case 'nz_custom_spots': customSpotsStore = parsed; break;
-    case 'nz_order': orderStore = parsed; break;
-    case 'nz_block_order': blockOrderStore = parsed; break;
-    case 'nz_route_maps': routeMapStore = parsed; break;
-    case 'nz_pack': packData = migratePackCategoryNames(parsed); persistPack(); if (typeof renderPackList === 'function') renderPackList(); return;
-    case 'nz_shop': shopData = parsed; if (typeof renderShopList === 'function') renderShopList(); return;
-    case 'nz_rules': rulesData = parsed; if (typeof renderRulesList === 'function') renderRulesList(); return;
-    case 'nz_docs': docsData = parsed; if (typeof renderDocsList === 'function') renderDocsList(); return;
-    default: return;
-  }
-  if (typeof renderDayContent === 'function') renderDayContent();
-  if (typeof updateSpotCount === 'function') updateSpotCount();
-}
+  for(const key of supported){
+    const remote=remoteMap.get(key);
+    const localRaw=localStorage.getItem(key);
+    const localTime=meta[key] ? Date.parse(meta[key]) : 0;
+    const remoteTime=remote && remote.updated_at ? Date.parse(remote.updated_at) : 0;
 
-/* 把本機剛寫入的資料推上雲端，讓家人即時看到。用簡單防抖（600ms），
-   避免使用者連續操作（例如一次選很多張照片）時狂打寫入次數 */
-function scheduleCloudPush(key, valueObj){
-  if (!cloudSync.enabled || cloudSync.applyingRemote) return;
-  cloudSync.pending[key] = valueObj;
-  clearTimeout(cloudSync.timer);
-  cloudSync.timer = setTimeout(flushCloudPush, 600);
-}
-async function flushCloudPush(){
-  const entries = Object.entries(cloudSync.pending);
-  cloudSync.pending = {};
-  for (const [key, valueObj] of entries) {
-    try {
-      const { error } = await cloudSync.client.from('nz_sync').upsert({
-        key,
-        value: JSON.stringify(valueObj),
-        updated_at: new Date().toISOString()
-      });
-      if (error) throw error;
-    } catch(e) {
-      console.error('雲端同步寫入失敗：', key, e);
-      alert('⚠️ 剛才的變更同步到家人共享雲端時失敗（可能是網路不穩，或資料量太大）。這台裝置上的資料仍已保留。');
-      updateSyncStatus(e);
+    if(remote && remoteTime >= localTime){
+      applyRemoteRow(remote);
+    } else if(localRaw != null){
+      let value;
+      try { value=JSON.parse(localRaw); } catch(e){ continue; }
+      await pushCloudNow(key,value,meta[key] || new Date().toISOString(),false);
     }
   }
 }
-function updateSyncStatus(err){
-  const el = document.getElementById('cloudSyncStatus');
-  if (!el) return;
-  if (!cloudSync.enabled) { el.style.display = 'none'; return; }
-  el.style.display = 'inline-flex';
-  el.classList.toggle('sync-error', !!err);
-  el.textContent = err ? '⚠️ 雲端連線異常' : '☁️ 家人共享同步中';
+
+function applyRemoteRow(row){
+  if(!row || typeof row.value === 'undefined') return;
+  const remoteTime=row.updated_at || new Date().toISOString();
+  const localTime=getSyncMeta()[row.key];
+  if(localTime && Date.parse(localTime) > Date.parse(remoteTime)) return;
+  cloudSync.applyingRemote=true;
+  try {
+    localStorage.setItem(row.key,row.value);
+    setSyncMeta(row.key,remoteTime);
+    applyStoreUpdate(row.key,row.value);
+  } catch(e){ console.error('套用家人共享資料失敗：',row.key,e); }
+  finally { cloudSync.applyingRemote=false; }
+}
+
+function startCloudListening(){
+  if(!cloudSync.enabled) return;
+  if(cloudSync.channel) cloudSync.client.removeChannel(cloudSync.channel);
+  cloudSync.channel=cloudSync.client.channel('nz_sync_changes_v2')
+    .on('postgres_changes',{event:'*',schema:'public',table:'nz_sync'},payload=>{
+      const row=payload.new && Object.keys(payload.new).length ? payload.new : payload.old;
+      applyRemoteRow(row);
+      updateSyncStatus();
+    })
+    .subscribe((status,err)=>{
+      if(status==='SUBSCRIBED') updateSyncStatus();
+      else if(status==='CHANNEL_ERROR' || status==='TIMED_OUT' || status==='CLOSED') updateSyncStatus(err || new Error(status));
+    });
+}
+
+function applyStoreUpdate(key,jsonStr){
+  let parsed;
+  try { parsed=JSON.parse(jsonStr); } catch(e){ console.error('套用雲端資料失敗：',key,e); return; }
+  switch(key){
+    case 'nz_notes': notesStore=parsed; break;
+    case 'nz_photos': photoStore=parsed; break;
+    case 'nz_covers': coverStore=parsed; break;
+    case 'nz_custom_spots': customSpotsStore=parsed; break;
+    case 'nz_order': orderStore=parsed; break;
+    case 'nz_block_order': blockOrderStore=parsed; break;
+    case 'nz_route_maps': routeMapStore=parsed; break;
+    case 'nz_pack': packData=migratePackCategoryNames(parsed); if(typeof renderPackList==='function') renderPackList(); return;
+    case 'nz_shop': shopData=parsed; if(typeof renderShopList==='function') renderShopList(); return;
+    case 'nz_rules': rulesData=parsed; if(typeof renderRulesList==='function') renderRulesList(); return;
+    case 'nz_docs': docsData=parsed; if(typeof renderDocsList==='function') renderDocsList(); return;
+    default:return;
+  }
+  if(typeof renderDayContent==='function') renderDayContent();
+  if(typeof updateSpotCount==='function') updateSpotCount();
+}
+
+function scheduleCloudPush(key,valueObj){
+  if(!cloudSync.enabled || cloudSync.applyingRemote) return;
+  const updatedAt=new Date().toISOString();
+  setSyncMeta(key,updatedAt);
+  cloudSync.pending[key]={valueObj,updatedAt};
+  clearTimeout(cloudSync.timer);
+  cloudSync.timer=setTimeout(flushCloudPush,700);
+  updateSyncStatus(null,'saving');
+}
+async function pushCloudNow(key,valueObj,updatedAt,showAlert=true){
+  try{
+    const {error}=await cloudSync.client.from('nz_sync').upsert({
+      key,value:JSON.stringify(valueObj),updated_at:updatedAt || new Date().toISOString()
+    },{onConflict:'key'});
+    if(error) throw error;
+    setSyncMeta(key,updatedAt);
+    return true;
+  }catch(e){
+    cloudSync.lastError=e;
+    console.error('雲端同步寫入失敗：',key,e);
+    if(showAlert) alert('⚠️ 這次變更已保存在目前裝置，但尚未同步到家人裝置。恢復穩定網路後再修改一次即可重試。');
+    updateSyncStatus(e);
+    return false;
+  }
+}
+async function flushCloudPush(){
+  const entries=Object.entries(cloudSync.pending);
+  cloudSync.pending={};
+  for(const [key,item] of entries) await pushCloudNow(key,item.valueObj,item.updatedAt,true);
+  if(!cloudSync.lastError) updateSyncStatus();
+}
+function updateSyncStatus(err,state){
+  const el=document.getElementById('cloudSyncStatus');
+  if(!el) return;
+  el.style.display='inline-flex';
+  el.classList.toggle('sync-error',!!err);
+  el.classList.toggle('sync-saving',state==='saving' || state==='connecting');
+  if(err) el.textContent='⚠️ 家人同步暫時離線';
+  else if(state==='connecting') el.textContent='☁️ 正在連接家人同步';
+  else if(state==='saving') el.textContent='☁️ 正在同步變更';
+  else el.textContent='☁️ 家人共享已同步';
 }
 
 /* ============ HEADER IMAGES ============ */
@@ -1427,7 +1438,7 @@ function setTab(tab) {
 }
 
 function removeUnneededUtilityUI(){
-  const patterns=[/跨裝置資料備份/,/跨裝置.*同步/,/匯出備份/,/匯入備份/,/輸出.*行程/,/儲存.*行程/];
+  const patterns=[/跨裝置資料備份/,/匯出備份/,/匯入備份/,/輸出.*行程/,/儲存.*行程/];
   document.querySelectorAll('button,a,section,.card,.guide-card,.utility-card').forEach(el=>{
     const text=(el.textContent||'').replace(/\s+/g,' ').trim();
     if(patterns.some(r=>r.test(text))){
@@ -1453,3 +1464,4 @@ removeUnneededUtilityUI();
 renderWeatherFromCache();
 loadLiveWeather();
 initRainRadar();
+initCloudSync();

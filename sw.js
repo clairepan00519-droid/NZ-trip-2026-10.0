@@ -17,7 +17,7 @@
    連結使用，此檔案就會正常運作並提供離線瀏覽能力。
    =========================================================== */
 
-const CACHE_VERSION = 'nz-trip-v1';
+const CACHE_VERSION = 'nz-trip-v8-family-sync';
 const SHELL_CACHE = `nz-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `nz-runtime-${CACHE_VERSION}`;
 
@@ -26,7 +26,9 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(SHELL_CACHE).then((cache) => {
       // 快取目前這一頁本身（不論檔名為何），讓離線時仍能開啟
-      return cache.add(new Request('./', { cache: 'reload' })).catch(() => {});
+      return cache.addAll([
+        './', './index.html', './app.js', './style.css', './images/map.webp'
+      ]).catch(() => {});
     })
   );
 });

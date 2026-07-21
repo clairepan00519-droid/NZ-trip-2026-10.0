@@ -350,3 +350,6 @@ button, .tab-btn, .day-chip, .btn, .guide-header, .sub-spot-header, .spot-subtab
   .fuel-price-head{flex-direction:column;align-items:stretch;}
   .fuel-price-head a{text-align:center;}
 }
+
+.cloud-sync-status.sync-saving{background:rgba(255,255,255,.28); animation:syncPulse 1.2s ease-in-out infinite;}
+@keyframes syncPulse{50%{opacity:.62}}
