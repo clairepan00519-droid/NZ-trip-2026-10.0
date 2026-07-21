@@ -1011,6 +1011,108 @@ async function fetchWeatherFor(k, attempt){
   renderOneLiveCity(k);
 }
 
+function renderWeatherFromCache(){
+  const wrap = document.getElementById('liveWeatherList');
+  if(!wrap) return;
+  const cache = loadWeatherCache();
+  const hasAny = Object.keys(CITIES).some(k=>cache[k] && cache[k].data);
+  wrap.innerHTML = Object.keys(CITIES).map(k=>`<div class="weather-day" id="live-${k}"><div class="date" style="width:auto; text-align:left;"><b style="font-size:12.5px;">${CITIES[k].label}</b></div><div class="mid"><div class="out">讀取中...</div></div></div>`).join('');
+  Object.keys(CITIES).forEach(k=>{
+    if(cache[k] && cache[k].data){
+      liveWeatherCache[k] = { data: cache[k].data, error:null, stale:true, fetchedAt: cache[k].fetchedAt };
+      renderOneLiveCity(k);
+    }
+  });
+  const timeEl = document.getElementById('liveWeatherTime');
+  if(timeEl && hasAny){
+    const times = Object.keys(CITIES).map(k=>cache[k] && cache[k].fetchedAt).filter(Boolean);
+    const latest = times.length ? new Date(Math.max(...times)).toLocaleString('zh-TW', {hour12:false}) : '—';
+    timeEl.textContent = navigator.onLine
+      ? `顯示上次快取資料（更新於 ${latest}），正在取得最新資訊...`
+      : `⚠️ 目前離線，顯示上次快取資料（更新於 ${latest}）`;
+  }
+  return hasAny;
+}
+
+async function loadLiveWeather(){
+  const wrap = document.getElementById('liveWeatherList');
+  if(!wrap) return;
+  const timeEl = document.getElementById('liveWeatherTime');
+
+  if(!navigator.onLine){
+    const hasAny = renderWeatherFromCache();
+    if(!hasAny && timeEl) timeEl.textContent = '⚠️ 目前離線，且尚無快取資料可顯示，請連上網路後再試一次。';
+    return;
+  }
+
+  wrap.innerHTML = Object.keys(CITIES).map(k=>`<div class="weather-day" id="live-${k}"><div class="date" style="width:auto; text-align:left;"><b style="font-size:12.5px;">${CITIES[k].label}</b></div><div class="mid"><div class="out">讀取中...</div></div></div>`).join('');
+  if(timeEl) timeEl.textContent = '即時資料抓取中...';
+
+  await Promise.all(Object.keys(CITIES).map(k=>fetchWeatherFor(k, 0)));
+
+  const failCount = Object.values(liveWeatherCache).filter(v=>v && v.error).length;
+  const staleCount = Object.values(liveWeatherCache).filter(v=>v && v.stale).length;
+  if(timeEl){
+    if(staleCount && staleCount === Object.keys(CITIES).length){
+      const times = Object.values(liveWeatherCache).map(v=>v.fetchedAt).filter(Boolean);
+      timeEl.textContent = `⚠️ 目前離線，顯示快取資料（更新於 ${times.length?new Date(Math.max(...times)).toLocaleString('zh-TW',{hour12:false}):'—'}）`;
+    } else if(failCount){
+      timeEl.textContent = `即時資料更新於：${new Date().toLocaleString('zh-TW', {hour12:false})}（${failCount} 個地點連線失敗，可點擊下方「重新整理」再試一次）`;
+    } else {
+      timeEl.textContent = '即時資料更新於：' + new Date().toLocaleString('zh-TW', {hour12:false});
+    }
+  }
+}
+
+function renderOneLiveCity(k){
+  const el = document.getElementById('live-'+k);
+  if(!el) return;
+  const entry = liveWeatherCache[k];
+  const data = entry && entry.data;
+  if(!data || !data.current){
+    const reason = (entry && entry.error) ? entry.error : '暫時無法取得氣象資料';
+    el.innerHTML = `<div class="mid" style="display:flex; align-items:center; justify-content:space-between; width:100%;"><div class="out">${CITIES[k].label}：${reason}</div><button onclick="fetchWeatherFor('${k}', 0)" style="background:#f2f3ec; border:none; color:var(--ink-soft); padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer;">🔄 重試</button></div>`;
+    return;
+  }
+  
+  const cw = data.current;
+  const [ico, desc] = wmoInfo(cw.weather_code);
+  const temp = Math.round(cw.temperature_2m);
+  const wind = cw.wind_speed_10m;
+  const precip = cw.precipitation;
+  const sr = data.daily && data.daily.sunrise ? data.daily.sunrise[0].substring(11, 16) : '--:--';
+  const ss = data.daily && data.daily.sunset ? data.daily.sunset[0].substring(11, 16) : '--:--';
+  const uv = data.daily && data.daily.uv_index_max ? getUVStars(data.daily.uv_index_max[0]) : '未知';
+  const tip = getDynamicTip(temp, cw.weather_code);
+  const badgeHtml = entry.stale
+    ? `<span class="live-badge stale"><span class="dot"></span>快取${entry.fetchedAt ? '・' + new Date(entry.fetchedAt).toLocaleString('zh-TW',{hour12:false, month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}) : ''}</span>`
+    : `<span class="live-badge"><span class="dot"></span>即時</span>`;
+  
+  const MW_TIMES = { 'Wanaka':'20:00~', 'Tekapo':'19:45~', 'MtCook':'20:00~', 'Oamaru':'--', 'Dunedin':'--', 'TeAnau':'20:30~', 'Queenstown':'20:15~' };
+  
+  el.innerHTML = `
+    <div style="display:flex; flex-direction:column; width:100%;">
+      <div style="display:flex; align-items:center; gap:12px; width:100%; border-bottom:1px dashed #eee; padding-bottom:10px; margin-bottom:10px;">
+        <div class="date" style="width:auto; text-align:left;"><b style="font-size:12.5px;">${CITIES[k].label}</b>${badgeHtml}</div>
+        <div class="ico">${ico}</div>
+        <div class="mid"><div class="place" style="font-size:14px; font-weight:900; white-space:nowrap;">${desc}</div><div class="out" style="font-size:11px; font-weight:700;">${temp}°C</div></div>
+        <div class="w-bot" style="text-align:right;">
+          <span style="display:block; font-size:10px;">風速 ${wind} km/h</span>
+          <span style="display:block; font-size:10px; color:#c1502f;">降雨 ${precip} mm</span>
+          <span style="display:block; font-size:10px; color:var(--teal);">UV ${uv}</span>
+        </div>
+      </div>
+      <div class="astro-box" style="margin-top:0;">
+        <span>🌅 日出 ${sr}</span>
+        <span>🌇 日落 ${ss}</span>
+        <span class="mw">🌌 銀河 ${MW_TIMES[k]}</span>
+      </div>
+      <div class="live-tip-box"><b>🧥 穿搭與裝備建議：</b><br>${tip}</div>
+    </div>
+  `;
+}
+
+
 /* ============ 內嵌 Windy 天氣圖 ============ */
 function initRainRadar(){ refreshRainRadar(); }
 function refreshRainRadar(){
@@ -1038,6 +1140,13 @@ function simplifyMetServiceButton(){
 /* 這四份清單（打包／購物／規範／票券）過去只存在記憶體中，
    重新整理頁面就會整個消失、勾選與照片也不會保留。
    現在改為讀取與寫入 LocalStorage，行為和景點筆記／照片一致。 */
+const PACK_SUBCATS = {
+  '🎒 隨身背包':['證件與金錢','電子用品','健康與隨身用品','機上用品','其他'],
+  '👜 手提行李':['攝影器材','電子用品','衣物備用','易碎／貴重物品','其他'],
+  '🧳 託運行李':['外套與保暖層','上衣與褲裝','鞋襪與配件','盥洗與保養','藥品與備品','其他']
+};
+function jsQuote(v){ return String(v).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+
 const defaultPackData = {
   '🎒 隨身背包':[{name:'護照＋機票／訂房憑證', qty:1, checked:false},{name:'國際駕照＋台灣駕照', qty:1, checked:false},{name:'行動電源＋備用電池', qty:2, checked:false},{name:'太陽眼鏡＋防曬乳', qty:1, checked:false},{name:'常備藥品', qty:1, checked:false}],
   '👜 手提行李':[{name:'Sony A7C2 相機', qty:1, checked:false},{name:'大光圈風景鏡頭／變焦鏡', qty:2, checked:false},{name:'大容量記憶卡', qty:2, checked:false},{name:'機上保暖薄毯/外套', qty:1, checked:false}],
@@ -1049,9 +1158,14 @@ function migratePackCategoryNames(data){
     if (!data['🧳 託運行李']) data['🧳 託運行李'] = data['🧳 托運行李（衣物防寒）'];
     delete data['🧳 托運行李（衣物防寒）'];
   }
+  if(!data) data = structuredClone(defaultPackData);
+  Object.keys(data).forEach(cat=>{
+    const fallback=(PACK_SUBCATS[cat]||['其他'])[0];
+    data[cat]=(data[cat]||[]).map(it=>({...it, subcat:it.subcat || fallback}));
+  });
   return data;
 }
-let packData = migratePackCategoryNames(JSON.parse(localStorage.getItem('nz_pack')) || defaultPackData);
+let packData = migratePackCategoryNames(JSON.parse(localStorage.getItem('nz_pack')) || structuredClone(defaultPackData));
 function persistPack(){ safeSetItem('nz_pack', packData); }
 
 const defaultShopData = [{name:'Manuka 麥蘆卡蜂蜜', qty:1, checked:false, img:null, cat:'supermarket', location:''},{name:'美麗諾羊毛製品', qty:1, checked:false, img:null, cat:'souvenir', location:''},{name:'Whittaker\'s 巧克力', qty:1, checked:false, img:null, cat:'supermarket', location:''}];
@@ -1059,10 +1173,10 @@ let shopData = JSON.parse(localStorage.getItem('nz_shop')) || defaultShopData;
 function persistShop(){ safeSetItem('nz_shop', shopData); }
 const SHOP_CATS = {supermarket:{label:'🛒 超市', color:'#2f8a52'}, souvenir:{label:'🎁 紀念品', color:'#c1502f'}};
 
-const listSectionOpen = { pack:{}, shop:{supermarket:true, souvenir:true} };
+const listSectionOpen = { pack:{}, shop:{supermarket:false, souvenir:false} };
 function toggleListSection(type, key){
   if(!listSectionOpen[type]) listSectionOpen[type] = {};
-  listSectionOpen[type][key] = listSectionOpen[type][key] === false;
+  listSectionOpen[type][key] = !listSectionOpen[type][key];
   if(type === 'pack') renderPackList(); else renderShopList();
 }
 function escAttr(v){ return String(v ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -1077,7 +1191,7 @@ function renderPackList(){
     const subHTML = subcats.map(sub=>{
       const entries=packData[cat].map((it,i)=>({it,i})).filter(x=>(x.it.subcat||subcats[0])===sub);
       if(!entries.length) return '';
-      return `<div class="pack-subgroup"><div class="pack-subgroup-title">${sub}</div>${entries.map(({it,i})=>`<div class="pack-item ${it.checked?'checked':''}"><input type="checkbox" ${it.checked?'checked':''} onchange="togglePack('${jsQuote(cat)}',${i})"><div class="name">${it.name}</div><div class="qty"><button onclick="changeQty('${jsQuote(cat)}',${i},-1)">－</button><span>${it.qty}</span><button onclick="changeQty('${jsQuote(cat)}',${i},1)">＋</button></div><button class="del" onclick="delPack('${jsQuote(cat)}',${i})">✕</button></div>`).join('')}</div>`;
+      return `<div class="pack-subgroup"><div class="pack-subgroup-title">${sub}</div>${entries.map(({it,i})=>`<div class="pack-item ${it.checked?'checked':''}"><input type="checkbox" ${it.checked?'checked':''} onchange="togglePack('${jsQuote(cat)}',${i})"><div class="name shop-item-title">${it.name}</div><div class="qty"><button onclick="changeQty('${jsQuote(cat)}',${i},-1)">－</button><span>${it.qty}</span><button onclick="changeQty('${jsQuote(cat)}',${i},1)">＋</button></div><button class="del" onclick="delPack('${jsQuote(cat)}',${i})">✕</button></div>`).join('')}</div>`;
     }).join('');
     return `<section class="checklist-group pack-group pack-group-${catIdx}"><button class="checklist-group-head" onclick="toggleListSection('pack', '${jsQuote(cat)}')" aria-expanded="${isOpen}"><span>${cat}</span><small>${done}/${packData[cat].length}</small><b>${isOpen?'⌃':'⌄'}</b></button><div class="checklist-group-body ${isOpen?'open':''}">${subHTML || '<div class="empty compact">此分類目前沒有項目。</div>'}</div></section>`;
   }).join('');
@@ -1106,12 +1220,12 @@ function renderShopList(){
   const groups = Object.keys(SHOP_CATS).map(catKey=>{
     const meta = SHOP_CATS[catKey];
     const entries = shopData.map((it,i)=>({it,i})).filter(x=>(x.it.cat || 'supermarket') === catKey);
-    const isOpen = listSectionOpen.shop[catKey] !== false;
+    const isOpen = listSectionOpen.shop[catKey] === true;
     const done = entries.filter(x=>x.it.checked).length;
     const itemsHTML = entries.length ? entries.map(({it,i})=>{
       const imgs = shopImgs(it);
       const photosHTML = imgs.length ? `<div class="shop-photo-row">${imgs.map((src,pi)=>`<div class="shop-photo"><img src="${src}" onclick="openAttachModal('${src}')"><button onclick="removeShopImg(${i},${pi})">✕</button></div>`).join('')}</div>` : '';
-      return `<div class="pack-item shop-item ${it.checked?'checked':''}"><input type="checkbox" ${it.checked?'checked':''} onchange="toggleShop(${i})"><div class="name">${it.name}</div><div class="qty"><button onclick="document.getElementById('shopFile-${i}').click()" class="camera-btn">📷</button><button onclick="changeShopQty(${i},-1)">－</button><span>${it.qty}</span><button onclick="changeShopQty(${i},1)">＋</button></div><button class="del" onclick="delShop(${i})">✕</button><input type="file" id="shopFile-${i}" accept="image/*" multiple style="display:none" onchange="handleShopPhoto(event, ${i})"><div class="shop-extra"><input type="text" value="${escAttr(it.location||'')}" placeholder="建議購買位置或其他資訊..." onchange="setShopLocation(${i}, this.value)"></div>${photosHTML}</div>`;
+      return `<div class="pack-item shop-item ${it.checked?'checked':''}"><input type="checkbox" ${it.checked?'checked':''} onchange="toggleShop(${i})"><div class="name shop-item-title">${it.name}</div><div class="qty"><button onclick="document.getElementById('shopFile-${i}').click()" class="camera-btn">📷</button><button onclick="changeShopQty(${i},-1)">－</button><span>${it.qty}</span><button onclick="changeShopQty(${i},1)">＋</button></div><button class="del" onclick="delShop(${i})">✕</button><input type="file" id="shopFile-${i}" accept="image/*" multiple style="display:none" onchange="handleShopPhoto(event, ${i})"><div class="shop-extra"><input type="text" value="${escAttr(it.location||'')}" placeholder="建議購買位置或其他資訊..." onchange="setShopLocation(${i}, this.value)"></div>${photosHTML}</div>`;
     }).join('') : '<div class="empty compact">此清單目前沒有項目。</div>';
     return `<section class="checklist-group shop-group shop-${catKey}"><button class="checklist-group-head" onclick="toggleListSection('shop','${catKey}')" aria-expanded="${isOpen}"><span>${meta.label}</span><small>${done}/${entries.length}</small><b>${isOpen?'⌃':'⌄'}</b></button><div class="checklist-group-body ${isOpen?'open':''}">${itemsHTML}</div></section>`;
   }).join('');
@@ -1292,7 +1406,7 @@ function updateNetStatus(){
     ? '<span class="net-dot online"></span><span class="net-txt">線上</span>'
     : '<span class="net-dot offline"></span><span class="net-txt">離線</span>';
 }
-window.addEventListener('online', ()=>{ updateNetStatus(); loadLiveWeather(); });
+window.addEventListener('online', ()=>{ updateNetStatus(); loadLiveWeather(); refreshRainRadar(); });
 window.addEventListener('offline', updateNetStatus);
 
 /* ============ Service Worker（離線快取整個網頁） ============ */
@@ -1309,7 +1423,7 @@ function setTab(tab) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-'+tab).classList.add('active');
   window.scrollTo({top:0, behavior:'smooth'});
-  if(tab === 'weather' && rainRadarMap){ setTimeout(()=>rainRadarMap.invalidateSize(), 100); }
+  if(tab === 'weather'){ setTimeout(refreshRainRadar, 100); }
 }
 
 function removeUnneededUtilityUI(){
