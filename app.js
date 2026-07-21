@@ -39,217 +39,100 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 
 
-/* ============ 家人即時共享同步（Supabase） ============
-   同一個 GitHub Pages 網址在手機與家人電腦開啟時，會同步筆記、照片、
-   自訂景點、行李清單、購物清單、路線圖與憑證。採用「最後更新時間優先」：
-   頁面開啟時不會再無條件用舊雲端資料覆蓋較新的本機資料。 */
+/* ============ 家人共用同步（Supabase REST） ============
+   不依賴外部 Supabase SDK 或 Realtime WebSocket，避免 CDN／WebSocket
+   在手機、公司或醫院網路被攔截。每 12 秒檢查一次家人更新。 */
 const SUPABASE_URL = "https://xkahhddatpoxuembeiwl.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrYWhoZGRhdHBveHVlbWJlaXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NDExNDksImV4cCI6MjEwMDAxNzE0OX0.Jdpxpz7rgyK_OikYkRrVQComDWZiaI4fgf5ZV_SdaII";
-const SYNC_META_KEY = 'nz_sync_meta_v2';
-const cloudSync = {
-  enabled:false, client:null, applyingRemote:false, pending:{}, timer:null,
-  channel:null, ready:false, lastError:null
-};
 
-function getSyncMeta(){
-  try { return JSON.parse(localStorage.getItem(SYNC_META_KEY)) || {}; }
-  catch(e){ return {}; }
-}
-function setSyncMeta(key, timestamp){
-  const meta=getSyncMeta();
-  meta[key]=timestamp || new Date().toISOString();
-  try { localStorage.setItem(SYNC_META_KEY, JSON.stringify(meta)); } catch(e){}
-}
-function localValueForKey(key){
-  const raw=localStorage.getItem(key);
-  if(raw == null) return null;
-  try { return JSON.parse(raw); } catch(e){ return null; }
-}
-
+const SYNC_META_KEY = 'nz_sync_meta_v3';
+const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_pack','nz_shop','nz_rules','nz_docs'];
 const MEDIA_SYNC_KEYS = new Set(['nz_photos','nz_covers','nz_route_maps','nz_shop','nz_rules','nz_docs']);
-function isBlankSyncValue(v){
-  if(v == null || v === '') return true;
-  if(Array.isArray(v)) return v.length === 0;
-  if(typeof v === 'object') return Object.keys(v).length === 0;
-  return false;
-}
-/* 圖片資料採「保留聯集」而不是整包覆蓋。這可避免某台裝置的空資料
-   把另一台裝置原本的照片清空。陣列會去除完全相同的重複圖片。 */
-function mergePreservingLocal(local, remote){
+const cloudSync = {enabled:false, applyingRemote:false, pending:{}, timer:null, pollTimer:null, lastError:null, ready:false};
+
+function syncHeaders(extra={}){ return {'apikey':SUPABASE_ANON_KEY,'Authorization':'Bearer '+SUPABASE_ANON_KEY,'Content-Type':'application/json',...extra}; }
+function getSyncMeta(){ try{return JSON.parse(localStorage.getItem(SYNC_META_KEY))||{};}catch(e){return {};} }
+function setSyncMeta(key,timestamp){const m=getSyncMeta();m[key]=timestamp||new Date().toISOString();try{localStorage.setItem(SYNC_META_KEY,JSON.stringify(m));}catch(e){}}
+function localValueForKey(key){const raw=localStorage.getItem(key);if(raw==null)return null;try{return JSON.parse(raw);}catch(e){return null;}}
+function isBlankSyncValue(v){if(v==null||v==='')return true;if(Array.isArray(v))return v.length===0;if(typeof v==='object')return Object.keys(v).length===0;return false;}
+function mergePreservingLocal(local,remote){
   if(isBlankSyncValue(local)) return remote;
   if(isBlankSyncValue(remote)) return local;
-  if(Array.isArray(local) && Array.isArray(remote)){
-    const out=[];
-    [...local,...remote].forEach(v=>{
-      const sig=typeof v==='string' ? v : JSON.stringify(v);
-      if(!out.some(x=>(typeof x==='string'?x:JSON.stringify(x))===sig)) out.push(v);
-    });
-    return out;
+  if(Array.isArray(local)&&Array.isArray(remote)){
+    const out=[];[...local,...remote].forEach(v=>{const sig=typeof v==='string'?v:JSON.stringify(v);if(!out.some(x=>(typeof x==='string'?x:JSON.stringify(x))===sig))out.push(v);});return out;
   }
-  if(typeof local==='object' && typeof remote==='object'){
-    const out={...remote};
-    Object.keys(local).forEach(k=>{
-      out[k]=k in remote ? mergePreservingLocal(local[k],remote[k]) : local[k];
-    });
-    return out;
+  if(typeof local==='object'&&typeof remote==='object'){
+    const out={...remote};Object.keys(local).forEach(k=>{out[k]=k in remote?mergePreservingLocal(local[k],remote[k]):local[k];});return out;
   }
   return local;
 }
-
+function friendlySyncError(e){
+  const msg=String(e&&e.message||e||'未知錯誤');
+  if(/Failed to fetch|NetworkError/i.test(msg)) return '無法連上雲端資料庫';
+  if(/relation.*nz_sync.*does not exist|PGRST205/i.test(msg)) return '尚未建立 nz_sync 資料表';
+  if(/row-level security|permission denied|42501/i.test(msg)) return 'Supabase 權限尚未設定';
+  if(/JWT|apikey|401|403/i.test(msg)) return 'Supabase 金鑰或權限錯誤';
+  return msg.slice(0,80);
+}
+async function restGetRows(){
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/nz_sync?select=key,value,updated_at`,{headers:syncHeaders(),cache:'no-store'});
+  const text=await r.text(); if(!r.ok) throw new Error(text||`HTTP ${r.status}`); return text?JSON.parse(text):[];
+}
+async function restUpsert(key,valueObj,updatedAt){
+  const r=await fetch(`${SUPABASE_URL}/rest/v1/nz_sync?on_conflict=key`,{method:'POST',headers:syncHeaders({'Prefer':'resolution=merge-duplicates,return=minimal'}),body:JSON.stringify({key,value:JSON.stringify(valueObj),updated_at:updatedAt||new Date().toISOString()})});
+  const text=await r.text(); if(!r.ok) throw new Error(text||`HTTP ${r.status}`); return true;
+}
 async function initCloudSync(){
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || typeof supabase === 'undefined') {
-    updateSyncStatus(new Error('Supabase SDK 未載入'));
-    return;
-  }
-  try {
-    cloudSync.client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      realtime:{ params:{ eventsPerSecond:5 } }
-    });
-    cloudSync.enabled = true;
-    updateSyncStatus(null, 'connecting');
-    await reconcileInitialCloudData();
-    startCloudListening();
-    cloudSync.ready = true;
-    updateSyncStatus();
-  } catch(e) {
-    cloudSync.lastError=e;
-    console.error('Supabase 初始化失敗，暫時維持本機模式：', e);
-    updateSyncStatus(e);
-  }
-}
-
-/* 開啟頁面時逐項比較 updated_at；較新的一方勝出。 */
-async function reconcileInitialCloudData(){
-  const { data, error } = await cloudSync.client.from('nz_sync').select('key,value,updated_at');
-  if(error) throw error;
-  const remoteMap=new Map((data||[]).map(row=>[row.key,row]));
-  const meta=getSyncMeta();
-  const supported=['nz_notes','nz_photos','nz_covers','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_pack','nz_shop','nz_rules','nz_docs'];
-
-  for(const key of supported){
-    const remote=remoteMap.get(key);
-    const localRaw=localStorage.getItem(key);
-    const localTime=meta[key] ? Date.parse(meta[key]) : 0;
-    const remoteTime=remote && remote.updated_at ? Date.parse(remote.updated_at) : 0;
-
-    if(MEDIA_SYNC_KEYS.has(key) && localRaw != null && remote){
-      let localValue, remoteValue;
-      try { localValue=JSON.parse(localRaw); remoteValue=JSON.parse(remote.value); } catch(e){ continue; }
-      const merged=mergePreservingLocal(localValue,remoteValue);
-      const mergedAt=new Date(Math.max(localTime||0,remoteTime||0,Date.now())).toISOString();
-      cloudSync.applyingRemote=true;
-      try { localStorage.setItem(key,JSON.stringify(merged)); setSyncMeta(key,mergedAt); applyStoreUpdate(key,JSON.stringify(merged)); }
-      finally { cloudSync.applyingRemote=false; }
-      await pushCloudNow(key,merged,mergedAt,false);
-    } else if(remote && remoteTime >= localTime){
-      applyRemoteRow(remote);
-    } else if(localRaw != null){
-      let value;
-      try { value=JSON.parse(localRaw); } catch(e){ continue; }
-      await pushCloudNow(key,value,meta[key] || new Date().toISOString(),false);
-    }
-  }
-}
-
-function applyRemoteRow(row){
-  if(!row || typeof row.value === 'undefined') return;
-  const remoteTime=row.updated_at || new Date().toISOString();
-  const localTime=getSyncMeta()[row.key];
-  if(localTime && Date.parse(localTime) > Date.parse(remoteTime)) return;
-  cloudSync.applyingRemote=true;
-  try {
-    let valueStr=row.value;
-    if(MEDIA_SYNC_KEYS.has(row.key)){
-      const local=localValueForKey(row.key);
-      let remote; try { remote=JSON.parse(row.value); } catch(e){ remote=null; }
-      valueStr=JSON.stringify(mergePreservingLocal(local,remote));
-    }
-    localStorage.setItem(row.key,valueStr);
-    setSyncMeta(row.key,remoteTime);
-    applyStoreUpdate(row.key,valueStr);
-  } catch(e){ console.error('套用家人共享資料失敗：',row.key,e); }
-  finally { cloudSync.applyingRemote=false; }
-}
-
-function startCloudListening(){
-  if(!cloudSync.enabled) return;
-  if(cloudSync.channel) cloudSync.client.removeChannel(cloudSync.channel);
-  cloudSync.channel=cloudSync.client.channel('nz_sync_changes_v2')
-    .on('postgres_changes',{event:'*',schema:'public',table:'nz_sync'},payload=>{
-      const row=payload.new && Object.keys(payload.new).length ? payload.new : payload.old;
-      applyRemoteRow(row);
-      updateSyncStatus();
-    })
-    .subscribe((status,err)=>{
-      if(status==='SUBSCRIBED') updateSyncStatus();
-      else if(status==='CHANNEL_ERROR' || status==='TIMED_OUT' || status==='CLOSED') updateSyncStatus(err || new Error(status));
-    });
-}
-
-function applyStoreUpdate(key,jsonStr){
-  let parsed;
-  try { parsed=JSON.parse(jsonStr); } catch(e){ console.error('套用雲端資料失敗：',key,e); return; }
-  switch(key){
-    case 'nz_notes': notesStore=parsed; break;
-    case 'nz_photos': photoStore=parsed; break;
-    case 'nz_covers': coverStore=parsed; break;
-    case 'nz_custom_spots': customSpotsStore=parsed; break;
-    case 'nz_order': orderStore=parsed; break;
-    case 'nz_block_order': blockOrderStore=parsed; break;
-    case 'nz_route_maps': routeMapStore=parsed; break;
-    case 'nz_pack': packData=migratePackCategoryNames(parsed); if(typeof renderPackList==='function') renderPackList(); return;
-    case 'nz_shop': shopData=parsed; if(typeof renderShopList==='function') renderShopList(); return;
-    case 'nz_rules': rulesData=parsed; if(typeof renderRulesList==='function') renderRulesList(); return;
-    case 'nz_docs': docsData=parsed; if(typeof renderDocsList==='function') renderDocsList(); return;
-    default:return;
-  }
-  if(typeof renderDayContent==='function') renderDayContent();
-  if(typeof updateSpotCount==='function') updateSpotCount();
-}
-
-function scheduleCloudPush(key,valueObj){
-  if(!cloudSync.enabled || cloudSync.applyingRemote) return;
-  const updatedAt=new Date().toISOString();
-  setSyncMeta(key,updatedAt);
-  cloudSync.pending[key]={valueObj,updatedAt};
-  clearTimeout(cloudSync.timer);
-  cloudSync.timer=setTimeout(flushCloudPush,700);
-  updateSyncStatus(null,'saving');
-}
-async function pushCloudNow(key,valueObj,updatedAt,showAlert=true){
+  updateSyncStatus(null,'connecting');
   try{
-    const {error}=await cloudSync.client.from('nz_sync').upsert({
-      key,value:JSON.stringify(valueObj),updated_at:updatedAt || new Date().toISOString()
-    },{onConflict:'key'});
-    if(error) throw error;
-    setSyncMeta(key,updatedAt);
-    return true;
-  }catch(e){
-    cloudSync.lastError=e;
-    console.error('雲端同步寫入失敗：',key,e);
-    if(showAlert) alert('⚠️ 這次變更已保存在目前裝置，但尚未同步到家人裝置。恢復穩定網路後再修改一次即可重試。');
-    updateSyncStatus(e);
-    return false;
+    cloudSync.enabled=true;
+    await reconcileInitialCloudData();
+    cloudSync.ready=true; cloudSync.lastError=null; updateSyncStatus();
+    clearInterval(cloudSync.pollTimer); cloudSync.pollTimer=setInterval(pollCloudChanges,12000);
+  }catch(e){cloudSync.lastError=e;console.error('家人同步初始化失敗：',e);updateSyncStatus(e);}
+}
+async function reconcileInitialCloudData(){
+  const rows=await restGetRows(); const remoteMap=new Map(rows.map(r=>[r.key,r])); const meta=getSyncMeta();
+  for(const key of SYNC_KEYS){
+    const remote=remoteMap.get(key), localRaw=localStorage.getItem(key), localTime=Date.parse(meta[key]||0)||0, remoteTime=Date.parse(remote&&remote.updated_at||0)||0;
+    if(MEDIA_SYNC_KEYS.has(key)&&localRaw!=null&&remote){
+      let lv,rv;try{lv=JSON.parse(localRaw);rv=JSON.parse(remote.value);}catch(e){continue;}
+      const merged=mergePreservingLocal(lv,rv), t=new Date(Math.max(localTime,remoteTime,Date.now())).toISOString();
+      cloudSync.applyingRemote=true;try{localStorage.setItem(key,JSON.stringify(merged));setSyncMeta(key,t);applyStoreUpdate(key,JSON.stringify(merged));}finally{cloudSync.applyingRemote=false;}
+      await restUpsert(key,merged,t);
+    }else if(remote&&remoteTime>=localTime){ applyRemoteRow(remote); }
+    else if(localRaw!=null){let v;try{v=JSON.parse(localRaw);}catch(e){continue;}await restUpsert(key,v,meta[key]||new Date().toISOString());}
   }
+}
+async function pollCloudChanges(){
+  if(!navigator.onLine||cloudSync.applyingRemote)return;
+  try{const rows=await restGetRows();rows.forEach(applyRemoteRow);cloudSync.lastError=null;updateSyncStatus();}
+  catch(e){cloudSync.lastError=e;updateSyncStatus(e);}
+}
+function applyRemoteRow(row){
+  if(!row||typeof row.value==='undefined')return;
+  const rt=row.updated_at||new Date().toISOString(), lt=getSyncMeta()[row.key]; if(lt&&Date.parse(lt)>Date.parse(rt))return;
+  cloudSync.applyingRemote=true;
+  try{let valueStr=row.value;if(MEDIA_SYNC_KEYS.has(row.key)){const local=localValueForKey(row.key);let remote;try{remote=JSON.parse(row.value);}catch(e){remote=null;}valueStr=JSON.stringify(mergePreservingLocal(local,remote));}localStorage.setItem(row.key,valueStr);setSyncMeta(row.key,rt);applyStoreUpdate(row.key,valueStr);}catch(e){console.error('套用家人資料失敗',e);}finally{cloudSync.applyingRemote=false;}
+}
+function applyStoreUpdate(key,jsonStr){
+  let parsed;try{parsed=JSON.parse(jsonStr);}catch(e){return;}
+  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_custom_spots':customSpotsStore=parsed;break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=parsed;break;case'nz_pack':packData=migratePackCategoryNames(parsed);renderPackList();return;case'nz_shop':shopData=parsed;renderShopList();return;case'nz_rules':rulesData=parsed;renderRulesList();return;case'nz_docs':docsData=parsed;renderDocsList();return;default:return;}
+  if(typeof renderDayContent==='function')renderDayContent();if(typeof updateSpotCount==='function')updateSpotCount();
+}
+function scheduleCloudPush(key,valueObj){
+  if(!cloudSync.enabled||cloudSync.applyingRemote)return;const t=new Date().toISOString();setSyncMeta(key,t);cloudSync.pending[key]={valueObj,updatedAt:t};clearTimeout(cloudSync.timer);cloudSync.timer=setTimeout(flushCloudPush,700);updateSyncStatus(null,'saving');
 }
 async function flushCloudPush(){
-  const entries=Object.entries(cloudSync.pending);
-  cloudSync.pending={};
-  for(const [key,item] of entries) await pushCloudNow(key,item.valueObj,item.updatedAt,true);
-  if(!cloudSync.lastError) updateSyncStatus();
+  const entries=Object.entries(cloudSync.pending);cloudSync.pending={};
+  for(const[key,item]of entries){try{await restUpsert(key,item.valueObj,item.updatedAt);cloudSync.lastError=null;}catch(e){cloudSync.lastError=e;console.error('同步寫入失敗',e);updateSyncStatus(e);return;}}
+  updateSyncStatus();setTimeout(pollCloudChanges,500);
 }
 function updateSyncStatus(err,state){
-  const el=document.getElementById('cloudSyncStatus');
-  if(!el) return;
-  el.style.display='inline-flex';
-  el.classList.toggle('sync-error',!!err);
-  el.classList.toggle('sync-saving',state==='saving' || state==='connecting');
-  if(err) el.textContent='⚠️ 家人同步暫時離線';
-  else if(state==='connecting') el.textContent='☁️ 正在連接家人同步';
-  else if(state==='saving') el.textContent='☁️ 正在同步變更';
-  else el.textContent='☁️ 家人共享已同步';
+  const el=document.getElementById('cloudSyncStatus');if(!el)return;el.style.display='inline-flex';el.classList.toggle('sync-error',!!err);el.classList.toggle('sync-saving',state==='saving'||state==='connecting');
+  if(err){el.textContent='⚠️ '+friendlySyncError(err);el.title=String(err&&err.message||err);}
+  else if(state==='connecting')el.textContent='☁️ 正在連接家人同步';else if(state==='saving')el.textContent='☁️ 正在同步變更';else el.textContent='☁️ 家人共享已同步';
 }
-
 /* ============ HEADER IMAGES ============ */
 const headerBgs = [
   {url:'https://redwhiteadventures.com/wp-content/uploads/2025/07/Pukaki-Kettle-Hole-Track-Mount-Cook-New-Zealand-15.webp', pos:'center 55%'},
