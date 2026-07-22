@@ -1,4 +1,4 @@
-# NZ Trip Family Sync v16
+# NZ Trip Family Sync v17
 
 修正背景同步時景點卡片自動收合與頁面跳動：
 - 保留所有已展開景點卡片

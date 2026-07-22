@@ -47,7 +47,8 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const SYNC_META_KEY = 'nz_sync_meta_v3';
 const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_pack','nz_shop','nz_rules','nz_docs'];
-const MEDIA_SYNC_KEYS = new Set(['nz_photos','nz_covers','nz_route_maps','nz_shop','nz_rules','nz_docs']);
+const MEDIA_SYNC_KEYS = new Set(['nz_photos','nz_covers','nz_route_maps']);
+const STRUCTURED_LIST_KEYS = new Set(['nz_shop','nz_rules','nz_docs']);
 const cloudSync = {enabled:false, applyingRemote:false, pending:{}, timer:null, pollTimer:null, lastError:null, ready:false};
 const MEDIA_BUCKET = 'trip-media';
 
@@ -147,6 +148,47 @@ function mergePreservingLocal(local,remote){
     const out={...remote};Object.keys(local).forEach(k=>{out[k]=k in remote?mergePreservingLocal(local[k],remote[k]):local[k];});return out;
   }
   return local;
+}
+
+function stableItemId(prefix, parts){
+  const text=parts.map(v=>String(v??'').trim().toLowerCase()).join('|');
+  let h=2166136261;
+  for(let i=0;i<text.length;i++){h^=text.charCodeAt(i);h=Math.imul(h,16777619);}
+  return `${prefix}-${(h>>>0).toString(36)}`;
+}
+function mergeUniqueUrls(a,b){
+  return [...new Set([...(Array.isArray(a)?a:[]),...(Array.isArray(b)?b:[])].filter(Boolean))];
+}
+function normalizeStructuredList(key,value){
+  if(!Array.isArray(value)) return value;
+  const map=new Map();
+  value.forEach((raw,index)=>{
+    if(!raw||typeof raw!=='object') return;
+    const item={...raw};
+    if(key==='nz_shop'){
+      item.cat=item.cat||'supermarket';
+      item.imgs=mergeUniqueUrls(item.imgs,item.img?[item.img]:[]);
+      item.img=null;
+      item.id=item.id||stableItemId('shop',[item.cat,item.name,item.location]);
+    }else if(key==='nz_rules'){
+      item.id=item.id||stableItemId('rule',[item.title,item.text]);
+    }else if(key==='nz_docs'){
+      item.id=item.id||stableItemId('doc',[item.ic,item.t,item.s]);
+    }
+    const fallback=`${key}-${index}`;
+    const id=item.id||fallback;
+    if(!map.has(id)){ map.set(id,item); return; }
+    const prev=map.get(id);
+    if(key==='nz_shop'){
+      map.set(id,{...prev,...item,imgs:mergeUniqueUrls(prev.imgs,item.imgs),qty:Math.max(Number(prev.qty)||1,Number(item.qty)||1),checked:Boolean(prev.checked||item.checked)});
+    }else{
+      map.set(id,{...prev,...item,img:item.img||prev.img||null});
+    }
+  });
+  return [...map.values()];
+}
+function normalizeSyncValue(key,value){
+  return STRUCTURED_LIST_KEYS.has(key)?normalizeStructuredList(key,value):value;
 }
 function friendlySyncError(e){
   const msg=String(e&&e.message||e||'未知錯誤');
@@ -249,11 +291,11 @@ function applyRemoteRow(row, forceApply=false){
   if(!forceApply && isUserEditingForm()){ queueRemoteRow(row); return; }
   const rt=row.updated_at||new Date().toISOString(), lt=getSyncMeta()[row.key]; if(lt&&Date.parse(lt)>Date.parse(rt))return;
   cloudSync.applyingRemote=true;
-  try{let valueStr=row.value;if(MEDIA_SYNC_KEYS.has(row.key)){const local=localValueForKey(row.key);let remote;try{remote=JSON.parse(row.value);}catch(e){remote=null;}valueStr=JSON.stringify(mergePreservingLocal(local,remote));}replaceLocalJson(row.key,JSON.parse(valueStr));setSyncMeta(row.key,rt);applyStoreUpdate(row.key,valueStr);}catch(e){console.error('套用家人資料失敗',e);}finally{cloudSync.applyingRemote=false;}
+  try{let remote;try{remote=JSON.parse(row.value);}catch(e){remote=null;}remote=normalizeSyncValue(row.key,remote);let value=remote;if(MEDIA_SYNC_KEYS.has(row.key)){const local=localValueForKey(row.key);value=mergePreservingLocal(local,remote);}const valueStr=JSON.stringify(value);replaceLocalJson(row.key,value);setSyncMeta(row.key,rt);applyStoreUpdate(row.key,valueStr);}catch(e){console.error('套用家人資料失敗',e);}finally{cloudSync.applyingRemote=false;}
 }
 function applyStoreUpdate(key,jsonStr){
   let parsed;try{parsed=JSON.parse(jsonStr);}catch(e){return;}
-  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_custom_spots':customSpotsStore=parsed;break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=parsed;break;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=parsed;renderShopList();return;case'nz_rules':rulesData=parsed;renderRulesList();return;case'nz_docs':docsData=parsed;renderDocsList();return;default:return;}
+  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_custom_spots':customSpotsStore=parsed;break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=parsed;break;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=normalizeStructuredList('nz_shop',parsed);renderShopList();return;case'nz_rules':rulesData=normalizeStructuredList('nz_rules',parsed);renderRulesList();return;case'nz_docs':docsData=normalizeStructuredList('nz_docs',parsed);renderDocsList();return;default:return;}
   if(typeof renderDayContent==='function')renderDayContent();if(typeof updateSpotCount==='function')updateSpotCount();
 }
 function scheduleCloudPush(key,valueObj){
@@ -468,6 +510,7 @@ function safeSetItem(key, valueObj){
   }
   // 若已啟用家人共享同步，改把資料推上雲端；雲端會自動用它自己的（容量大很多的）
   // 離線快取保存，所以就算這台裝置的 localStorage 滿了也不代表資料真的保不住。
+  valueObj=normalizeSyncValue(key,valueObj);
   if (!cloudSync.applyingRemote) scheduleCloudPush(key, valueObj);
   if (!localOk && !cloudSync.enabled) {
     alert('⚠️ 這台裝置瀏覽器的儲存空間已滿，剛才的變更可能無法保存。請先刪除幾張較舊或較大的照片，再重新上傳。');
@@ -1309,7 +1352,7 @@ let packData = migratePackCategoryNames(JSON.parse(localStorage.getItem('nz_pack
 function persistPack(){ safeSetItem('nz_pack', packData); }
 
 const defaultShopData = [{name:'Manuka 麥蘆卡蜂蜜', qty:1, checked:false, img:null, cat:'supermarket', location:''},{name:'美麗諾羊毛製品', qty:1, checked:false, img:null, cat:'souvenir', location:''},{name:'Whittaker\'s 巧克力', qty:1, checked:false, img:null, cat:'supermarket', location:''}];
-let shopData = JSON.parse(localStorage.getItem('nz_shop')) || defaultShopData;
+let shopData = normalizeStructuredList('nz_shop', JSON.parse(localStorage.getItem('nz_shop')) || defaultShopData);
 function persistShop(){ safeSetItem('nz_shop', shopData); }
 const SHOP_CATS = {supermarket:{label:'🛒 超市', color:'#2f8a52'}, souvenir:{label:'🎁 紀念品', color:'#c1502f'}};
 
@@ -1408,19 +1451,24 @@ function renderShopList(){
   }).join('');
   wrap.innerHTML = groups + `<div class="add-row shop-add-row"><select id="newShopCat" class="pill-select">${Object.keys(SHOP_CATS).map(k=>`<option value="${k}">${SHOP_CATS[k].label}</option>`).join('')}</select><input type="text" id="newShopItem" placeholder="新增購物項目..."><button onclick="addShopItem()">＋</button></div>`;
 }
-function handleShopPhoto(e, i){
-  const files = Array.from(e.target.files || []);
-  if(!files.length) return;
-  if(!Array.isArray(shopData[i].imgs)) shopData[i].imgs = shopImgs(shopData[i]);
-  shopData[i].img = null;
-  Promise.all(files.map(f=>fileToDataURL(f))).then(dataUrls=>{ shopData[i].imgs.push(...dataUrls); persistShop(); renderShopList(); });
+async function handleShopPhoto(e,i){
+  const files=Array.from(e.target.files||[]);
   e.target.value='';
+  if(!files.length)return;
+  try{
+    if(!Array.isArray(shopData[i].imgs))shopData[i].imgs=shopImgs(shopData[i]);
+    shopData[i].img=null;
+    updateSyncStatus(null,'saving');
+    const urls=await Promise.all(files.map(f=>uploadMediaFile(f,'shopping')));
+    shopData[i].imgs=mergeUniqueUrls(shopData[i].imgs,urls);
+    persistShop();renderShopList();
+  }catch(err){alert('⚠️ '+friendlySyncError(err)+'\n'+String(err.message||err));updateSyncStatus(err);}
 }
 function removeShopImg(i, photoIdx){ const imgs = shopImgs(shopData[i]); imgs.splice(photoIdx,1); shopData[i].imgs = imgs; shopData[i].img = null; persistShop(); renderShopList(); }
 function toggleShop(i){ shopData[i].checked = !shopData[i].checked; persistShop(); renderShopList(); }
 function changeShopQty(i,delta){ shopData[i].qty = Math.max(1, shopData[i].qty+delta); persistShop(); renderShopList(); }
 function delShop(i){ shopData.splice(i,1); persistShop(); renderShopList(); }
-function addShopItem(){ const input = document.getElementById('newShopItem'); const cat = document.getElementById('newShopCat')?.value || 'supermarket'; if(input && input.value.trim()){ shopData.push({name:input.value.trim(), qty:1, checked:false, imgs:[], cat, location:''}); persistShop(); listSectionOpen.shop[cat] = true; renderShopList(); } }
+function addShopItem(){ const input = document.getElementById('newShopItem'); const cat = document.getElementById('newShopCat')?.value || 'supermarket'; if(input && input.value.trim()){ shopData.push({id:'shop-'+crypto.randomUUID(),name:input.value.trim(), qty:1, checked:false, imgs:[], cat, location:''}); persistShop(); listSectionOpen.shop[cat] = true; renderShopList(); } }
 function setShopCat(i, val){ shopData[i].cat = val; persistShop(); renderShopList(); }
 function setShopLocation(i, val){ shopData[i].location = val; persistShop(); }
 
@@ -1430,7 +1478,7 @@ const defaultRulesData = [
   { title: '靠左行駛', text: '右駕靠左通行，山路多彎、單線橋需禮讓標誌方向。', img: null },
   { title: '國際駕照', text: '需攜帶台灣駕照＋國際駕照（IDP）。', img: null }
 ];
-let rulesData = JSON.parse(localStorage.getItem('nz_rules')) || defaultRulesData;
+let rulesData = normalizeStructuredList('nz_rules', JSON.parse(localStorage.getItem('nz_rules')) || defaultRulesData);
 function persistRules(){ safeSetItem('nz_rules', rulesData); }
 
 function renderRulesList() {
@@ -1476,7 +1524,7 @@ function addRuleItem() {
   const titleInput = document.getElementById('newRuleTitle');
   const input = document.getElementById('newRuleItem');
   if(input && input.value.trim()){
-    rulesData.push({ title: titleInput ? titleInput.value.trim() : '', text: input.value.trim(), img: null });
+    rulesData.push({ id:'rule-'+crypto.randomUUID(), title: titleInput ? titleInput.value.trim() : '', text: input.value.trim(), img: null });
     persistRules(); renderRulesList();
   }
 }
@@ -1496,7 +1544,7 @@ const defaultDocsData = [
   { ic: '🏨', t: 'Goldrush Escape', s: '9/24–9/27・3晚・Airbnb', chip: '已確認', link: 'https://www.airbnb.com.tw/rooms/16826185', img: null },
   { ic: '🚗', t: '自駕租車憑證', s: 'ZQN 機場取還車', chip: '待上傳', link: '', img: null }
 ];
-let docsData = JSON.parse(localStorage.getItem('nz_docs')) || defaultDocsData;
+let docsData = normalizeStructuredList('nz_docs', JSON.parse(localStorage.getItem('nz_docs')) || defaultDocsData);
 function persistDocs(){ safeSetItem('nz_docs', docsData); }
 
 function renderDocsList() {
