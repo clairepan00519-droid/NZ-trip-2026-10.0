@@ -187,7 +187,7 @@
 <!-- Modal for Images -->
 <div class="attach-modal" id="attachModal" onclick="closeAttachModal()">
   <button class="attach-modal-close" onclick="event.stopPropagation(); closeAttachModal()">✕</button>
-  <img id="attachModalImg" src="" onclick="event.stopPropagation()">
+  <img id="attachModalImg" src="" onerror="handleImageError(this)" onclick="event.stopPropagation()">
 </div>
 
 <script src="app.js"></script>

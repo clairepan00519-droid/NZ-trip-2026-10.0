@@ -116,7 +116,7 @@ const SUPABASE_URL = "https://xkahhddatpoxuembeiwl.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrYWhoZGRhdHBveHVlbWJlaXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NDExNDksImV4cCI6MjEwMDAxNzE0OX0.Jdpxpz7rgyK_OikYkRrVQComDWZiaI4fgf5ZV_SdaII";
 
 const SYNC_META_KEY = 'nz_sync_meta_v3';
-const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_pack','nz_shop','nz_rules','nz_docs'];
+const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_nav_links','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_pack','nz_shop','nz_rules','nz_docs'];
 const MEDIA_SYNC_KEYS = new Set(['nz_photos','nz_covers','nz_route_maps']);
 const STRUCTURED_LIST_KEYS = new Set(['nz_shop','nz_rules','nz_docs']);
 const cloudSync = {enabled:false, applyingRemote:false, pending:{}, timer:null, pollTimer:null, lastError:null, ready:false};
@@ -368,7 +368,7 @@ function applyRemoteRow(row, forceApply=false){
 }
 function applyStoreUpdate(key,jsonStr){
   let parsed;try{parsed=JSON.parse(jsonStr);}catch(e){return;}
-  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_custom_spots':customSpotsStore=parsed;break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=parsed;break;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=normalizeStructuredList('nz_shop',parsed);renderShopList();return;case'nz_rules':rulesData=normalizeStructuredList('nz_rules',parsed);renderRulesList();return;case'nz_docs':docsData=normalizeStructuredList('nz_docs',parsed);renderDocsList();return;default:return;}
+  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_nav_links':navLinkStore=parsed;break;case'nz_custom_spots':customSpotsStore=parsed;break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=parsed;break;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=normalizeStructuredList('nz_shop',parsed);renderShopList();return;case'nz_rules':rulesData=normalizeStructuredList('nz_rules',parsed);renderRulesList();return;case'nz_docs':docsData=normalizeStructuredList('nz_docs',parsed);renderDocsList();return;default:return;}
   if(typeof renderDayContent==='function')renderDayContent();if(typeof updateSpotCount==='function')updateSpotCount();
 }
 function scheduleCloudPush(key,valueObj){
@@ -735,6 +735,44 @@ function persistPhotos(){ return safeSetItem('nz_photos', photoStore); }
    而不是每次上傳新照片就自動覆蓋原本的封面 */
 let coverStore = JSON.parse(localStorage.getItem('nz_covers')) || {};
 function persistCover(){ safeSetItem('nz_covers', coverStore); }
+
+/* 自訂導航：可直接貼 Google Maps 分享網址，或輸入「緯度, 經度」。 */
+let navLinkStore = JSON.parse(localStorage.getItem('nz_nav_links')) || {};
+const openNavEditorKeys = new Set();
+function persistNavLinks(){ safeSetItem('nz_nav_links', navLinkStore); }
+function normalizeNavigationInput(raw){
+  const value=String(raw||'').trim();
+  const coords=value.match(/^(-?\d{1,2}(?:\.\d+)?)\s*[,，]\s*(-?\d{1,3}(?:\.\d+)?)$/);
+  if(coords){
+    const lat=Number(coords[1]),lon=Number(coords[2]);
+    if(lat>=-90&&lat<=90&&lon>=-180&&lon<=180)return `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`;
+  }
+  try{
+    const url=new URL(value);
+    const host=url.hostname.toLowerCase();
+    if(url.protocol==='https:' && (host==='maps.app.goo.gl'||host.endsWith('google.com')||host.endsWith('google.co.nz')))return url.href;
+  }catch(e){}
+  return null;
+}
+function toggleNavEditor(event,key){
+  if(event)event.stopPropagation();
+  const box=document.getElementById('nav-edit-'+key); if(!box)return;
+  const opening=box.hidden; box.hidden=!opening;
+  if(opening){openNavEditorKeys.add(String(key));requestAnimationFrame(()=>document.getElementById('nav-input-'+key)?.focus({preventScroll:true}));}
+  else openNavEditorKeys.delete(String(key));
+}
+function saveNavigationLink(event,key){
+  if(event)event.stopPropagation();
+  const input=document.getElementById('nav-input-'+key); if(!input)return;
+  const url=normalizeNavigationInput(input.value);
+  if(!url){alert('請貼上 Google Maps 分享連結，或輸入「緯度, 經度」，例如：-45.0312, 168.6626');return;}
+  navLinkStore[key]=url; persistNavLinks(); openNavEditorKeys.delete(String(key)); renderDayContent();
+}
+function resetNavigationLink(event,key){
+  if(event)event.stopPropagation();
+  const previous=navLinkStore[key]; delete navLinkStore[key]; persistNavLinks(); openNavEditorKeys.delete(String(key)); renderDayContent();
+  offerUndo('已恢復自動搜尋導航',()=>{if(previous)navLinkStore[key]=previous;persistNavLinks();renderDayContent();});
+}
 function setCoverPhoto(key, sel) {
   coverStore[key] = sel;
   persistCover();
@@ -1016,11 +1054,11 @@ function stayQuickCardHTML(dayIdx){
     const next=dayIdx<days.length-1 && hotelsForDay(days[dayIdx+1]).some(h=>h.name===hotel.name);
     const status=!prev?'今日入住':(next?'連住中':'最後一晚');
     const checkout=!next?'翌日退房・請確認時間':'免退房';
-    return `<div class="stay-quick-card"><div class="stay-quick-head"><span>🏡 ${status}</span><b>${hotel.name}</b></div><div class="stay-quick-meta"><span>🕒 ${checkout}</span><span>🚗 一鍵開啟導航</span></div><div class="stay-quick-actions"><a href="${mapsLink(hotel.name)}" target="_blank" rel="noopener">🗺️ 導航住宿</a>${hotel.link?`<a href="${hotel.link}" target="_blank" rel="noopener">🔗 訂房頁面</a>`:''}</div></div>`;
+    return `<div class="stay-quick-card"><div class="stay-quick-head"><span>🏡 ${status}</span><b>${hotel.name}</b></div><div class="stay-quick-meta"><span>🕒 ${checkout}</span><span>🚗 一鍵開啟導航</span></div><div class="stay-quick-actions"><a href="${mapsLink(hotel.name,hotel._storageKey)}" target="_blank" rel="noopener">🗺️ 導航住宿</a>${hotel.link?`<a href="${hotel.link}" target="_blank" rel="noopener">🔗 訂房頁面</a>`:''}</div></div>`;
   }).join('');
 }
 
-function mapsLink(name){ return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(name + ' New Zealand'); }
+function mapsLink(name,key){ return (key && navLinkStore[key]) || 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(name + ' New Zealand'); }
 
 function renderDayChips(){
   const todayIdx=tripDayIndexForToday();
@@ -1110,7 +1148,7 @@ function spotCardHTML(spot, key, isMainSpot, customMeta, orderInfo){
   const noteDraft = escapeHTMLText(noteDraftStore[idx] || '');
   let noteEditArea = `<div class="note-edit-area" style="margin-top:10px; display:${isNoteEditorOpen ? 'block' : 'none'};" id="edit-note-${idx}" onclick="event.stopPropagation()"><textarea id="note-input-${idx}" oninput="updateNoteDraft('${idx}', this.value)" placeholder="新增一筆攻略、必點菜單或提醒...（可重複新增多筆）" style="width:100%; border:1px solid var(--line); border-radius:8px; padding:8px; font-size:12px; font-family:inherit; resize:vertical; min-height:60px; outline:none; margin-bottom:6px;">${noteDraft}</textarea><div style="display:flex; gap:6px;"><button onclick="event.stopPropagation(); addNote('${idx}')" style="padding:6px 14px; font-size:11px; background:var(--blue); color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:700;">💾 新增這筆</button><button onclick="toggleEditNote(event, '${idx}')" style="padding:6px 14px; font-size:11px; background:#f2f3ec; color:var(--ink); border:none; border-radius:6px; cursor:pointer; font-weight:700;">收合</button></div></div>${!displayInfo ? `<button class="btn-note-toggle" onclick="toggleEditNote(event, '${idx}')" style="display:${isNoteEditorOpen ? 'none' : 'inline-block'}; background:transparent; border:1px dashed #c1c8cf; border-radius:999px; padding:6px 12px; font-size:11.5px; color:#6b7686; cursor:pointer; font-family:inherit; margin-top:6px; margin-bottom:10px;" id="btn-note-${idx}">➕ 添加評論或資訊</button>` : ''}`;
 
-  let miniStripHTML = thumbImgs.length > 0 ? `<div class="mini-photo-strip" onclick="event.stopPropagation();">` + thumbImgs.map((u, i) => `<div style="position:relative; display:inline-block;"><img src="${u}" onclick="openAttachModal('${u}')">${thumbImgsAreUserPhotos ? `<button onclick="removePhoto(event, '${idx}', ${i})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:16px; height:16px; font-size:8px; cursor:pointer;">✕</button>` : ''}</div>`).join('') + `</div>` : '';
+  let miniStripHTML = thumbImgs.length > 0 ? `<div class="mini-photo-strip" onclick="event.stopPropagation();">` + thumbImgs.map((u, i) => `<div style="position:relative; display:inline-block;"><img src="${u}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)">${thumbImgsAreUserPhotos ? `<button onclick="removePhoto(event, '${idx}', ${i})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:16px; height:16px; font-size:8px; cursor:pointer;">✕</button>` : ''}</div>`).join('') + `</div>` : '';
 
   /* 照片區：主要亮點卡片會列出「原始配圖 + 所有使用者上傳的照片」，並可個別指定作為封面；
      次要（食衣住）景點沒有封面概念，維持原本只顯示使用者照片的邏輯 */
@@ -1129,11 +1167,11 @@ function spotCardHTML(spot, key, isMainSpot, customMeta, orderInfo){
         const removeBtn = (g.sel !== 'original')
           ? `<button onclick="removePhoto(event, '${idx}', ${g.sel})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:20px; height:20px; font-size:10px; cursor:pointer;">✕</button>`
           : '';
-        return `<div class="photo-item-wrap"><img src="${g.url}" onclick="openAttachModal('${g.url}')">${removeBtn}${coverTag}</div>`;
+        return `<div class="photo-item-wrap"><img src="${g.url}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)">${removeBtn}${coverTag}</div>`;
       }).join('') + `</div>`;
     }
   } else {
-    pStrip = (userPhotos.length) ? `<div class="photo-strip" onclick="event.stopPropagation()">` + userPhotos.map((u, i)=>`<div class="photo-item-wrap"><img src="${u}" onclick="openAttachModal('${u}')"><button onclick="removePhoto(event, '${idx}', ${i})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:20px; height:20px; font-size:10px; cursor:pointer;">✕</button></div>`).join('') + `</div>` : '';
+    pStrip = (userPhotos.length) ? `<div class="photo-strip" onclick="event.stopPropagation()">` + userPhotos.map((u, i)=>`<div class="photo-item-wrap"><img src="${u}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)"><button onclick="removePhoto(event, '${idx}', ${i})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:20px; height:20px; font-size:10px; cursor:pointer;">✕</button></div>`).join('') + `</div>` : '';
   }
 
   const badgesHTML = badges.length ? `<div class="badges" style="margin-bottom:6px;">${badges.join('')}</div>` : '';
@@ -1177,11 +1215,14 @@ function spotCardHTML(spot, key, isMainSpot, customMeta, orderInfo){
       </div>
     </div>` : '';
 
+  const navEditorHTML=`<div class="nav-edit-box" id="nav-edit-${idx}" ${openNavEditorKeys.has(String(idx))?'':'hidden'} onclick="event.stopPropagation()"><b>📍 修正「${safeSpotName}」導航</b><small>貼上 Google Maps 分享連結，或輸入緯度、經度。</small><input id="nav-input-${idx}" type="text" value="${escAttr(navLinkStore[idx]||'')}" placeholder="https://maps.app.goo.gl/... 或 -45.0312, 168.6626"><div><button onclick="saveNavigationLink(event,'${idx}')">儲存導航</button>${navLinkStore[idx]?`<button class="nav-reset" onclick="resetNavigationLink(event,'${idx}')">恢復自動搜尋</button>`:''}<button class="nav-cancel" onclick="toggleNavEditor(event,'${idx}')">取消</button></div></div>`;
+  const navFixButton=`<button class="btn btn-nav-edit" onclick="toggleNavEditor(event,'${idx}')">✏️ 修正導航</button>`;
+
   if (!isMainSpot) {
-    return `<div class="sub-spot-card sub-spot-${spot.cat || 'other'}" id="spot-card-${idx}"><div class="sub-spot-header" onclick="toggleSpotDetails('${idx}')"><div class="sub-spot-header-content"><h4>${safeSpotName}</h4><p class="short-desc">${safeSpotDesc}</p>${miniStripHTML}</div><div class="chevron">▼</div></div><div class="sub-spot-details-wrap"><div class="sub-spot-details" onclick="event.stopPropagation()">${customBar}${editSpotAreaHTML}<p class="full-desc">${safeSpotFullDesc}</p>${spot.recDishes ? `<div class="dish-tag">🍲 必點推薦：${escapeHTMLText(spot.recDishes)}</div>` : ''}${reorderableBlocksHTML}<div class="action-row" style="margin-top:10px;"><a class="btn btn-map" href="${mapsLink(spot.name)}" target="_blank" rel="noopener">🗺️ 導航</a>${spot.link ? `<a class="btn btn-photo" href="${spot.link}" target="_blank" rel="noopener">🔗 ${escapeHTMLText(spot.linkLabel)}</a>` : ''}<button class="btn btn-photo" onclick="document.getElementById('file-${idx}').click()">📷 上傳照片</button></div><input type="file" accept="image/*" id="file-${idx}" style="display:none" multiple onchange="handlePhoto(event, '${idx}')">${pStrip}</div></div></div>`;
+    return `<div class="sub-spot-card sub-spot-${spot.cat || 'other'}" id="spot-card-${idx}"><div class="sub-spot-header" onclick="toggleSpotDetails('${idx}')"><div class="sub-spot-header-content"><h4>${safeSpotName}</h4><p class="short-desc">${safeSpotDesc}</p>${miniStripHTML}</div><div class="chevron">▼</div></div><div class="sub-spot-details-wrap"><div class="sub-spot-details" onclick="event.stopPropagation()">${customBar}${editSpotAreaHTML}${navEditorHTML}<p class="full-desc">${safeSpotFullDesc}</p>${spot.recDishes ? `<div class="dish-tag">🍲 必點推薦：${escapeHTMLText(spot.recDishes)}</div>` : ''}${reorderableBlocksHTML}<div class="action-row" style="margin-top:10px;"><a class="btn btn-map" href="${mapsLink(spot.name,idx)}" target="_blank" rel="noopener">🗺️ 導航</a>${navFixButton}${spot.link ? `<a class="btn btn-photo" href="${spot.link}" target="_blank" rel="noopener">🔗 ${escapeHTMLText(spot.linkLabel)}</a>` : ''}<button class="btn btn-photo" onclick="document.getElementById('file-${idx}').click()">📷 上傳照片</button></div><input type="file" accept="image/*" id="file-${idx}" style="display:none" multiple onchange="handlePhoto(event, '${idx}')">${pStrip}</div></div></div>`;
   }
 
-  return `<div class="guide-card" id="spot-card-${idx}"><div class="guide-header" style="background-image:url('${bg}');" onclick="toggleSpotDetails('${idx}')">${photoStore[idx] && photoStore[idx].length > 0 ? `<span class="own-badge" onclick="event.stopPropagation(); document.getElementById('file-${idx}').click()">✅ 已有你的實拍照片</span>` : `<button class="own-badge" style="border:none; cursor:pointer;" onclick="event.stopPropagation(); document.getElementById('file-${idx}').click()">📷 新增我的照片</button>`}<div class="guide-header-content"><span class="cat-label ${c.cls}">${c.emoji} ${c.label}</span><h3>${safeSpotName}</h3><p class="short-desc">${safeSpotDesc}</p></div><div class="chevron">▼</div></div><div class="guide-details-wrap"><div class="guide-details" onclick="event.stopPropagation()">${customBar}${editSpotAreaHTML}<p class="full-desc">${safeSpotFullDesc}</p>${reorderableBlocksHTML}${spot.tip?`<div class="tip-box"><b>📸 拍照與自駕小解密：</b>${escapeHTMLText(spot.tip)}</div>`:''}${spot.docMap?`<div class="tip-box" style="background: linear-gradient(120deg,#e8f8ee,#fff); border-color:#8fd6c3; color:#22513f;"><b>🗺️ DOC 官方步道地圖與狀態：</b><a href="${spot.docMap}" target="_blank" rel="noopener" style="color:var(--blue); font-weight:700; text-decoration:underline;">點此開啟</a></div>`:''}${spot.park?`<div class="park-box"><b>🅿️ 停車＆自駕補給：</b>${escapeHTMLText(spot.park)}</div>`:''}<div class="action-row" style="margin-top:10px;"><a class="btn btn-map" href="${mapsLink(spot.name)}" target="_blank" rel="noopener">🗺️ 導航導出</a>${spot.link ? `<a class="btn btn-photo" href="${spot.link}" target="_blank" rel="noopener">🔗 ${escapeHTMLText(spot.linkLabel)}</a>` : ''}<button class="btn btn-photo" onclick="document.getElementById('file-${idx}').click()">📷 上傳照片</button></div><input type="file" accept="image/*" id="file-${idx}" style="display:none" multiple onchange="handlePhoto(event, '${idx}')">${pStrip}</div></div></div>`;
+  return `<div class="guide-card" id="spot-card-${idx}"><div class="guide-header" onclick="toggleSpotDetails('${idx}')"><img class="guide-bg-img" src="${bg}" alt="" onerror="handleImageError(this)">${photoStore[idx] && photoStore[idx].length > 0 ? `<span class="own-badge" onclick="event.stopPropagation(); document.getElementById('file-${idx}').click()">✅ 已有你的穩定照片</span>` : `<button class="own-badge" style="border:none; cursor:pointer;" onclick="event.stopPropagation(); document.getElementById('file-${idx}').click()">📷 上傳穩定封面</button>`}<div class="guide-header-content"><span class="cat-label ${c.cls}">${c.emoji} ${c.label}</span><h3>${safeSpotName}</h3><p class="short-desc">${safeSpotDesc}</p></div><div class="chevron">▼</div></div><div class="guide-details-wrap"><div class="guide-details" onclick="event.stopPropagation()">${customBar}${editSpotAreaHTML}${navEditorHTML}<p class="full-desc">${safeSpotFullDesc}</p>${reorderableBlocksHTML}${spot.tip?`<div class="tip-box"><b>📸 拍照與自駕小解密：</b>${escapeHTMLText(spot.tip)}</div>`:''}${spot.docMap?`<div class="tip-box" style="background: linear-gradient(120deg,#e8f8ee,#fff); border-color:#8fd6c3; color:#22513f;"><b>🗺️ DOC 官方步道地圖與狀態：</b><a href="${spot.docMap}" target="_blank" rel="noopener" style="color:var(--blue); font-weight:700; text-decoration:underline;">點此開啟</a></div>`:''}${spot.park?`<div class="park-box"><b>🅿️ 停車＆自駕補給：</b>${escapeHTMLText(spot.park)}</div>`:''}<div class="action-row" style="margin-top:10px;"><a class="btn btn-map" href="${mapsLink(spot.name,idx)}" target="_blank" rel="noopener">🗺️ 導航導出</a>${navFixButton}${spot.link ? `<a class="btn btn-photo" href="${spot.link}" target="_blank" rel="noopener">🔗 ${escapeHTMLText(spot.linkLabel)}</a>` : ''}<button class="btn btn-photo" onclick="document.getElementById('file-${idx}').click()">📷 上傳照片</button></div><input type="file" accept="image/*" id="file-${idx}" style="display:none" multiple onchange="handlePhoto(event, '${idx}')">${pStrip}</div></div></div>`;
 }
 
 /* 讀取檔案並自動壓縮：長邊限制在 1600px、轉存為 JPEG(品質0.82)，
@@ -1247,6 +1288,12 @@ function openAttachModal(src) {
   document.getElementById('attachModalImg').src = src;
   document.getElementById('attachModal').classList.add('active');
 }
+function handleImageError(img){
+  if(!img || img.dataset.fallbackApplied==='1') return;
+  img.dataset.fallbackApplied='1';
+  img.src='images/map.webp';
+  img.classList.add('image-fallback');
+}
 function closeAttachModal() { document.getElementById('attachModal').classList.remove('active'); }
 
 function switchSubTab(dayIdx, tabType) {
@@ -1261,6 +1308,20 @@ const FUEL_BRANDS = ['NPD','Waitomo','Gull','Z','BP','Mobil','Caltex','Challenge
 function fuelPricePanel(day){
   if(!day.gas) return '';
   return `<div class="fuel-price-panel"><div class="fuel-price-head"><span>${day.gas}</span><a href="https://www.gaspy.nz/stats.html" target="_blank" rel="noopener">⛽ 查看即時油價</a></div><div class="fuel-brand-row">${FUEL_BRANDS.map(b=>`<a href="https://www.google.com/maps/search/${encodeURIComponent(b+' petrol station New Zealand')}" target="_blank" rel="noopener">${b}</a>`).join('')}</div><small>逐站即時價格由 Gaspy 社群更新；品牌按鈕可快速搜尋沿途分店。</small></div>`;
+}
+
+const ICE_CREAM_COMPARE_NAMES=new Set(['Anita Gelato','Patagonia Chocolate','Mrs Ferg Gelateria','Duck Island Ice Cream']);
+function comparisonImageFor(spot,key){
+  const photos=photoStore[key]||[]; const sel=coverStore[key];
+  if(typeof sel==='number'&&photos[sel])return photos[sel];
+  if(sel==='original'&&spot.img)return spot.img;
+  return photos[0]||spot.img||'images/map.webp';
+}
+function iceCreamComparisonHTML(entries,dayIdx){
+  if(!entries.length)return '';
+  const rows=entries.map(({spot,key})=>`<div class="ice-compare-row"><img src="${comparisonImageFor(spot,key)}" alt="${escapeHTMLText(spot.name)}" onerror="handleImageError(this)"><div class="ice-compare-info"><b>${escapeHTMLText(spot.name)}</b><span>${escapeHTMLText(spot.recDishes||spot.desc)}</span><small>🕒 ${escapeHTMLText(spot.hours||'請確認當日營業時間')}</small></div><a href="${mapsLink(spot.name,key)}" target="_blank" rel="noopener">導航</a></div>`).join('');
+  const detailCards=entries.map(o=>spotCardHTML(o.spot,o.key,false,o.customMeta,{dayIdx,listType:'life'})).join('');
+  return `<section class="ice-compare-card"><div class="ice-compare-title"><div><span>🍨 9/26 冰淇淋比較卡</span><b>現場依路線與口味挑一間就好</b></div><small>四間都保留，可自行上傳穩定照片與修正導航。</small></div>${rows}<details class="ice-compare-details"><summary>展開四間完整資料、照片與導航設定</summary><div>${detailCards}</div></details></section>`;
 }
 
 function renderDayContent(){
@@ -1278,7 +1339,9 @@ function renderDayContent(){
   let mainSpotsHTML = mainList.map(o=>spotCardHTML(o.spot, o.key, true, o.customMeta, {dayIdx:activeDay, listType:'main'})).join('');
   if(!mainSpotsHTML) mainSpotsHTML = '<div class="empty">此區域今天暫無排定主要亮點。</div>';
 
-  let secondaryCardsHTML = lifeList.map(o=>spotCardHTML(o.spot, o.key, false, o.customMeta, {dayIdx:activeDay, listType:'life'})).join('');
+  const iceCreamEntries=d.date==='9/26' ? lifeList.filter(o=>ICE_CREAM_COMPARE_NAMES.has(o.spot.name)) : [];
+  const regularLifeList=iceCreamEntries.length ? lifeList.filter(o=>!ICE_CREAM_COMPARE_NAMES.has(o.spot.name)) : lifeList;
+  let secondaryCardsHTML = iceCreamComparisonHTML(iceCreamEntries,activeDay) + regularLifeList.map(o=>spotCardHTML(o.spot, o.key, false, o.customMeta, {dayIdx:activeDay, listType:'life'})).join('');
   if(!secondaryCardsHTML) secondaryCardsHTML = '<div class="empty">此區域今天暫無排定食衣住項目，歡迎在下方新增您的私房景點。</div>';
 
   const addSpotFormHTML = `
@@ -1297,7 +1360,7 @@ function renderDayContent(){
     </div>`;
 
   const routeMaps = routeMapStore[activeDay] || [];
-  const routeMapGalleryHTML = routeMaps.length ? `<div class="route-map-gallery">${routeMaps.map((u,i)=>`<div class="route-map-item"><img src="${u}" onclick="openAttachModal('${u}')" alt="Day ${d.dayNum} 路線圖"><button class="route-map-remove" onclick="removeRouteMap(${activeDay}, ${i})">✕</button></div>`).join('')}</div>` : '<div class="empty">尚未上傳今天的行動路線圖。</div>';
+  const routeMapGalleryHTML = routeMaps.length ? `<div class="route-map-gallery">${routeMaps.map((u,i)=>`<div class="route-map-item"><img src="${u}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)" alt="Day ${d.dayNum} 路線圖"><button class="route-map-remove" onclick="removeRouteMap(${activeDay}, ${i})">✕</button></div>`).join('')}</div>` : '<div class="empty">尚未上傳今天的行動路線圖。</div>';
   const routeMapHTML = `
     <div class="section-card" style="margin-top:4px;">
       <h3 style="margin:0 0 10px;">🗺️ 我的當日行動路線圖</h3>
@@ -1667,7 +1730,7 @@ function renderShopList(){
     const done = entries.filter(x=>x.it.checked).length;
     const itemsHTML = entries.length ? entries.map(({it,i})=>{
       const imgs = shopImgs(it);
-      const photosHTML = imgs.length ? `<div class="shop-photo-row">${imgs.map((src,pi)=>`<div class="shop-photo"><img src="${src}" onclick="openAttachModal('${src}')"><button onclick="removeShopImg(${i},${pi})">✕</button></div>`).join('')}</div>` : '';
+      const photosHTML = imgs.length ? `<div class="shop-photo-row">${imgs.map((src,pi)=>`<div class="shop-photo"><img src="${src}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)"><button onclick="removeShopImg(${i},${pi})">✕</button></div>`).join('')}</div>` : '';
       return `<div class="pack-item shop-item ${it.checked?'checked':''}"><input type="checkbox" ${it.checked?'checked':''} onchange="toggleShop(${i})"><div class="name shop-item-title">${escapeHTMLText(it.name)}</div><div class="qty"><button onclick="document.getElementById('shopFile-${i}').click()" class="camera-btn">📷</button><button onclick="changeShopQty(${i},-1)">－</button><span>${Number(it.qty)||1}</span><button onclick="changeShopQty(${i},1)">＋</button></div><button class="del" onclick="delShop(${i})">✕</button><input type="file" id="shopFile-${i}" accept="image/*" multiple style="display:none" onchange="handleShopPhoto(event, ${i})"><div class="shop-extra"><input type="text" value="${escAttr(it.location||'')}" placeholder="建議購買位置或其他資訊..." onchange="setShopLocation(${i}, this.value)"></div>${photosHTML}</div>`;
     }).join('') : '<div class="empty compact">此清單目前沒有項目。</div>';
     return `<section class="checklist-group shop-group shop-${catKey}"><button class="checklist-group-head" onclick="toggleListSection('shop','${catKey}')" aria-expanded="${isOpen}"><span>${meta.label}</span><small>${done}/${entries.length}</small><b>${isOpen?'⌃':'⌄'}</b></button><div class="checklist-group-body ${isOpen?'open':''}">${itemsHTML}</div></section>`;
