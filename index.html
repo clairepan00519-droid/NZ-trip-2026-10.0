@@ -11,16 +11,17 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 </head>
 <body class="family-locked">
 <div id="familyGate" class="family-gate" aria-hidden="false">
   <div class="family-gate-card">
     <div class="family-gate-icon">🌿</div>
     <h2>南島家庭旅行</h2>
-    <p>請輸入家人共用密碼後進入。所有裝置會共用同一份景點、照片、購物與餐點資料。</p>
-    <input id="familyGateInput" type="password" inputmode="text" autocomplete="current-password" placeholder="家人共用密碼">
+    <p>請使用已授權的家人帳號登入。登入過的裝置即使暫時離線，也能查看已快取的行程。</p>
+    <input id="familyGateEmail" type="email" inputmode="email" autocomplete="username" placeholder="家人登入 Email">
+    <input id="familyGateInput" type="password" inputmode="text" autocomplete="current-password" placeholder="密碼">
     <button id="familyGateButton" type="button">進入行程</button>
+    <button id="familyOfflineButton" class="family-offline-button" type="button" hidden>離線查看此裝置快取</button>
     <div id="familyGateError" class="family-gate-error" role="alert"></div>
   </div>
 </div>
@@ -51,6 +52,7 @@
 
   <!-- ================= ITINERARY VIEW ================= -->
   <div class="view active" id="view-itinerary">
+    <div id="todayModeBar"></div>
     <div class="day-scroll" id="dayScroll"></div>
     <div id="dayContent"></div>
   </div>
@@ -61,7 +63,7 @@
       <h3 style="margin:0 0 10px; font-size:18px; font-weight:900; text-align:center; color:var(--ink);">🚗 紐西蘭南島自駕路線環線</h3>
       
       <div id="nzSouthIslandHandDrawnMap" class="svg-map-container" style="position:relative;">
-        <img id="handDrawnMapImg" src="images/map.webp" alt="紐西蘭南島自駕環線手繪地圖，標示主要城鎮與景點路線" loading="lazy" alt="紐西蘭南島自駕環線" style="width:100%; border-radius:var(--r-md); box-shadow:var(--shadow-sm); display:block;">
+        <img id="handDrawnMapImg" src="images/map.webp" alt="紐西蘭南島自駕環線手繪地圖，標示主要城鎮與景點路線" loading="lazy" style="width:100%; border-radius:var(--r-md); box-shadow:var(--shadow-sm); display:block;">
         <div id="mapFallback" style="display:none; padding:24px 16px; border:2px dashed #c9e2e9; border-radius:var(--r-md); background:#f7fbfd; text-align:center;">
           <p style="font-size:13px; color:#2f3a4a; font-weight:700; line-height:1.6; margin-top:0;">⚠️ 找不到地圖圖片！<br><span style="font-size:11px; font-weight:400;">請點擊下方按鈕手動選擇：</span></p>
           <input type="file" id="mapUploader" style="display:none;" accept="image/*" onchange="loadLocalMap(event)">
@@ -188,7 +190,6 @@
   <img id="attachModalImg" src="" onclick="event.stopPropagation()">
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="app.js"></script>
 
 </body>

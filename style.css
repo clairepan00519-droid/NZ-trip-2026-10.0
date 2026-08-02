@@ -104,12 +104,28 @@ button, .tab-btn, .day-chip, .btn, .guide-header, .sub-spot-header, .spot-subtab
 .day-chip .m{font-size:9.5px; color:var(--ink-soft); font-weight:500;}
 .day-chip.active{border-color:var(--blue); background:linear-gradient(160deg,var(--sand),var(--pale)); transform: translateY(-2px) scale(1.05); box-shadow:0 8px 16px -6px rgba(83,129,236,.35);}
 .day-chip.active .d{color:var(--blue);}
+.day-chip.today{position:relative;}
+.day-chip.today::after{content:'TODAY';position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);background:#2f8a52;color:#fff;border-radius:999px;padding:2px 6px;font-size:7px;font-weight:900;letter-spacing:.04em;}
+
+.today-mode-card{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:8px 0 4px;padding:13px 14px;border:1px solid #d9e3ef;border-radius:16px;background:linear-gradient(135deg,#f7fbff,#fffdf5);box-shadow:var(--shadow-sm);}
+.today-mode-card.live{border-color:#8fd6c3;background:linear-gradient(135deg,#eaf8f1,#f8fcff);}
+.today-mode-card>div{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.today-mode-card .today-kicker{font-size:9px;font-weight:900;color:#2f8a52;letter-spacing:.06em;}
+.today-mode-card b{font-size:13px;color:var(--ink);}
+.today-mode-card small{font-size:10.5px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.today-mode-card button{flex:none;border:0;border-radius:999px;background:var(--blue);color:#fff;padding:8px 12px;font-family:inherit;font-size:10.5px;font-weight:900;cursor:pointer;}
 
 /* ---------- Adjusted Day Headers ---------- */
 .day-card-head{
   background:var(--card); border-radius:var(--r-lg); padding:16px 18px; box-shadow:var(--shadow); margin-bottom:14px;
   border-top: 4px solid transparent; border-image: linear-gradient(90deg, var(--yellow), var(--teal), var(--blue)) 1;
 }
+.stay-quick-card{margin-top:11px;padding:12px;border:1px solid #d9e7df;border-radius:14px;background:linear-gradient(135deg,#f5fbf7,#fff);text-align:left;}
+.stay-quick-head{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:11px;color:#2f8a52;font-weight:800;}
+.stay-quick-head b{font-size:13px;color:var(--ink);text-align:right;}
+.stay-quick-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:7px;color:var(--ink-soft);font-size:9.5px;font-weight:700;}
+.stay-quick-actions{display:flex;gap:7px;margin-top:9px;}
+.stay-quick-actions a{flex:1;text-align:center;text-decoration:none;border-radius:999px;padding:7px 8px;background:#fff;border:1px solid #b8d5c5;color:#2f6f52;font-size:10px;font-weight:900;}
 .day-card-head .region{font-size:18.5px; font-weight:900; color:var(--blue); letter-spacing:.02em; line-height:1.3;}
 .day-card-head .drive-info{font-size:11px; font-weight:700; color:var(--teal); margin-top:6px; display:inline-block; background:#e8f6f4; padding:4px 10px; border-radius:8px;}
 .day-card-head .gas-info{font-size:11px; font-weight:700; color:#c1502f; margin-top:6px; margin-left:4px; display:inline-block; background:#ffe1d6; padding:4px 10px; border-radius:8px;}
@@ -140,7 +156,7 @@ button, .tab-btn, .day-chip, .btn, .guide-header, .sub-spot-header, .spot-subtab
 .guide-header .chevron{ position:absolute; right:16px; bottom:16px; color:#fff; font-size:18px; font-weight:900; transition:transform 0.4s ease; }
 .guide-card.open .chevron{ transform:rotate(180deg); }
 .guide-details-wrap{ max-height:0; overflow:hidden; transition:max-height 0.4s ease; background:#fff; }
-.guide-card.open .guide-details-wrap{ max-height:2500px; }
+.guide-card.open .guide-details-wrap{ max-height:7000px; }
 .guide-details{ padding:16px; }
 .own-badge{ position:absolute; top:12px; left:12px; z-index:2; background:rgba(255,255,255,.92); color:#3a7a4f; font-size:10px; font-weight:700; padding:4px 10px; border-radius:999px; display:flex; align-items:center; gap:3px; box-shadow: var(--shadow-sm); cursor:pointer; }
 
@@ -193,7 +209,7 @@ button, .tab-btn, .day-chip, .btn, .guide-header, .sub-spot-header, .spot-subtab
 .sub-spot-card .photo-item-wrap img{ width:130px; height:130px; }
 .sub-spot-details p.full-desc{ margin:0 0 12px; font-size:12.5px; color:var(--ink); line-height:1.65; text-align:justify; }
 .sub-spot-details-wrap{ max-height:0; overflow:hidden; transition:max-height 0.4s ease; }
-.sub-spot-card.open .sub-spot-details-wrap{ max-height:1500px; }
+.sub-spot-card.open .sub-spot-details-wrap{ max-height:5000px; }
 .sub-spot-details{ padding:0 14px 16px; border-top:1px dashed #eee; margin-top:4px; padding-top:14px;}
 .dish-tag{display:inline-block; background:#ffe1d6; color:#c1502f; font-size:11.5px; font-weight:700; padding:6px 12px; border-radius:8px; margin:0 0 12px 0; line-height:1.4;}
 
@@ -370,6 +386,12 @@ body.family-locked{overflow:hidden;}
 .family-gate-card h2{margin:0 0 8px;font-size:24px;color:var(--ink);}
 .family-gate-card p{margin:0 0 18px;font-size:13px;line-height:1.7;color:var(--ink-soft);}
 .family-gate-card input{width:100%;box-sizing:border-box;border:1.5px solid var(--line);border-radius:14px;padding:13px 14px;font:inherit;font-size:15px;background:#fff;outline:none;}
+.family-gate-card input+input{margin-top:9px;}
 .family-gate-card input:focus{border-color:var(--blue);box-shadow:0 0 0 4px rgba(83,129,236,.12);}
 .family-gate-card button{width:100%;margin-top:10px;border:0;border-radius:14px;padding:13px 16px;background:linear-gradient(135deg,var(--blue),#7d9cf0);color:#fff;font:inherit;font-weight:900;cursor:pointer;box-shadow:0 10px 24px rgba(83,129,236,.22);}
+.family-gate-card .family-offline-button{background:#fff;color:var(--blue);border:1.5px solid #b7c9ed;box-shadow:none;}
 .family-gate-error{min-height:20px;margin-top:8px;font-size:12px;font-weight:800;color:#c1502f;}
+
+.undo-toast{position:fixed;left:50%;bottom:96px;z-index:100000;transform:translate(-50%,22px);width:min(90%,390px);display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 13px 12px 16px;border-radius:16px;background:rgba(39,48,61,.96);color:#fff;box-shadow:0 16px 38px rgba(24,31,42,.32);opacity:0;pointer-events:none;transition:.24s ease;font-size:12px;font-weight:800;}
+.undo-toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto;}
+.undo-toast button{border:0;border-radius:999px;background:var(--yellow);color:#2f3a4a;padding:7px 13px;font:inherit;font-size:11px;font-weight:900;cursor:pointer;}
