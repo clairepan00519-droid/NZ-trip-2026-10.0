@@ -239,7 +239,8 @@ function normalizeStructuredList(key,value){
     if(!raw||typeof raw!=='object') return;
     const item={...raw};
     if(key==='nz_shop'){
-      item.cat=item.cat||'supermarket';
+      const freshWords=/生鮮|蔬菜|水果|牛奶|鮮奶|蛋|雞蛋|肉|牛排|鮭魚|海鮮|起司|乳酪|優格|沙拉/i;
+      item.cat=item.cat==='supermarket'?(freshWords.test(`${item.name||''} ${item.location||''}`)?'fresh':'food'):(item.cat||'food');
       item.imgs=mergeUniqueUrls(item.imgs,item.img?[item.img]:[]);
       item.img=null;
       item.id=item.id||stableItemId('shop',[item.cat,item.name,item.location]);
@@ -364,7 +365,7 @@ function applyRemoteRow(row, forceApply=false){
   if(!forceApply && isUserEditingForm()){ queueRemoteRow(row); return; }
   const rt=row.updated_at||new Date().toISOString(), lt=getSyncMeta()[row.key]; if(lt&&Date.parse(lt)>Date.parse(rt))return;
   cloudSync.applyingRemote=true;
-  try{let remote;try{remote=JSON.parse(row.value);}catch(e){remote=null;}remote=normalizeSyncValue(row.key,remote);let value=remote;if(MEDIA_SYNC_KEYS.has(row.key)){const local=localValueForKey(row.key);value=mergePreservingLocal(local,remote);}const valueStr=JSON.stringify(value);replaceLocalJson(row.key,value);setSyncMeta(row.key,rt);applyStoreUpdate(row.key,valueStr);}catch(e){console.error('套用家人資料失敗',e);}finally{cloudSync.applyingRemote=false;}
+  try{let remote;try{remote=JSON.parse(row.value);}catch(e){remote=null;}remote=normalizeSyncValue(row.key,remote);let value=remote;if(MEDIA_SYNC_KEYS.has(row.key)){const local=localValueForKey(row.key);value=mergePreservingLocal(local,remote);}const valueStr=JSON.stringify(value);const localStr=JSON.stringify(normalizeSyncValue(row.key,localValueForKey(row.key)));setSyncMeta(row.key,rt);if(valueStr===localStr)return;replaceLocalJson(row.key,value);applyStoreUpdate(row.key,valueStr);}catch(e){console.error('套用家人資料失敗',e);}finally{cloudSync.applyingRemote=false;}
 }
 function applyStoreUpdate(key,jsonStr){
   let parsed;try{parsed=JSON.parse(jsonStr);}catch(e){return;}
@@ -452,6 +453,7 @@ const days = [
   S('Lindis Pass','attraction','連接奧塔哥與麥肯齊盆地的高山通道，擁有惡地金黃丘陵地形。',{tags:['必拍'], fullDesc:'連接奧塔哥與麥肯齊盆地的著名高山山口通道（海拔達 971 公尺）。這裡擁有極為獨特的惡地丘陵地形，山上覆蓋著金黃色的草本植物（Tussock），在陽光照射下會呈現如絲綢般的光影線條，冬天與初春時則可能覆蓋白雪，壯麗非凡。', tip:'山頂風大且氣溫驟降，下車記得穿大衣。官方觀景台設有一段短步道可爬上小山丘。', park:'山口最高點設有專屬免費停車場。', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQn22Xamf2PRFoVYt6rOfa_B9cUB3LwDglLx3WZgyimAGkn98eiFGdR2xWw&s=10'}), 
   S('Lake Tekapo','attraction','麥肯齊盆地的明珠。夢幻「土耳其藍」湖水與牧羊人教堂。',{tags:['必拍'], fullDesc:'麥肯齊盆地的明珠。蒂卡波湖最著名的是其夢幻般的「土耳其藍」湖水，這是因為冰河融水夾帶了大量的微細岩粉懸浮在水中。背景襯托著高聳的阿爾卑斯山脈，湖畔還有指標性的牧羊人教堂。', img:'https://www.outsidesports.co.nz/cdn/shop/articles/church-of-good-shepherd-new-zealand-m8y3_2239x.webp?v=1765414174'}), 
   S('Sunset Rock','attraction','蒂卡波當地人私藏的頂級日落觀景高地。',{tags:['必拍'], fullDesc:'蒂卡波當地人私藏的頂級日落觀景高地。位於小鎮後方的半山腰山頭，居高臨下，能同時將整片土耳其藍湖泊、牧羊人教堂以及背後整座被夕陽染成粉紅色的南阿爾卑斯雪山群峰盡收眼底。', tip:'建議在預計日落前 40 分鐘抵達。帶上相機腳架，用黃金光線拍攝牧羊人教堂與湖泊全景。', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQTlto7cMN_62cjmkAztGVa_g2lwh4n8PIRcc1arYiwcw&s=10'}), 
+  S('Tekapo 湖畔初夜觀星','activity','抵達 Tekapo 後的輕量觀星夜：先讓眼睛適應黑暗，再找南十字座、指極星與銀河。',{tags:['必拍'],dur:'21:00–22:15', hours:'依雲量彈性調整', note:'關閉車燈後步行；使用紅光手電筒，不跨入私人土地', fullDesc:'晚餐後從住宿附近選擇安全、視野開闊且合法停留的位置觀星。先用 15–20 分鐘適應黑暗，從南方低空尋找南十字座與半人馬座指極星，再沿著銀河向西辨認天蠍座。若雲量偏高，改為在住宿窗邊短看，不必為了行程勉強夜駕。', tip:'9 月夜間寒冷且風大，帶毛帽、手套、保溫杯與腳架；手機螢幕調到最暗。'}),
   ], 
   moreSpots: [
     S('Scroggin Coffee','food','木質調文青咖啡館。主打健康在地早午餐。',{tags:['必吃'], hours:'07:00–14:30', fullDesc:'瓦納卡市區極具質感的木質調文青咖啡館。主打健康、在地食材的早午餐與自家烘焙精品豆，出發跨區長途自駕前補充能量的首選。', img:'https://www.scrogginwanaka.co.nz/cdn/shop/files/Scroggin-205.jpg?v=1725840972&width=600', recDishes:'酪梨吐司、自製烘焙燕麥'}), 
@@ -461,6 +463,7 @@ const days = [
   S('Mt John Summit Track','activity','環繞約翰山頂的景觀步道。擁有震撼的 360 度視角。',{tags:['必拍'],dur:'約2–3小時', fullDesc:'環繞約翰山頂的頂級景觀步道。山頂視野毫無遮蔽，擁有震撼的 360 度視角，可同時俯瞰碧藍的蒂卡波湖、寶藍的亞歷山德里納湖。', tip:'山頂完全暴露在風口中，即使是大晴天也往往狂風大作，防風防水外套、毛帽與太陽眼鏡為必備。', park:'步道口有免費停車場；若選擇開車上山頂需在山腳閘門支付道路使用費。', docMap:'https://www.doc.govt.nz/parks-and-recreation/places-to-go/canterbury/places/lake-tekapo-area/tracks/mount-john-summit-track/', img:'https://cdn.prod.rexby.com/image/9f8fa577cdd143059ad1f07343635b74?format=webp&width=1080&height=1350&quality=80'}), 
   S('Mt John Observatory','attraction','坎特伯里大學天文觀測台。夜間可觀星。',{tags:['必拍'], hours:'咖啡廳 09:00–15:00', note:'開車上山需收費', fullDesc:'坎特伯里大學設於紐西蘭的重要天文研究觀測台。由於蒂卡波屬於國際黑暗天空保護區，這裡擁有全紐西蘭最純淨、無光害的星空環境。夜間可報名參加專業觀星導覽。', img:'https://cloudfront-ap-southeast-2.images.arcpublishing.com/nzme/SBRRQJLB47WWHMFRG7BH3BPOS4.jpg'}), 
   S('Lake Alexandrina','attraction','蒂卡波湖旁的私房隱密湖泊。深邃寶藍色，嚴禁動力船進入。',{fullDesc:'距離蒂卡波湖僅約 15 分鐘車程的私房隱密湖泊。不同於蒂卡波湖的冰河懸浮土耳其藍，這座湖是純淨的地下泉水與雨水匯集，湖水呈深邃清透的寶藍色，嚴禁任何動力船隻進入，是尋求極致安寧的世外桃源。', img:'https://cdn.sanity.io/images/n1o990un/production/0bfb837ba10be9becbf00dda9b661028527416ac-1600x1200.jpg?auto=format&fit=max&w=3840'}), 
+  S('Aoraki Mackenzie 深空觀星','activity','第二晚安排完整觀星時段；可預約導覽，或在安全地點辨認銀河、南十字座與麥哲倫雲。',{tags:['必拍'],dur:'20:30–22:45', hours:'需依雲量與月光確認', note:'若參加 Mt John 夜間團，務必事先預約並依集合通知報到', fullDesc:'利用連住第二晚安排較完整的深空觀察。先看西側銀河較明亮的區域，再往南找南十字座與指極星；南方天空夠暗時，可嘗試用肉眼找大小麥哲倫雲。若自行觀星，選住宿附近合法安全位置，避免夜間臨停公路或闖入農場。', link:'https://www.darkskyproject.co.nz/', linkLabel:'查看官方觀星行程'}),
   ], 
   moreSpots: [
     S('The Greedy Cow Cafe','food','人氣溫馨早餐店。主打大份量英式傳統早餐與帕尼尼。',{tags:['必吃'], hours:'07:30–14:00', fullDesc:'蒂卡波小鎮上極受歡迎的溫馨早餐店。主打大份量的英式傳統早餐、香煎培根與現做帕尼尼。店內氣氛輕快，咖啡水準極高，是開啟一天步道行程的最佳起點。', img:'https://static.wixstatic.com/media/db1de0_39f47fad88b6491380d9b51bb9c94724~mv2.jpg/v1/fill/w_1920,h_1200,al_c,q_90/Greedy-Cow-Featured-Image-2.jpg', recDishes:'Big Breakfast、現做帕尼尼'}), 
@@ -556,7 +559,7 @@ const days = [
   S('Glenorchy Animal Experience','activity','格倫諾基近郊的真實農場體驗，可近距離餵食羊駝、迷你馬、小豬等多種動物。',{img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQm7ahK_LdJocOCJ59L8pQwLeeRtuqzgUAJJPcgdkAWGWzmnbM4hItbiHjU&s=10', fullDesc:'位於格倫諾基近郊、通往 Paradise 途中的真實運作農場，同時也是開放參觀的迷你動物園。可以近距離餵食與互動的動物包括紐西蘭羊群與小羊、迷你馬與克萊茲代爾馬、羊駝、山羊、豬、驢子及兔子等，是全家大小都能樂在其中的體驗行程，也是支持在地小型農場經營的好方式。'}), 
   ], 
   moreSpots: [
-    S('Remarkable Market','shopping','皇后鎮近郊在地假日市集。',{tags:['必買'], hours:'每週六 09:00–14:00', fullDesc:'逢週六在皇后鎮近郊 Frankton 開放的在地假日市集。匯集了手作藝術家、古董商與在地小農。', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTN8mRbvFTeIbdAswlmSAPu1v-C308EVliTejdDbqEKh-0X5Gp0XqNzd7ut&s=10'}), 
+    S('Remarkables Market（營業日待確認）','attraction','Frankton 在地市集，集合小農、熟食、烘焙與紐西蘭手作；目前官方 2026 行事曆未列 9/26。',{tags:['必買'], hours:'常態季 10–4 月週六 09:00–14:00', note:'⚠️ 目前官方僅公布 9/5 Spring Fling，未列 9/26；出發前請再查活動日', fullDesc:'市集位於 Remarkables Park、Queenstown Airport 附近，主打在地農產、現做餐食、烘焙、藝術手作與現場音樂，也推行減少一次性塑膠。若 9/26 後續加開，可優先找 Whitestone Cheese Co 的 Oamaru 手工起司、Merino Frank 的紐西蘭製美麗諾羊毛與 possum 配件，以及 The Country Cakery 的在地食材甜點；實際出攤仍以當週名單為準。', customInfo:'🔎 推薦逛法：先確認官方日期 → 開攤即到 → 先買冷藏起司／甜點 → 最後逛手作。<br><a href="https://remarkablesmarket.com/" target="_blank" rel="noopener">官方活動日</a>・<a href="https://remarkablesmarket.com/stallholders/" target="_blank" rel="noopener">官方攤商名錄</a><details class="market-backup"><summary>🅱️ 9/26 未營業備案</summary><b>09:00 Queenstown Market → 10:45 Queenstown Gardens → 湖畔午餐 → 冰淇淋比較卡擇一</b><p>Queenstown Market 位於 Earnslaw Park，官方資料為全年每週六舉辦，主力是本地陶藝、珠寶、pounamu、羊毛、攝影與皮件；它不是生鮮食品市集，但旁邊有熟食攤與市中心餐廳。全段步行即可，不必再往 Frankton 開車。</p><a href="https://www.queenstownmarket.nz/" target="_blank" rel="noopener">查看 Queenstown Market</a>・<a href="https://www.google.com/maps/dir/Queenstown+Market,+Earnslaw+Park/Queenstown+Gardens" target="_blank" rel="noopener">開啟備案步行路線</a></details>', link:'https://remarkablesmarket.com/', linkLabel:'確認官方營業日'}), 
     S('Jervois Steak House','food','最高檔頂級美式牛排館，嚴選 Wakanui 牛肉。',{tags:['必吃'], hours:'17:00–22:00', note:'強烈建議提前線上訂位', fullDesc:'皇后鎮最高檔的頂級美式高級牛排館，嚴選紐西蘭頂級熟成 Wakanui 牛肉。', img:'https://www.jervoissteakhouse.co.nz/media/pages/story/c05b98f51d-1764014775/jsh-qt-board.jpg', recDishes:'Wakanui 熟成肋眼牛排'}), 
     S('Flame Bar & Grill','food','超大份量、高 CP 值的窯烤秘製豬肋排。',{tags:['必吃'], hours:'12:00–22:30', fullDesc:'以超大份量、高 CP 值的窯烤秘製豬肋排與海陸雙拼餐酒館著稱。', img:'https://images.myguide-cdn.com/md/queenstown/companies/flame-bar-and-grill/large/flame-bar-and-grill-703896.jpg', recDishes:'秘製窯烤豬肋排'}), 
     S('Mrs Woolly\'s General Store','shopping','格倫諾基小鎮上的可愛雜貨店，兼營咖啡與伴手禮，緊鄰唯一的露營地。',{img:'https://mrswoollysgeneralstore.nz/cdn/shop/files/about_section_2_img_1_x2_1413b23d-5dd0-468c-a676-a0c5133facec.jpg?v=1686144241&width=812', fullDesc:'位於格倫諾基入口處、緊鄰 Mrs Woolly\'s Campground（鎮上唯一的露營地）的雜貨小店。除了販售日常雜貨與紀念品外，也提供咖啡與輕食，是進入格倫諾基前後稍作休息、採買伴手禮的可愛據點。'}), 
@@ -597,11 +600,11 @@ const days = [
   if(day26HotelIndex >= 0) day26.moreSpots.splice(day26HotelIndex, 0, ...iceCreamStops);
   else day26.moreSpots.push(...iceCreamStops);
 
-  /* Remarkables Market 僅週六營業，因此即使其餘行程交換，仍固定留在 9/26。 */
-  const marketIndex = (day25.moreSpots || []).findIndex(spot=>spot.name==='Remarkable Market');
+  /* 依規劃固定在 9/26，並升為主要亮點；卡片內保留官方營業日警示。 */
+  const marketIndex = (day25.moreSpots || []).findIndex(spot=>spot.name.startsWith('Remarkables Market'));
   if(marketIndex >= 0){
     const [market] = day25.moreSpots.splice(marketIndex, 1);
-    day26.moreSpots.unshift(market);
+    day26.spots.unshift(market);
   }
 
   day24.dayDesc = '由 Deer Park Heights 絕美視角登高俯瞰，收攬 Queenstown 百萬湖山景致';
@@ -1324,6 +1327,17 @@ function iceCreamComparisonHTML(entries,dayIdx){
   return `<section class="ice-compare-card"><div class="ice-compare-title"><div><span>🍨 9/26 冰淇淋比較卡</span><b>現場依路線與口味挑一間就好</b></div><small>四間都保留，可自行上傳穩定照片與修正導航。</small></div>${rows}<details class="ice-compare-details"><summary>展開四間完整資料、照片與導航設定</summary><div>${detailCards}</div></details></section>`;
 }
 
+function constellationStoriesHTML(date){
+  if(date!=='9/15'&&date!=='9/16')return '';
+  const second=date==='9/16';
+  return `<section class="star-story-panel"><div class="star-story-head"><span>✦ TEKAPO NIGHT SKY · ${date}</span><h3>${second?'深空辨星與南方故事':'抵達夜的星空故事'}</h3><p>建議約 20:30–23:00 觀看；星位為行程規劃參考，當晚仍以雲量、月光與現場地平線為準。</p></div><div class="star-story-grid">
+    <article><b>✦ 南十字座 · Te Punga</b><p>南十字座全年可見。Tainui 傳統將它視為天空大舟的錨「Te Punga」；Wairarapa 則稱 Māhutonga，像銀河之中讓風穿過的開口。</p></article>
+    <article><b>✦ 天蠍座 · 季節的追逐</b><p>9 月晚間可在西方銀河附近找天蠍彎鉤。希臘故事裡，蠍子與獵戶 Orion 被放在天空兩側，一方升起時另一方退場。</p></article>
+    <article><b>✦ 銀河 · Te Ikaroa</b><p>橫跨暗空的銀河在 Māori 傳統中稱 Te Ikaroa「長魚」。先避開燈光、讓眼睛適應約 20 分鐘，才會看見更多雲霧般細節。</p></article>
+    ${second?'<article><b>✦ 麥哲倫雲</b><p>南方夠暗、天空透明時，可找兩團與銀河分離的淡淡雲斑；它們其實是鄰近矮星系，而不是地球大氣中的雲。</p></article>':''}
+  </div><div class="star-story-links"><a href="https://teara.govt.nz/en/southern-cross" target="_blank" rel="noopener">Te Ara：南十字座</a><a href="https://teara.govt.nz/en/night-sky" target="_blank" rel="noopener">Te Ara：紐西蘭夜空</a></div></section>`;
+}
+
 function renderDayContent(){
   rememberOpenSpotCards();
   document.querySelectorAll('textarea[id^="note-input-"]').forEach(input=>{
@@ -1383,7 +1397,7 @@ function renderDayContent(){
     </div>
     <div id="day-card-${activeDay}">
       <div class="spot-subtabs"><button class="spot-subtab${curSubTab==='main'?' active':''}" data-type="main" onclick="switchSubTab(${activeDay}, 'main')">📌 主要亮點 (${mainList.length})</button><button class="spot-subtab${curSubTab==='more'?' active':''}" data-type="more" onclick="switchSubTab(${activeDay}, 'more')">🍴 食衣住 (${lifeList.length})</button><button class="spot-subtab${curSubTab==='routemap'?' active':''}" data-type="routemap" onclick="switchSubTab(${activeDay}, 'routemap')">🗺️ 路線圖${routeMaps.length ? ` (${routeMaps.length})` : ''}</button></div>
-      <div class="subtab-content${curSubTab==='main'?' active':''}" data-type="main">${mainSpotsHTML}</div>
+      <div class="subtab-content${curSubTab==='main'?' active':''}" data-type="main">${mainSpotsHTML}${constellationStoriesHTML(d.date)}</div>
       <div class="subtab-content${curSubTab==='more'?' active':''}" data-type="more" style="background:#f4f6f0; border-radius:0 0 var(--r-lg) var(--r-lg); padding:16px 12px 16px; margin-bottom:16px;">${secondaryCardsHTML}${addSpotFormHTML}</div>
       <div class="subtab-content${curSubTab==='routemap'?' active':''}" data-type="routemap" style="background:#f4f6f0; border-radius:0 0 var(--r-lg) var(--r-lg); padding:16px 12px 16px; margin-bottom:16px;">${routeMapHTML}</div>
     </div>
@@ -1458,7 +1472,7 @@ async function fetchWeatherFor(k, attempt){
   const timeout = setTimeout(()=>controller.abort(), 9000);
   try{
     if(!navigator.onLine) throw new Error('OFFLINE');
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,wind_speed_10m,precipitation,weather_code&daily=sunrise,sunset,uv_index_max&timezone=Pacific%2FAuckland`, { signal: controller.signal });
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,wind_speed_10m,precipitation,weather_code&hourly=cloud_cover,precipitation_probability,wind_speed_10m,visibility&daily=sunrise,sunset,uv_index_max&forecast_days=3&timezone=Pacific%2FAuckland`, { signal: controller.signal });
     clearTimeout(timeout);
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data = await res.json();
@@ -1558,6 +1572,7 @@ function renderOneLiveCity(k){
     : `<span class="live-badge"><span class="dot"></span>即時</span>`;
   
   const MW_TIMES = { 'Wanaka':'20:00~', 'Tekapo':'19:45~', 'MtCook':'20:00~', 'Oamaru':'--', 'Dunedin':'--', 'TeAnau':'20:30~', 'Queenstown':'20:15~' };
+  const starDecision=stargazingDecision(data);
   
   el.innerHTML = `
     <div style="display:flex; flex-direction:column; width:100%;">
@@ -1576,9 +1591,26 @@ function renderOneLiveCity(k){
         <span>🌇 日落 ${ss}</span>
         <span class="mw">🌌 銀河 ${MW_TIMES[k]}</span>
       </div>
+      ${starDecision}
       <div class="live-tip-box"><b>🧥 穿搭與裝備建議：</b><br>${tip}</div>
     </div>
   `;
+}
+
+function stargazingDecision(data){
+  const h=data&&data.hourly;if(!h||!Array.isArray(h.time))return '<div class="star-go-card unknown"><b>🌌 觀星判斷：等待預報</b><span>抵達前 3 天重新整理，即會以晚間資料判斷。</span></div>';
+  const currentTime=(data.current&&data.current.time)||h.time[0];
+  const currentHour=Number((currentTime.split('T')[1]||'0').slice(0,2));
+  const dates=[...new Set(h.time.map(t=>t.slice(0,10)))];
+  const targetDate=dates[currentHour>=23?1:0]||dates[0];
+  const indices=h.time.map((t,i)=>({t,i})).filter(o=>o.t.startsWith(targetDate)&&Number(o.t.slice(11,13))>=20&&Number(o.t.slice(11,13))<=22).map(o=>o.i);
+  if(!indices.length)return '<div class="star-go-card unknown"><b>🌌 觀星判斷：等待預報</b><span>目前沒有今晚 20–23 時資料。</span></div>';
+  const avg=key=>Math.round(indices.reduce((sum,i)=>sum+(Number(h[key]?.[i])||0),0)/indices.length);
+  const cloud=avg('cloud_cover'), rain=avg('precipitation_probability'), wind=avg('wind_speed_10m'), visibility=avg('visibility');
+  let level='go',title='GO・值得安排',reason='雲量與降雨風險較低，可按計畫出發。';
+  if(cloud>65||rain>40||wind>40||visibility<8000){level='no';title='NO-GO・先不要出發';reason='雲層、降雨、強風或能見度不利，留在住宿休息並稍後再看。';}
+  else if(cloud>35||rain>20||wind>30||visibility<15000){level='maybe';title='MAYBE・短時觀察';reason='條件有變數，先看即時雲圖；只安排住宿附近的短觀星。';}
+  return `<div class="star-go-card ${level}"><div><small>${targetDate} 20:00–23:00</small><b>🌌 ${title}</b><span>${reason}</span></div><dl><div><dt>雲量</dt><dd>${cloud}%</dd></div><div><dt>降雨</dt><dd>${rain}%</dd></div><div><dt>風速</dt><dd>${wind} km/h</dd></div></dl><p>此卡為自動初篩；出發前仍應確認官方警報與肉眼雲況。</p></div>`;
 }
 
 
@@ -1637,12 +1669,12 @@ function migratePackCategoryNames(data){
 let packData = migratePackCategoryNames(JSON.parse(localStorage.getItem('nz_pack')) || structuredClone(defaultPackData));
 function persistPack(){ safeSetItem('nz_pack', packData); }
 
-const defaultShopData = [{name:'Manuka 麥蘆卡蜂蜜', qty:1, checked:false, img:null, cat:'supermarket', location:''},{name:'美麗諾羊毛製品', qty:1, checked:false, img:null, cat:'souvenir', location:''},{name:'Whittaker\'s 巧克力', qty:1, checked:false, img:null, cat:'supermarket', location:''}];
+const defaultShopData = [{name:'牛奶／優格', qty:1, checked:false, img:null, cat:'fresh', location:''},{name:'Manuka 麥蘆卡蜂蜜', qty:1, checked:false, img:null, cat:'food', location:''},{name:'美麗諾羊毛製品', qty:1, checked:false, img:null, cat:'souvenir', location:''},{name:'Whittaker\'s 巧克力', qty:1, checked:false, img:null, cat:'food', location:''}];
 let shopData = normalizeStructuredList('nz_shop', JSON.parse(localStorage.getItem('nz_shop')) || defaultShopData);
 function persistShop(){ safeSetItem('nz_shop', shopData); }
-const SHOP_CATS = {supermarket:{label:'🛒 超市', color:'#2f8a52'}, souvenir:{label:'🎁 紀念品', color:'#c1502f'}};
+const SHOP_CATS = {fresh:{label:'🥬 超市・生鮮', color:'#2f8a52'}, food:{label:'🥫 超市・食品', color:'#9b6a24'}, souvenir:{label:'🎁 紀念品', color:'#c1502f'}};
 
-const listSectionOpen = { pack:{}, shop:{supermarket:false, souvenir:false} };
+const listSectionOpen = { pack:{}, shop:{fresh:false, food:false, souvenir:false} };
 function toggleListSection(type, key){
   if(!listSectionOpen[type]) listSectionOpen[type] = {};
   listSectionOpen[type][key] = !listSectionOpen[type][key];
@@ -1725,7 +1757,7 @@ function renderShopList(){
   if(!wrap) return;
   const groups = Object.keys(SHOP_CATS).map(catKey=>{
     const meta = SHOP_CATS[catKey];
-    const entries = shopData.map((it,i)=>({it,i})).filter(x=>(x.it.cat || 'supermarket') === catKey);
+    const entries = shopData.map((it,i)=>({it,i})).filter(x=>(x.it.cat || 'food') === catKey);
     const isOpen = listSectionOpen.shop[catKey] === true;
     const done = entries.filter(x=>x.it.checked).length;
     const itemsHTML = entries.length ? entries.map(({it,i})=>{
@@ -1754,7 +1786,7 @@ function removeShopImg(i, photoIdx){ const imgs = shopImgs(shopData[i]); const [
 function toggleShop(i){ shopData[i].checked = !shopData[i].checked; persistShop(); renderShopList(); }
 function changeShopQty(i,delta){ shopData[i].qty = Math.max(1, shopData[i].qty+delta); persistShop(); renderShopList(); }
 function delShop(i){ const [removed]=shopData.splice(i,1); persistShop(); renderShopList(); offerUndo(`已刪除「${removed?.name||'購物項目'}」`,()=>{shopData.splice(i,0,removed);persistShop();renderShopList();}); }
-function addShopItem(){ const input = document.getElementById('newShopItem'); const cat = document.getElementById('newShopCat')?.value || 'supermarket'; if(input && input.value.trim()){ shopData.push({id:'shop-'+crypto.randomUUID(),name:input.value.trim(), qty:1, checked:false, imgs:[], cat, location:''}); persistShop(); listSectionOpen.shop[cat] = true; renderShopList(); } }
+function addShopItem(){ const input = document.getElementById('newShopItem'); const cat = document.getElementById('newShopCat')?.value || 'food'; if(input && input.value.trim()){ shopData.push({id:'shop-'+crypto.randomUUID(),name:input.value.trim(), qty:1, checked:false, imgs:[], cat, location:''}); persistShop(); listSectionOpen.shop[cat] = true; renderShopList(); } }
 function setShopCat(i, val){ shopData[i].cat = val; persistShop(); renderShopList(); }
 function setShopLocation(i, val){ shopData[i].location = val; persistShop(); }
 
@@ -1960,7 +1992,18 @@ function removeUnneededUtilityUI(){
   });
 }
 
+/* ============ 桌機寬版編輯／手機預覽 ============ */
+function setDesktopLayout(mode){
+  const next=mode==='phone'?'phone':'wide';
+  document.body.classList.toggle('desktop-phone',next==='phone');
+  document.body.classList.toggle('desktop-wide',next==='wide');
+  document.getElementById('phoneModeBtn')?.classList.toggle('active',next==='phone');
+  document.getElementById('wideModeBtn')?.classList.toggle('active',next==='wide');
+  localStorage.setItem('nz_desktop_layout',next);
+}
+
 /* ============ INIT ============ */
+setDesktopLayout(localStorage.getItem('nz_desktop_layout')||'wide');
 updateSpotCount();
 renderTodayMode();
 renderDayChips();

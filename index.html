@@ -13,6 +13,10 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body class="family-locked">
+<aside class="desktop-workbench" aria-label="桌機顯示模式">
+  <b>🖥️ 桌機工作區</b><span>編輯時用寬版，出發前切手機預覽檢查。</span>
+  <div><button id="wideModeBtn" type="button" onclick="setDesktopLayout('wide')">寬版編輯</button><button id="phoneModeBtn" type="button" onclick="setDesktopLayout('phone')">手機預覽</button></div>
+</aside>
 <div id="familyGate" class="family-gate" aria-hidden="false">
   <div class="family-gate-card">
     <div class="family-gate-icon">🌿</div>
@@ -72,6 +76,19 @@
       </div>
       <a href="https://www.google.com/maps/dir/Queenstown+Airport/Wanaka/Lake+Tekapo/Aoraki+Mount+Cook+Village/Oamaru/Dunedin/Te+Anau/Queenstown" target="_blank" rel="noopener" class="btn btn-map" style="display:flex; margin-top:12px; text-decoration:none;">🗺️ 在 Google 地圖開啟完整環線</a>
     </div>
+
+    <section class="section-card road-check-card">
+      <div class="road-check-head"><div><small>出發前 10 分鐘檢查</small><h3>❄️ 道路封閉／積雪快捷查詢</h3></div><span>官方即時資訊</span></div>
+      <div class="road-risk-strip"><b>本行程需特別看：</b> SH8 Lindis Pass／Burkes Pass、SH80 Mt Cook Road、SH94 Milford Road、Crown Range Road</div>
+      <div class="road-link-grid">
+        <a href="https://www.journeys.nzta.govt.nz/highway-conditions" target="_blank" rel="noopener"><b>🚧 NZTA 國道路況</b><span>封路、事故、施工與攝影機</span></a>
+        <a href="https://www.qldc.govt.nz/winter-road-reports" target="_blank" rel="noopener"><b>🏔️ Crown Range／地方道路</b><span>QLDC 冬季路報與雪鏈要求</span></a>
+        <a href="https://www.milfordroad.co.nz/" target="_blank" rel="noopener"><b>🏞️ Milford Road SH94</b><span>開放狀態、雪崩與管制</span></a>
+        <a href="https://www.metservice.com/warnings/home" target="_blank" rel="noopener"><b>🌨️ 道路降雪警報</b><span>MetService 官方警報</span></a>
+      </div>
+      <details class="road-decision"><summary>看到警示時怎麼決定？</summary><ol><li><b>Closed／Road closed：</b>不要出發，不依 Google Maps 小路繞行。</li><li><b>Chains essential：</b>只有車上有合規雪鏈且會安裝才出發；租車規則優先。</li><li><b>Area warning／ice：</b>避開清晨與入夜，放慢速度、加倍跟車距離。</li><li><b>SH94 或 Crown Range 不確定：</b>改走官方開放路線或直接延後，不用硬趕預約。</li></ol></details>
+      <p class="source-note">即時狀態需要網路；離線時仍會保留這份檢查順序與重點道路名稱。</p>
+    </section>
 
     <!-- Flights -->
     <div class="section-card">
