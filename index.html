@@ -8,6 +8,14 @@
 <meta property="og:title" content="謐境・南島 星穹冰河與曠野的雋永私藏">
 <meta property="og:description" content="紐西蘭南島自駕行程規劃，含每日景點指南、天氣、行李與購物清單，支援家人即時共享同步。">
 <meta property="og:type" content="website">
+<meta name="theme-color" content="#5276d8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="南島旅行">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
@@ -26,7 +34,11 @@
     <h2>南島家庭旅行</h2>
     <p>請使用已授權的家人帳號登入。登入過的裝置即使暫時離線，也能查看已快取的行程。</p>
     <input id="familyGateEmail" type="email" inputmode="email" autocomplete="username" placeholder="家人登入 Email">
-    <input id="familyGateInput" type="password" inputmode="text" autocomplete="current-password" placeholder="密碼">
+    <div class="family-password-wrap">
+      <input id="familyGateInput" type="password" autocomplete="current-password" placeholder="密碼" aria-describedby="familyCapsWarning">
+      <button id="familyPasswordToggle" class="family-password-toggle" type="button" aria-pressed="false" aria-label="顯示密碼">顯示</button>
+    </div>
+    <div id="familyCapsWarning" class="family-caps-warning" role="status" hidden>⇧ Caps Lock 已開啟，請留意密碼大小寫。</div>
     <button id="familyGateButton" type="button">進入行程</button>
     <button id="familyOfflineButton" class="family-offline-button" type="button" hidden>離線查看此裝置快取</button>
     <div id="familyGateError" class="family-gate-error" role="alert"></div>
@@ -212,7 +224,7 @@
 <!-- Modal for Images -->
 <div class="attach-modal" id="attachModal" onclick="closeAttachModal()">
   <button class="attach-modal-close" aria-label="關閉圖片" onclick="event.stopPropagation(); closeAttachModal()">✕</button>
-  <img id="attachModalImg" src="" onerror="handleImageError(this)" onclick="event.stopPropagation()">
+  <img id="attachModalImg" alt="放大的旅程圖片" onclick="event.stopPropagation()">
 </div>
 
 <script src="app.js"></script>

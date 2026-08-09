@@ -17,7 +17,7 @@
    連結使用，此檔案就會正常運作並提供離線瀏覽能力。
    =========================================================== */
 
-const CACHE_VERSION = 'nz-trip-v24-weather-btn-fix';
+const CACHE_VERSION = 'nz-trip-v25-pwa-sync-outbox';
 const SHELL_CACHE = `nz-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `nz-runtime-${CACHE_VERSION}`;
 
@@ -27,7 +27,8 @@ self.addEventListener('install', (event) => {
     caches.open(SHELL_CACHE).then((cache) => {
       // 快取目前這一頁本身（不論檔名為何），讓離線時仍能開啟
       return cache.addAll([
-        './', './index.html', './app.js', './style.css', './images/map.webp'
+        './', './index.html', './app.js', './style.css', './manifest.webmanifest',
+        './images/map.webp', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png'
       ]).catch(() => {});
     })
   );

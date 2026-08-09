@@ -122,12 +122,27 @@ async function restoreFamilyAccess(){
 document.addEventListener('DOMContentLoaded',()=>{
   const email=document.getElementById('familyGateEmail');
   const input=document.getElementById('familyGateInput');
+  const passwordToggle=document.getElementById('familyPasswordToggle');
+  const capsWarning=document.getElementById('familyCapsWarning');
   const btn=document.getElementById('familyGateButton');
   const offlineBtn=document.getElementById('familyOfflineButton');
   restoreFamilyAccess();
   setTimeout(()=>email&&email.focus(),80);
   if(btn) btn.addEventListener('click',submitFamilyGate);
-  if(input) input.addEventListener('keydown',e=>{ if(e.key==='Enter') submitFamilyGate(); });
+  const updateCapsWarning=e=>{if(capsWarning)capsWarning.hidden=!(e.getModifierState&&e.getModifierState('CapsLock'));};
+  if(input){
+    input.addEventListener('keydown',e=>{ updateCapsWarning(e); if(e.key==='Enter') submitFamilyGate(); });
+    input.addEventListener('keyup',updateCapsWarning);
+    input.addEventListener('blur',()=>{if(capsWarning)capsWarning.hidden=true;});
+  }
+  if(passwordToggle&&input) passwordToggle.addEventListener('click',()=>{
+    const reveal=input.type==='password';
+    input.type=reveal?'text':'password';
+    passwordToggle.textContent=reveal?'隱藏':'顯示';
+    passwordToggle.setAttribute('aria-pressed',String(reveal));
+    passwordToggle.setAttribute('aria-label',reveal?'隱藏密碼':'顯示密碼');
+    input.focus({preventScroll:true});
+  });
   if(offlineBtn) offlineBtn.addEventListener('click',()=>unlockFamilySite({onlineSync:false}));
   window.addEventListener('offline',()=>{ if(offlineBtn) offlineBtn.hidden=localStorage.getItem(FAMILY_TRUSTED_DEVICE_KEY)!=='1'; });
   window.addEventListener('online',()=>{ if(offlineBtn) offlineBtn.hidden=true; if(!document.body.classList.contains('family-locked')&&!familyCloudStarted) restoreFamilyAccess(); });
@@ -141,10 +156,14 @@ const SUPABASE_URL = "https://xkahhddatpoxuembeiwl.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrYWhoZGRhdHBveHVlbWJlaXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NDExNDksImV4cCI6MjEwMDAxNzE0OX0.Jdpxpz7rgyK_OikYkRrVQComDWZiaI4fgf5ZV_SdaII";
 
 const SYNC_META_KEY = 'nz_sync_meta_v3';
+const SYNC_OUTBOX_KEY = 'nz_sync_outbox_v1';
 const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_nav_links','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_stay_times','nz_pack','nz_shop','nz_rules','nz_docs'];
 const MEDIA_SYNC_KEYS = new Set(['nz_photos','nz_covers','nz_route_maps']);
 const STRUCTURED_LIST_KEYS = new Set(['nz_shop','nz_rules','nz_docs']);
-const cloudSync = {enabled:false, applyingRemote:false, pending:{}, timer:null, pollTimer:null, lastError:null, ready:false};
+function loadSyncOutbox(){try{const value=JSON.parse(localStorage.getItem(SYNC_OUTBOX_KEY));return value&&typeof value==='object'&&!Array.isArray(value)?value:{};}catch(e){return {};}}
+function saveSyncOutbox(){try{localStorage.setItem(SYNC_OUTBOX_KEY,JSON.stringify(cloudSync.pending));}catch(e){console.warn('無法保存待同步佇列',e);}}
+function syncOutboxCount(){return Object.keys(cloudSync.pending||{}).length;}
+const cloudSync = {enabled:false, applyingRemote:false, pending:loadSyncOutbox(), timer:null, pollTimer:null, lastError:null, ready:false, flushing:false};
 const MEDIA_BUCKET = 'trip-media';
 
 function makeMediaPath(folder, ext='jpg'){
@@ -315,6 +334,7 @@ async function initCloudSync(){
     await reconcileInitialCloudData();
     cloudSync.ready=true; cloudSync.lastError=null; updateSyncStatus();
     clearInterval(cloudSync.pollTimer); cloudSync.pollTimer=setInterval(pollCloudChanges,12000);
+    if(syncOutboxCount()) flushCloudPush();
   }catch(e){cloudSync.lastError=e;console.error('家人同步初始化失敗：',e);updateSyncStatus(e);}
 }
 async function reconcileInitialCloudData(){
@@ -402,17 +422,45 @@ function applyStoreUpdate(key,jsonStr){
   if(typeof renderDayContent==='function')renderDayContent();if(typeof updateSpotCount==='function')updateSpotCount();
 }
 function scheduleCloudPush(key,valueObj){
-  if(!cloudSync.enabled||cloudSync.applyingRemote)return;const t=new Date().toISOString();setSyncMeta(key,t);cloudSync.pending[key]={valueObj,updatedAt:t};clearTimeout(cloudSync.timer);cloudSync.timer=setTimeout(flushCloudPush,700);updateSyncStatus(null,'saving');
+  if(cloudSync.applyingRemote)return;
+  const t=new Date().toISOString();
+  setSyncMeta(key,t);
+  cloudSync.pending[key]={valueObj,updatedAt:t};
+  saveSyncOutbox();
+  clearTimeout(cloudSync.timer);
+  if(navigator.onLine&&cloudSync.enabled) cloudSync.timer=setTimeout(flushCloudPush,700);
+  updateSyncStatus(null,navigator.onLine&&cloudSync.enabled?'saving':'queued');
 }
 async function flushCloudPush(){
-  const entries=Object.entries(cloudSync.pending);cloudSync.pending={};
-  for(const[key,item]of entries){try{await restUpsert(key,item.valueObj,item.updatedAt);cloudSync.lastError=null;}catch(e){cloudSync.lastError=e;console.error('同步寫入失敗',e);updateSyncStatus(e);return;}}
-  updateSyncStatus();setTimeout(pollCloudChanges,500);
+  if(cloudSync.flushing||!cloudSync.enabled||!navigator.onLine||!syncOutboxCount()){updateSyncStatus(null,syncOutboxCount()?'queued':null);return;}
+  cloudSync.flushing=true;
+  const entries=Object.entries(cloudSync.pending);
+  try{
+    for(const[key,item]of entries){
+      try{
+        await restUpsert(key,item.valueObj,item.updatedAt);
+        if(cloudSync.pending[key]?.updatedAt===item.updatedAt) delete cloudSync.pending[key];
+        saveSyncOutbox();
+        cloudSync.lastError=null;
+        updateSyncStatus(null,syncOutboxCount()?'saving':null);
+      }catch(e){
+        cloudSync.lastError=e;
+        console.error('同步寫入失敗，已保留待上傳佇列：',e);
+        updateSyncStatus(e,'queued');
+        return;
+      }
+    }
+    if(!syncOutboxCount()) setTimeout(pollCloudChanges,500);
+  }finally{cloudSync.flushing=false;}
 }
 function updateSyncStatus(err,state){
   const el=document.getElementById('cloudSyncStatus');if(!el)return;el.style.display='inline-flex';el.classList.toggle('sync-error',!!err);el.classList.toggle('sync-saving',state==='saving'||state==='connecting');
-  if(err){el.textContent='⚠️ '+friendlySyncError(err);el.title=String(err&&err.message||err);}
-  else if(state==='connecting')el.textContent='☁️ 正在連接家人同步';else if(state==='saving')el.textContent='☁️ 正在同步變更';else el.textContent='☁️ 家人共享已同步';
+  const queued=syncOutboxCount();
+  if(err){el.textContent=`⚠️ ${queued?queued+' 項等待同步':'同步失敗'}・${friendlySyncError(err)}`;el.title=String(err&&err.message||err);}
+  else if(state==='connecting')el.textContent='☁️ 正在連接家人同步';
+  else if(state==='saving')el.textContent=`☁️ 正在同步${queued?' '+queued+' 項變更':''}`;
+  else if(state==='queued'||queued)el.textContent=`☁️ ${queued} 項變更等待同步`;
+  else el.textContent='☁️ 家人共享已同步';
 }
 /* ============ HEADER IMAGES ============ */
 const headerBgs = [
@@ -1326,7 +1374,11 @@ function removePhoto(e, idx, photoIdx) {
 }
 
 function openAttachModal(src) {
-  document.getElementById('attachModalImg').src = src;
+  const img=document.getElementById('attachModalImg');
+  if(!img||!src)return;
+  delete img.dataset.fallbackApplied;
+  img.onerror=()=>handleImageError(img);
+  img.src=src;
   document.getElementById('attachModal').classList.add('active');
 }
 function handleImageError(img){
@@ -1335,7 +1387,11 @@ function handleImageError(img){
   img.src='images/map.webp';
   img.classList.add('image-fallback');
 }
-function closeAttachModal() { document.getElementById('attachModal').classList.remove('active'); }
+function closeAttachModal() {
+  document.getElementById('attachModal').classList.remove('active');
+  const img=document.getElementById('attachModalImg');
+  if(img){img.onerror=null;img.removeAttribute('src');delete img.dataset.fallbackApplied;}
+}
 
 function switchSubTab(dayIdx, tabType) {
   activeSubTabStore[dayIdx] = tabType;
@@ -2035,7 +2091,7 @@ function updateNetStatus(){
     ? '<span class="net-dot online"></span><span class="net-txt">線上</span>'
     : '<span class="net-dot offline"></span><span class="net-txt">離線</span>';
 }
-window.addEventListener('online', ()=>{ updateNetStatus(); loadLiveWeather(); refreshRainRadar(); });
+window.addEventListener('online', ()=>{ updateNetStatus(); loadLiveWeather(); refreshRainRadar(); if(cloudSync.enabled) flushCloudPush(); });
 window.addEventListener('offline', updateNetStatus);
 
 /* ============ Service Worker（離線快取整個網頁） ============ */

@@ -1,0 +1,26 @@
+{
+  "name": "謐境・南島家庭旅行",
+  "short_name": "南島旅行",
+  "description": "2026 紐西蘭南島家庭自駕行程、住宿、交通、天氣與共享清單。",
+  "lang": "zh-Hant",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f5f7f2",
+  "theme_color": "#5276d8",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
