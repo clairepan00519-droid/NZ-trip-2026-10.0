@@ -322,6 +322,9 @@ button, .tab-btn, .day-chip, .btn, .guide-header, .sub-spot-header, .spot-subtab
 .weather-day-collapsed .weather-day-toggle{ padding-bottom:0; margin-bottom:0; border-bottom:0; }
 .weather-day-collapsed .weather-day-toggle .chevron{ transform:rotate(-90deg); }
 .weather-day-collapsed .weather-day-body{ display:none; }
+/* 天氣頁「全部展開/收合」：獨立命名規則，避免被 .add-row button{width:38px}（原本給小圓形加號鍵用的規則）誤套用，
+   導致按鈕被壓成 38px 寬、文字被擠到邊緣甚至看起來跳動。固定 min-width 讓「全部展開」／「全部收合」兩種文字長度切換時按鈕大小不會跳動。 */
+.weather-toggle-all{ flex:none!important; width:auto!important; min-width:118px; text-align:center; background:var(--blue)!important; color:#fff!important; border:none!important; border-radius:999px; padding:11px 16px!important; font-family:inherit; font-weight:900; font-size:12.5px!important; cursor:pointer; white-space:nowrap; box-shadow:var(--shadow-sm); }
 @media(max-width:420px){ .weather-day-toggle .w-bot{ display:none; } .weather-day-toggle{ flex-wrap:wrap; } }
 
 /* Bottom Nav */

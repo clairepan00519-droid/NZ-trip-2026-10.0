@@ -9,6 +9,7 @@
 <meta property="og:description" content="紐西蘭南島自駕行程規劃，含每日景點指南、天氣、行李與購物清單，支援家人即時共享同步。">
 <meta property="og:type" content="website">
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -180,7 +181,7 @@
       <div class="sub">串接 Open-Meteo 即時氣象，自動提供各城鎮目前的氣候數據與穿搭建議。</div>
       <div class="add-row" style="margin-bottom:10px; gap:8px;">
         <button onclick="loadLiveWeather()" style="flex:1; background:var(--blue); color:#fff; border:none; border-radius:999px; padding:10px 0; font-family:inherit; font-weight:700; font-size:12.5px; cursor:pointer; box-shadow:var(--shadow-sm);">🔄 取得最新即時氣象與穿搭</button>
-        <button id="weatherToggleAllBtn" onclick="toggleAllWeatherCards()" style="flex:none; background:#eef3fb; color:var(--blue); border:1px solid #d8e3f5; border-radius:999px; padding:10px 14px; font-family:inherit; font-weight:900; font-size:12px; cursor:pointer; white-space:nowrap;">⬇️ 全部展開</button>
+        <button id="weatherToggleAllBtn" class="weather-toggle-all" onclick="toggleAllWeatherCards()">⬇️ 全部展開</button>
       </div>
       <div class="sub" style="margin-top:-4px; margin-bottom:10px;">預設收合每個地點，點卡片即可展開細節；下方衛星雲圖不用滑很久就能看到。</div>
       <div id="liveWeatherList"></div>
@@ -210,7 +211,7 @@
 
 <!-- Modal for Images -->
 <div class="attach-modal" id="attachModal" onclick="closeAttachModal()">
-  <button class="attach-modal-close" onclick="event.stopPropagation(); closeAttachModal()">✕</button>
+  <button class="attach-modal-close" aria-label="關閉圖片" onclick="event.stopPropagation(); closeAttachModal()">✕</button>
   <img id="attachModalImg" src="" onerror="handleImageError(this)" onclick="event.stopPropagation()">
 </div>
 
