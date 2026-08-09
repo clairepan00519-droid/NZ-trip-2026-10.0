@@ -1,4 +1,29 @@
 
+/* ============================================================
+   目錄／NAVIGATION MAP（純註解，不影響程式運作）
+   檔案較長，用 Ctrl+F／Cmd+F 搜尋下面任一標題文字即可跳到對應區塊：
+   - 家人登入入口（Supabase Auth）
+   - 家人共用同步（Supabase REST）
+   - HEADER IMAGES
+   - DATA                                　　　← 每日行程原始資料
+   - 筆記/照片/自訂景點系統 (LocalStorage 永久保存)
+   - 景點排序 (LocalStorage 永久保存)
+   - 景點內「資訊與評論」區塊排序 (LocalStorage 永久保存)
+   - RENDER: ITINERARY                        ← 行程頁渲染
+   - RENDER: ENHANCED LIVE WEATHER & OUTFIT    ← 天氣頁渲染／API
+   - 內嵌 Windy 天氣圖
+   - GUIDE LISTS                              ← 打包清單／購物清單
+   - CUSTOM TRAVEL RULES
+   - DYNAMIC DOCS/VOUCHERS
+   - 線上／離線狀態
+   - Service Worker（離線快取整個網頁）
+   - TABS                                     ← 頁籤切換／環線頁收合
+   - 桌機寬版編輯／手機預覽
+   - INIT ／ 頁面初始化                        ← 開機執行順序，改動前請先看這裡
+   若之後要拆檔，建議照這個順序切；DATA 與 RENDER 區塊互相依賴較深，其餘
+   模組（天氣／清單／文件）耦合度低，適合優先抽成獨立檔案。
+   ============================================================ */
+
 /* ============ 家人登入入口（Supabase Auth） ============
    v19 不再把可重用的密碼雜湊放在公開 JavaScript 中；資料庫與圖片寫入改由
    Supabase Auth access token 驗證。成功登入過的裝置會保留唯讀離線通行權。 */
@@ -328,10 +353,14 @@ async function reconcileInitialCloudData(){
 }
 
 async function pollCloudChanges(){
-  if(!navigator.onLine||cloudSync.applyingRemote)return;
+  if(!navigator.onLine||cloudSync.applyingRemote||document.hidden)return;
   try{const rows=await restGetRows();rows.forEach(applyRemoteRow);cloudSync.lastError=null;updateSyncStatus();}
   catch(e){cloudSync.lastError=e;updateSyncStatus(e);}
 }
+/* 分頁切到背景時暫停輪詢（省流量／省電），回到前景立刻補抓一次最新資料 */
+document.addEventListener('visibilitychange', ()=>{
+  if(!document.hidden && cloudSync.enabled) pollCloudChanges();
+});
 
 /* 背景同步不得打斷任何正在輸入的表單。
    遠端資料會先排隊，等輸入框失焦後再一次套用。 */
@@ -1160,7 +1189,7 @@ function spotCardHTML(spot, key, isMainSpot, customMeta, orderInfo){
   const noteDraft = escapeHTMLText(noteDraftStore[idx] || '');
   let noteEditArea = `<div class="note-edit-area" style="margin-top:10px; display:${isNoteEditorOpen ? 'block' : 'none'};" id="edit-note-${idx}" onclick="event.stopPropagation()"><textarea id="note-input-${idx}" oninput="updateNoteDraft('${idx}', this.value)" placeholder="新增一筆攻略、必點菜單或提醒...（可重複新增多筆）" style="width:100%; border:1px solid var(--line); border-radius:8px; padding:8px; font-size:12px; font-family:inherit; resize:vertical; min-height:60px; outline:none; margin-bottom:6px;">${noteDraft}</textarea><div style="display:flex; gap:6px;"><button onclick="event.stopPropagation(); addNote('${idx}')" style="padding:6px 14px; font-size:11px; background:var(--blue); color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:700;">💾 新增這筆</button><button onclick="toggleEditNote(event, '${idx}')" style="padding:6px 14px; font-size:11px; background:#f2f3ec; color:var(--ink); border:none; border-radius:6px; cursor:pointer; font-weight:700;">收合</button></div></div>${!displayInfo ? `<button class="btn-note-toggle" onclick="toggleEditNote(event, '${idx}')" style="display:${isNoteEditorOpen ? 'none' : 'inline-block'}; background:transparent; border:1px dashed #c1c8cf; border-radius:999px; padding:6px 12px; font-size:11.5px; color:#6b7686; cursor:pointer; font-family:inherit; margin-top:6px; margin-bottom:10px;" id="btn-note-${idx}">➕ 添加評論或資訊</button>` : ''}`;
 
-  let miniStripHTML = thumbImgs.length > 0 ? `<div class="mini-photo-strip" onclick="event.stopPropagation();">` + thumbImgs.map((u, i) => `<div style="position:relative; display:inline-block;"><img src="${u}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)">${thumbImgsAreUserPhotos ? `<button onclick="removePhoto(event, '${idx}', ${i})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:16px; height:16px; font-size:8px; cursor:pointer;">✕</button>` : ''}</div>`).join('') + `</div>` : '';
+  let miniStripHTML = thumbImgs.length > 0 ? `<div class="mini-photo-strip" onclick="event.stopPropagation();">` + thumbImgs.map((u, i) => `<div style="position:relative; display:inline-block;"><img loading="lazy" decoding="async" src="${u}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)">${thumbImgsAreUserPhotos ? `<button onclick="removePhoto(event, '${idx}', ${i})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:16px; height:16px; font-size:8px; cursor:pointer;">✕</button>` : ''}</div>`).join('') + `</div>` : '';
 
   /* 照片區：主要亮點卡片會列出「原始配圖 + 所有使用者上傳的照片」，並可個別指定作為封面；
      次要（食衣住）景點沒有封面概念，維持原本只顯示使用者照片的邏輯 */
@@ -1179,11 +1208,11 @@ function spotCardHTML(spot, key, isMainSpot, customMeta, orderInfo){
         const removeBtn = (g.sel !== 'original')
           ? `<button onclick="removePhoto(event, '${idx}', ${g.sel})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:20px; height:20px; font-size:10px; cursor:pointer;">✕</button>`
           : '';
-        return `<div class="photo-item-wrap"><img src="${g.url}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)">${removeBtn}${coverTag}</div>`;
+        return `<div class="photo-item-wrap"><img loading="lazy" decoding="async" src="${g.url}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)">${removeBtn}${coverTag}</div>`;
       }).join('') + `</div>`;
     }
   } else {
-    pStrip = (userPhotos.length) ? `<div class="photo-strip" onclick="event.stopPropagation()">` + userPhotos.map((u, i)=>`<div class="photo-item-wrap"><img src="${u}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)"><button onclick="removePhoto(event, '${idx}', ${i})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:20px; height:20px; font-size:10px; cursor:pointer;">✕</button></div>`).join('') + `</div>` : '';
+    pStrip = (userPhotos.length) ? `<div class="photo-strip" onclick="event.stopPropagation()">` + userPhotos.map((u, i)=>`<div class="photo-item-wrap"><img loading="lazy" decoding="async" src="${u}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)"><button onclick="removePhoto(event, '${idx}', ${i})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:20px; height:20px; font-size:10px; cursor:pointer;">✕</button></div>`).join('') + `</div>` : '';
   }
 
   const badgesHTML = badges.length ? `<div class="badges" style="margin-bottom:6px;">${badges.join('')}</div>` : '';
@@ -1234,7 +1263,7 @@ function spotCardHTML(spot, key, isMainSpot, customMeta, orderInfo){
     return `<div class="sub-spot-card sub-spot-${spot.cat || 'other'}" id="spot-card-${idx}"><div class="sub-spot-header" onclick="toggleSpotDetails('${idx}')"><div class="sub-spot-header-content"><h4>${safeSpotName}</h4><p class="short-desc">${safeSpotDesc}</p>${miniStripHTML}</div><div class="chevron">▼</div></div><div class="sub-spot-details-wrap"><div class="sub-spot-details" onclick="event.stopPropagation()">${customBar}${editSpotAreaHTML}${navEditorHTML}<p class="full-desc">${safeSpotFullDesc}</p>${spot.recDishes ? `<div class="dish-tag">🍲 必點推薦：${escapeHTMLText(spot.recDishes)}</div>` : ''}${reorderableBlocksHTML}<div class="action-row" style="margin-top:10px;"><a class="btn btn-map" href="${mapsLink(spot.name,idx)}" target="_blank" rel="noopener">🗺️ 導航</a>${navFixButton}${spot.link ? `<a class="btn btn-photo" href="${spot.link}" target="_blank" rel="noopener">🔗 ${escapeHTMLText(spot.linkLabel)}</a>` : ''}<button class="btn btn-photo" onclick="document.getElementById('file-${idx}').click()">📷 上傳照片</button></div><input type="file" accept="image/*" id="file-${idx}" style="display:none" multiple onchange="handlePhoto(event, '${idx}')">${pStrip}</div></div></div>`;
   }
 
-  return `<div class="guide-card" id="spot-card-${idx}"><div class="guide-header" onclick="toggleSpotDetails('${idx}')"><img class="guide-bg-img" src="${bg}" alt="" onerror="handleImageError(this)">${photoStore[idx] && photoStore[idx].length > 0 ? `<span class="own-badge" onclick="event.stopPropagation(); document.getElementById('file-${idx}').click()">✅ 已有你的穩定照片</span>` : `<button class="own-badge" style="border:none; cursor:pointer;" onclick="event.stopPropagation(); document.getElementById('file-${idx}').click()">📷 上傳穩定封面</button>`}<div class="guide-header-content"><span class="cat-label ${c.cls}">${c.emoji} ${c.label}</span><h3>${safeSpotName}</h3><p class="short-desc">${safeSpotDesc}</p></div><div class="chevron">▼</div></div><div class="guide-details-wrap"><div class="guide-details" onclick="event.stopPropagation()">${customBar}${editSpotAreaHTML}${navEditorHTML}<p class="full-desc">${safeSpotFullDesc}</p>${reorderableBlocksHTML}${spot.tip?`<div class="tip-box"><b>📸 拍照與自駕小解密：</b>${escapeHTMLText(spot.tip)}</div>`:''}${spot.docMap?`<div class="tip-box" style="background: linear-gradient(120deg,#e8f8ee,#fff); border-color:#8fd6c3; color:#22513f;"><b>🗺️ DOC 官方步道地圖與狀態：</b><a href="${spot.docMap}" target="_blank" rel="noopener" style="color:var(--blue); font-weight:700; text-decoration:underline;">點此開啟</a></div>`:''}${spot.park?`<div class="park-box"><b>🅿️ 停車＆自駕補給：</b>${escapeHTMLText(spot.park)}</div>`:''}<div class="action-row" style="margin-top:10px;"><a class="btn btn-map" href="${mapsLink(spot.name,idx)}" target="_blank" rel="noopener">🗺️ 導航導出</a>${navFixButton}${spot.link ? `<a class="btn btn-photo" href="${spot.link}" target="_blank" rel="noopener">🔗 ${escapeHTMLText(spot.linkLabel)}</a>` : ''}<button class="btn btn-photo" onclick="document.getElementById('file-${idx}').click()">📷 上傳照片</button></div><input type="file" accept="image/*" id="file-${idx}" style="display:none" multiple onchange="handlePhoto(event, '${idx}')">${pStrip}</div></div></div>`;
+  return `<div class="guide-card" id="spot-card-${idx}"><div class="guide-header" onclick="toggleSpotDetails('${idx}')"><img loading="lazy" decoding="async" class="guide-bg-img" src="${bg}" alt="" onerror="handleImageError(this)">${photoStore[idx] && photoStore[idx].length > 0 ? `<span class="own-badge" onclick="event.stopPropagation(); document.getElementById('file-${idx}').click()">✅ 已有你的穩定照片</span>` : `<button class="own-badge" style="border:none; cursor:pointer;" onclick="event.stopPropagation(); document.getElementById('file-${idx}').click()">📷 上傳穩定封面</button>`}<div class="guide-header-content"><span class="cat-label ${c.cls}">${c.emoji} ${c.label}</span><h3>${safeSpotName}</h3><p class="short-desc">${safeSpotDesc}</p></div><div class="chevron">▼</div></div><div class="guide-details-wrap"><div class="guide-details" onclick="event.stopPropagation()">${customBar}${editSpotAreaHTML}${navEditorHTML}<p class="full-desc">${safeSpotFullDesc}</p>${reorderableBlocksHTML}${spot.tip?`<div class="tip-box"><b>📸 拍照與自駕小解密：</b>${escapeHTMLText(spot.tip)}</div>`:''}${spot.docMap?`<div class="tip-box" style="background: linear-gradient(120deg,#e8f8ee,#fff); border-color:#8fd6c3; color:#22513f;"><b>🗺️ DOC 官方步道地圖與狀態：</b><a href="${spot.docMap}" target="_blank" rel="noopener" style="color:var(--blue); font-weight:700; text-decoration:underline;">點此開啟</a></div>`:''}${spot.park?`<div class="park-box"><b>🅿️ 停車＆自駕補給：</b>${escapeHTMLText(spot.park)}</div>`:''}<div class="action-row" style="margin-top:10px;"><a class="btn btn-map" href="${mapsLink(spot.name,idx)}" target="_blank" rel="noopener">🗺️ 導航導出</a>${navFixButton}${spot.link ? `<a class="btn btn-photo" href="${spot.link}" target="_blank" rel="noopener">🔗 ${escapeHTMLText(spot.linkLabel)}</a>` : ''}<button class="btn btn-photo" onclick="document.getElementById('file-${idx}').click()">📷 上傳照片</button></div><input type="file" accept="image/*" id="file-${idx}" style="display:none" multiple onchange="handlePhoto(event, '${idx}')">${pStrip}</div></div></div>`;
 }
 
 /* 讀取檔案並自動壓縮：長邊限制在 1600px、轉存為 JPEG(品質0.82)，
@@ -1331,7 +1360,7 @@ function comparisonImageFor(spot,key){
 }
 function iceCreamComparisonHTML(entries,dayIdx){
   if(!entries.length)return '';
-  const rows=entries.map(({spot,key})=>`<div class="ice-compare-row"><img src="${comparisonImageFor(spot,key)}" alt="${escapeHTMLText(spot.name)}" onerror="handleImageError(this)"><div class="ice-compare-info"><b>${escapeHTMLText(spot.name)}</b><span>${escapeHTMLText(spot.recDishes||spot.desc)}</span><small>🕒 ${escapeHTMLText(spot.hours||'請確認當日營業時間')}</small></div><a href="${mapsLink(spot.name,key)}" target="_blank" rel="noopener">導航</a></div>`).join('');
+  const rows=entries.map(({spot,key})=>`<div class="ice-compare-row"><img loading="lazy" decoding="async" src="${comparisonImageFor(spot,key)}" alt="${escapeHTMLText(spot.name)}" onerror="handleImageError(this)"><div class="ice-compare-info"><b>${escapeHTMLText(spot.name)}</b><span>${escapeHTMLText(spot.recDishes||spot.desc)}</span><small>🕒 ${escapeHTMLText(spot.hours||'請確認當日營業時間')}</small></div><a href="${mapsLink(spot.name,key)}" target="_blank" rel="noopener">導航</a></div>`).join('');
   const detailCards=entries.map(o=>spotCardHTML(o.spot,o.key,false,o.customMeta,{dayIdx,listType:'life'})).join('');
   return `<section class="ice-compare-card"><div class="ice-compare-title"><div><span>🍨 9/26 冰淇淋比較卡</span><b>現場依路線與口味挑一間就好</b></div><small>四間都保留，可自行上傳穩定照片與修正導航。</small></div>${rows}<details class="ice-compare-details"><summary>展開四間完整資料、照片與導航設定</summary><div>${detailCards}</div></details></section>`;
 }
@@ -1383,7 +1412,7 @@ function renderDayContent(){
     </div>`;
 
   const routeMaps = routeMapStore[activeDay] || [];
-  const routeMapGalleryHTML = routeMaps.length ? `<div class="route-map-gallery">${routeMaps.map((u,i)=>`<div class="route-map-item"><img src="${u}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)" alt="Day ${d.dayNum} 路線圖"><button class="route-map-remove" onclick="removeRouteMap(${activeDay}, ${i})">✕</button></div>`).join('')}</div>` : '<div class="empty">尚未上傳今天的行動路線圖。</div>';
+  const routeMapGalleryHTML = routeMaps.length ? `<div class="route-map-gallery">${routeMaps.map((u,i)=>`<div class="route-map-item"><img loading="lazy" decoding="async" src="${u}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)" alt="Day ${d.dayNum} 路線圖"><button class="route-map-remove" onclick="removeRouteMap(${activeDay}, ${i})">✕</button></div>`).join('')}</div>` : '<div class="empty">尚未上傳今天的行動路線圖。</div>';
   const routeMapHTML = `
     <div class="section-card" style="margin-top:4px;">
       <h3 style="margin:0 0 10px;">🗺️ 我的當日行動路線圖</h3>
@@ -1461,6 +1490,7 @@ function getUVStars(uv) {
 }
 
 let liveWeatherCache = {};
+let weatherOpenKeys = new Set(); // 展開中的天氣卡片 key，預設全部收合，滑動到雲圖更快
 
 /* ---- 天氣離線快取 (localStorage) ---- */
 const WEATHER_CACHE_KEY = 'nz_weather_cache_v1';
@@ -1582,10 +1612,15 @@ function renderOneLiveCity(k){
   
   const MW_TIMES = { 'Wanaka':'20:00~', 'Tekapo':'19:45~', 'MtCook':'20:00~', 'Oamaru':'--', 'Dunedin':'--', 'TeAnau':'20:30~', 'Queenstown':'20:15~' };
   const starDecision=stargazingDecision(data);
-  
+  const starLevel=computeStargazingLevel(data);
+  const isOpen=weatherOpenKeys.has(k);
+  const miniStarHtml=starLevel.level && starLevel.level!=='unknown'
+    ? `<span class="weather-mini-badge star-${starLevel.level}">${STARGAZE_MINI_LABEL[starLevel.level]}</span>` : '';
+
+  el.classList.toggle('weather-day-collapsed', !isOpen);
   el.innerHTML = `
     <div style="display:flex; flex-direction:column; width:100%;">
-      <div style="display:flex; align-items:center; gap:12px; width:100%; border-bottom:1px dashed #eee; padding-bottom:10px; margin-bottom:10px;">
+      <button type="button" class="weather-day-toggle" onclick="toggleWeatherCard('${k}')" aria-expanded="${isOpen}">
         <div class="date" style="width:auto; text-align:left;"><b style="font-size:12.5px;">${CITIES[k].label}</b>${badgeHtml}</div>
         <div class="ico">${ico}</div>
         <div class="mid"><div class="place" style="font-size:14px; font-weight:900; white-space:nowrap;">${desc}</div><div class="out" style="font-size:11px; font-weight:700;">${temp}°C</div></div>
@@ -1594,33 +1629,63 @@ function renderOneLiveCity(k){
           <span style="display:block; font-size:10px; color:#c1502f;">降雨 ${precip} mm</span>
           <span style="display:block; font-size:10px; color:var(--teal);">UV ${uv}</span>
         </div>
+        ${miniStarHtml}
+        <span class="chevron">⌄</span>
+      </button>
+      <div class="weather-day-body">
+        <div class="astro-box" style="margin-top:0;">
+          <span>🌅 日出 ${sr}</span>
+          <span>🌇 日落 ${ss}</span>
+          <span class="mw">🌌 銀河 ${MW_TIMES[k]}</span>
+        </div>
+        ${starDecision}
+        <div class="live-tip-box"><b>🧥 穿搭與裝備建議：</b><br>${tip}</div>
       </div>
-      <div class="astro-box" style="margin-top:0;">
-        <span>🌅 日出 ${sr}</span>
-        <span>🌇 日落 ${ss}</span>
-        <span class="mw">🌌 銀河 ${MW_TIMES[k]}</span>
-      </div>
-      ${starDecision}
-      <div class="live-tip-box"><b>🧥 穿搭與裝備建議：</b><br>${tip}</div>
     </div>
   `;
 }
 
-function stargazingDecision(data){
-  const h=data&&data.hourly;if(!h||!Array.isArray(h.time))return '<div class="star-go-card unknown"><b>🌌 觀星判斷：等待預報</b><span>抵達前 3 天重新整理，即會以晚間資料判斷。</span></div>';
+function toggleWeatherCard(k){
+  if(weatherOpenKeys.has(k)) weatherOpenKeys.delete(k); else weatherOpenKeys.add(k);
+  renderOneLiveCity(k);
+  updateWeatherToggleAllLabel();
+}
+function toggleAllWeatherCards(){
+  const allKeys=Object.keys(CITIES);
+  const anyClosed=allKeys.some(k=>!weatherOpenKeys.has(k));
+  if(anyClosed){ allKeys.forEach(k=>weatherOpenKeys.add(k)); } else { weatherOpenKeys.clear(); }
+  allKeys.forEach(k=>{ if(liveWeatherCache[k]) renderOneLiveCity(k); });
+  updateWeatherToggleAllLabel();
+}
+function updateWeatherToggleAllLabel(){
+  const btn=document.getElementById('weatherToggleAllBtn');
+  if(!btn) return;
+  const allKeys=Object.keys(CITIES);
+  const allOpen=allKeys.length>0 && allKeys.every(k=>weatherOpenKeys.has(k));
+  btn.textContent=allOpen ? '⬆️ 全部收合' : '⬇️ 全部展開';
+}
+
+function computeStargazingLevel(data){
+  const h=data&&data.hourly;if(!h||!Array.isArray(h.time))return {level:'unknown'};
   const currentTime=(data.current&&data.current.time)||h.time[0];
   const currentHour=Number((currentTime.split('T')[1]||'0').slice(0,2));
   const dates=[...new Set(h.time.map(t=>t.slice(0,10)))];
   const targetDate=dates[currentHour>=23?1:0]||dates[0];
   const indices=h.time.map((t,i)=>({t,i})).filter(o=>o.t.startsWith(targetDate)&&Number(o.t.slice(11,13))>=20&&Number(o.t.slice(11,13))<=22).map(o=>o.i);
-  if(!indices.length)return '<div class="star-go-card unknown"><b>🌌 觀星判斷：等待預報</b><span>目前沒有今晚 20–23 時資料。</span></div>';
+  if(!indices.length)return {level:'unknown'};
   const avg=key=>Math.round(indices.reduce((sum,i)=>sum+(Number(h[key]?.[i])||0),0)/indices.length);
   const cloud=avg('cloud_cover'), rain=avg('precipitation_probability'), wind=avg('wind_speed_10m'), visibility=avg('visibility');
   let level='go',title='GO・值得安排',reason='雲量與降雨風險較低，可按計畫出發。';
   if(cloud>65||rain>40||wind>40||visibility<8000){level='no';title='NO-GO・先不要出發';reason='雲層、降雨、強風或能見度不利，留在住宿休息並稍後再看。';}
   else if(cloud>35||rain>20||wind>30||visibility<15000){level='maybe';title='MAYBE・短時觀察';reason='條件有變數，先看即時雲圖；只安排住宿附近的短觀星。';}
-  return `<div class="star-go-card ${level}"><div><small>${targetDate} 20:00–23:00</small><b>🌌 ${title}</b><span>${reason}</span></div><dl><div><dt>雲量</dt><dd>${cloud}%</dd></div><div><dt>降雨</dt><dd>${rain}%</dd></div><div><dt>風速</dt><dd>${wind} km/h</dd></div></dl><p>此卡為自動初篩；出發前仍應確認官方警報與肉眼雲況。</p></div>`;
+  return {level,title,reason,targetDate,cloud,rain,wind};
 }
+function stargazingDecision(data){
+  const s=computeStargazingLevel(data);
+  if(s.level==='unknown')return '<div class="star-go-card unknown"><b>🌌 觀星判斷：等待預報</b><span>抵達前 3 天重新整理，即會以晚間資料判斷。</span></div>';
+  return `<div class="star-go-card ${s.level}"><div><small>${s.targetDate} 20:00–23:00</small><b>🌌 ${s.title}</b><span>${s.reason}</span></div><dl><div><dt>雲量</dt><dd>${s.cloud}%</dd></div><div><dt>降雨</dt><dd>${s.rain}%</dd></div><div><dt>風速</dt><dd>${s.wind} km/h</dd></div></dl><p>此卡為自動初篩；出發前仍應確認官方警報與肉眼雲況。</p></div>`;
+}
+const STARGAZE_MINI_LABEL={go:'🌌 GO',maybe:'🌌 MAYBE',no:'🌌 NO-GO',unknown:''};
 
 
 /* ============ 內嵌 Windy 天氣圖 ============ */
@@ -1689,7 +1754,7 @@ function toggleListSection(type, key){
   listSectionOpen[type][key] = !listSectionOpen[type][key];
   if(type === 'pack') renderPackList(); else renderShopList();
 }
-function escAttr(v){ return String(v ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(v){ return escapeHTMLText(v); } /* 屬性與文字轉義邏輯相同，統一呼叫同一實作，避免兩邊改到不同步 */
 
 function capturePackComposerState(){
   const composer=document.getElementById('packComposer');
@@ -1771,7 +1836,7 @@ function renderShopList(){
     const done = entries.filter(x=>x.it.checked).length;
     const itemsHTML = entries.length ? entries.map(({it,i})=>{
       const imgs = shopImgs(it);
-      const photosHTML = imgs.length ? `<div class="shop-photo-row">${imgs.map((src,pi)=>`<div class="shop-photo"><img src="${src}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)"><button onclick="removeShopImg(${i},${pi})">✕</button></div>`).join('')}</div>` : '';
+      const photosHTML = imgs.length ? `<div class="shop-photo-row">${imgs.map((src,pi)=>`<div class="shop-photo"><img loading="lazy" decoding="async" src="${src}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)"><button onclick="removeShopImg(${i},${pi})">✕</button></div>`).join('')}</div>` : '';
       return `<div class="pack-item shop-item ${it.checked?'checked':''}"><input type="checkbox" ${it.checked?'checked':''} onchange="toggleShop(${i})"><div class="name shop-item-title">${escapeHTMLText(it.name)}</div><div class="qty"><button onclick="document.getElementById('shopFile-${i}').click()" class="camera-btn">📷</button><button onclick="changeShopQty(${i},-1)">－</button><span>${Number(it.qty)||1}</span><button onclick="changeShopQty(${i},1)">＋</button></div><button class="del" onclick="delShop(${i})">✕</button><input type="file" id="shopFile-${i}" accept="image/*" multiple style="display:none" onchange="handleShopPhoto(event, ${i})"><div class="shop-extra"><input type="text" value="${escAttr(it.location||'')}" placeholder="建議購買位置或其他資訊..." onchange="setShopLocation(${i}, this.value)"></div>${photosHTML}</div>`;
     }).join('') : '<div class="empty compact">此清單目前沒有項目。</div>';
     return `<section class="checklist-group shop-group shop-${catKey}"><button class="checklist-group-head" onclick="toggleListSection('shop','${catKey}')" aria-expanded="${isOpen}"><span>${meta.label}</span><small>${done}/${entries.length}</small><b>${isOpen?'⌃':'⌄'}</b></button><div class="checklist-group-body ${isOpen?'open':''}">${itemsHTML}</div></section>`;

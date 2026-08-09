@@ -66,8 +66,8 @@
 
   <!-- ================= ROUTE MAP VIEW ================= -->
   <div class="view" id="view-route">
-    <nav class="route-quick-nav" aria-label="環線快捷目錄"><button onclick="jumpRouteSection('route-flights')">✈️ 航班</button><button onclick="jumpRouteSection('route-docs')">📁 票券住宿</button><button onclick="jumpRouteSection('route-road')">❄️ 道路</button><button onclick="jumpRouteSection('route-gas')">⛽ 加油</button><button class="route-toggle-all" onclick="toggleAllRouteSections()">全部展開</button></nav>
-    <div class="map-wrap" style="margin-top:0; padding-bottom:24px;">
+    <nav class="route-quick-nav" aria-label="環線快捷目錄"><button class="nav-theme-flights" onclick="jumpRouteSection('route-flights')">✈️ 航班</button><button class="nav-theme-docs" onclick="jumpRouteSection('route-docs')">📁 票券住宿</button><button class="nav-theme-road" onclick="jumpRouteSection('route-road')">❄️ 道路</button><button class="nav-theme-gas" onclick="jumpRouteSection('route-gas')">⛽ 加油</button><button class="route-toggle-all" onclick="toggleAllRouteSections()">全部展開</button></nav>
+    <div class="map-wrap" style="margin-top:0; margin-bottom:22px; padding-bottom:24px;">
       <h3 style="margin:0 0 10px; font-size:18px; font-weight:900; text-align:center; color:var(--ink);">🚗 紐西蘭南島自駕路線環線</h3>
       
       <div id="nzSouthIslandHandDrawnMap" class="svg-map-container" style="position:relative;">
@@ -82,7 +82,7 @@
     </div>
 
     <!-- Flights -->
-    <div class="section-card route-fold" id="route-flights" data-route-title="✈️ 飛航資訊" data-route-summary="去回程航班、轉機與抵達時間">
+    <div class="section-card route-fold route-theme-flights" id="route-flights" data-route-title="✈️ 飛航資訊" data-route-summary="去回程航班、轉機與抵達時間">
       <h3>✈️ 飛航資訊</h3>
       <div class="flight-box">
         <div class="ftitle">🛫 去程航班 (中華航空 CI53)</div>
@@ -102,14 +102,14 @@
     </div>
 
     <!-- Docs -->
-    <div class="section-card route-fold" id="route-docs" data-route-title="📁 行程票券與住宿總匯" data-route-summary="機票、住宿與租車憑證集中管理">
+    <div class="section-card route-fold route-theme-docs" id="route-docs" data-route-title="📁 行程票券與住宿總匯" data-route-summary="機票、住宿與租車憑證集中管理">
       <h3>📁 行程票券與住宿總匯</h3>
       <div class="sub">可上傳憑證截圖。點擊「出示截圖」即可全螢幕放大給櫃檯人員確認！</div>
       <div id="docsListWrap"></div>
     </div>
     
     <!-- Road conditions：緊接加油資訊，出發前一起檢查 -->
-    <section class="section-card road-check-card route-fold" id="route-road" data-route-title="❄️ 道路封閉／積雪" data-route-summary="NZTA、Crown Range、Milford Road 與降雪警報">
+    <section class="section-card road-check-card route-fold route-theme-road" id="route-road" data-route-title="❄️ 道路封閉／積雪" data-route-summary="NZTA、Crown Range、Milford Road 與降雪警報">
       <div class="road-check-head"><div><small>出發前 10 分鐘檢查</small><h3>❄️ 道路封閉／積雪快捷查詢</h3></div><span>官方即時資訊</span></div>
       <div class="road-risk-strip"><b>本行程需特別看：</b> SH8 Lindis Pass／Burkes Pass、SH80 Mt Cook Road、SH94 Milford Road、Crown Range Road</div>
       <div class="road-link-grid">
@@ -123,7 +123,7 @@
     </section>
 
     <!-- Gas -->
-    <div class="section-card route-fold" id="route-gas" data-route-title="⛽ 南島自駕加油策略" data-route-summary="5 個關鍵補油點與即時油價入口">
+    <div class="section-card route-fold route-theme-gas" id="route-gas" data-route-title="⛽ 南島自駕加油策略" data-route-summary="5 個關鍵補油點與即時油價入口">
       <h3>⛽ 南島自駕建議加油策略</h3>
       <div class="sub">南島油價城鎮差異大，建議利用大城市超市優惠券或平價站點。</div>
       <a href="https://www.gaspy.nz/stats.html" target="_blank" rel="noopener" class="fuel-live-main">⛽ 查看即時油價</a>
@@ -178,9 +178,11 @@
     <div class="section-card" style="margin-bottom:14px;">
       <h3>🌌 即時氣象與觀星穿搭指南</h3>
       <div class="sub">串接 Open-Meteo 即時氣象，自動提供各城鎮目前的氣候數據與穿搭建議。</div>
-      <div class="add-row" style="margin-bottom:10px;">
+      <div class="add-row" style="margin-bottom:10px; gap:8px;">
         <button onclick="loadLiveWeather()" style="flex:1; background:var(--blue); color:#fff; border:none; border-radius:999px; padding:10px 0; font-family:inherit; font-weight:700; font-size:12.5px; cursor:pointer; box-shadow:var(--shadow-sm);">🔄 取得最新即時氣象與穿搭</button>
+        <button id="weatherToggleAllBtn" onclick="toggleAllWeatherCards()" style="flex:none; background:#eef3fb; color:var(--blue); border:1px solid #d8e3f5; border-radius:999px; padding:10px 14px; font-family:inherit; font-weight:900; font-size:12px; cursor:pointer; white-space:nowrap;">⬇️ 全部展開</button>
       </div>
+      <div class="sub" style="margin-top:-4px; margin-bottom:10px;">預設收合每個地點，點卡片即可展開細節；下方衛星雲圖不用滑很久就能看到。</div>
       <div id="liveWeatherList"></div>
       <div class="source-note" id="liveWeatherTime">即時資料尚未更新</div>
     </div>

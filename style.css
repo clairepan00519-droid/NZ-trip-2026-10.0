@@ -313,6 +313,16 @@ button, .tab-btn, .day-chip, .btn, .guide-header, .sub-spot-header, .spot-subtab
 .source-note{font-size:10.5px; color:var(--ink-soft); text-align:center; margin-top:10px; line-height:1.6;}
 
 .live-tip-box { background:#fff9e0; border-left:3px solid var(--yellow); padding:10px 12px; font-size:12px; color:#7a6a1f; margin-top:12px; border-radius:6px; font-weight:700; line-height:1.5;}
+.weather-day-toggle{ width:100%; display:flex; align-items:center; gap:12px; border:0; background:transparent; padding:0 0 10px; margin-bottom:10px; border-bottom:1px dashed #eee; font:inherit; text-align:left; cursor:pointer; }
+.weather-mini-badge{ flex:none; font-size:9.5px; font-weight:900; padding:3px 8px; border-radius:999px; white-space:nowrap; }
+.weather-mini-badge.star-go{ background:#eaf8f1; color:#1f9160; }
+.weather-mini-badge.star-maybe{ background:#fff8df; color:#a67e0e; }
+.weather-mini-badge.star-no{ background:#fff0ec; color:#c1502f; }
+.weather-day-toggle .chevron{ flex:none; font-size:14px; color:var(--ink-soft); transition:transform .3s ease; }
+.weather-day-collapsed .weather-day-toggle{ padding-bottom:0; margin-bottom:0; border-bottom:0; }
+.weather-day-collapsed .weather-day-toggle .chevron{ transform:rotate(-90deg); }
+.weather-day-collapsed .weather-day-body{ display:none; }
+@media(max-width:420px){ .weather-day-toggle .w-bot{ display:none; } .weather-day-toggle{ flex-wrap:wrap; } }
 
 /* Bottom Nav */
 .bottom-nav{ position:fixed; left:50%; bottom:16px; transform:translateX(-50%); width:min(94%,440px); background:rgba(255,255,255,.95); backdrop-filter:blur(10px); border-radius:999px; box-shadow:0 14px 30px -10px rgba(47,58,74,.4); display:flex; padding:6px; z-index:9999; border:1px solid rgba(255,255,255,.6); }
@@ -437,7 +447,24 @@ body.family-locked{overflow:hidden;}
 .star-story-links{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}.star-story-links a{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:6px 9px;font-size:9.5px;font-weight:800}
 .market-backup{margin-top:10px;padding:9px 10px;border:1px solid #e8cf8a;border-radius:12px;background:#fffaf0}.market-backup summary{cursor:pointer;font-size:11.5px;font-weight:900;color:#8a5b15}.market-backup b{display:block;margin-top:8px;font-size:11.5px;line-height:1.6}.market-backup p{font-size:10.5px;line-height:1.65;color:var(--ink-soft)}.market-backup a{font-size:10px;font-weight:900;color:var(--blue)}
 .star-go-card{margin-top:9px;padding:11px 12px;border-radius:14px;border:1px solid;display:grid;grid-template-columns:1fr auto;gap:8px 10px}.star-go-card.go{background:#eaf8f1;border-color:#9bd5b7}.star-go-card.maybe{background:#fff8df;border-color:#ead47a}.star-go-card.no{background:#fff0ec;border-color:#edb3a5}.star-go-card.unknown{display:flex;flex-direction:column;background:#f3f5f8;border-color:#dfe3e9}.star-go-card small,.star-go-card span{display:block;font-size:9.5px;line-height:1.5;color:var(--ink-soft)}.star-go-card b{display:block;font-size:12px;margin:2px 0}.star-go-card dl{display:flex;gap:5px;margin:0}.star-go-card dl div{min-width:45px;padding:5px;border-radius:8px;background:rgba(255,255,255,.72);text-align:center}.star-go-card dt{font-size:8px;color:var(--ink-soft)}.star-go-card dd{margin:1px 0 0;font-size:9.5px;font-weight:900}.star-go-card p{grid-column:1/-1;margin:0;font-size:8.5px;color:var(--ink-soft)}
-.road-check-card{border-color:#dbe4ef;background:linear-gradient(145deg,#f8fbff,#fff)}.road-check-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.road-check-head small{font-size:9px;font-weight:900;color:var(--blue)}.road-check-head h3{margin-top:2px}.road-check-head>span{flex:none;padding:5px 8px;border-radius:999px;background:#eaf2ff;color:var(--blue);font-size:9px;font-weight:900}.road-risk-strip{margin:10px 0;padding:9px 10px;border-left:3px solid var(--coral);border-radius:8px;background:#fff3ee;font-size:10.5px;line-height:1.6}.road-link-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.road-link-grid a{padding:11px;border:1px solid #dfe6ee;border-radius:13px;background:#fff;text-decoration:none;color:var(--ink);box-shadow:var(--shadow-sm)}.road-link-grid b,.road-link-grid span{display:block}.road-link-grid b{font-size:11.5px}.road-link-grid span{margin-top:3px;font-size:9.5px;line-height:1.4;color:var(--ink-soft)}.road-decision{margin-top:10px;border-top:1px dashed #dfe4e9;padding-top:9px}.road-decision summary{cursor:pointer;font-size:11px;font-weight:900;color:var(--blue)}.road-decision ol{padding-left:20px;font-size:10.5px;line-height:1.65;color:var(--ink-soft)}
+.road-check-card{border-color:#dbe4ef;background:linear-gradient(145deg,#f8fbff,#fff)}
+/* 環線頁四大區塊：依主色調各自加上淡色底，方便一眼辨識 */
+.route-theme-flights{ background:linear-gradient(160deg,#eef3ff,#ffffff); border-color:#d7e3fb; }
+.route-theme-flights h3{ color:var(--blue); }
+.route-theme-docs{ background:linear-gradient(160deg,#eafaf6,#ffffff); border-color:#c9ece2; }
+.route-theme-docs h3{ color:var(--teal); }
+.route-theme-road.road-check-card{ background:linear-gradient(160deg,#fff3ef,#ffffff); border-color:#ffd9c9; }
+.route-theme-road .road-check-head h3{ color:#e0623f; }
+.route-theme-gas{ background:linear-gradient(160deg,#fffbe0,#ffffff); border-color:#f3ecb0; }
+.route-theme-gas h3{ color:#a68a10; }
+.route-theme-flights .route-section-toggle b{ color:var(--blue); }
+.route-theme-docs .route-section-toggle b{ color:var(--teal); }
+.route-theme-road .route-section-toggle b{ color:#e0623f; }
+.route-theme-gas .route-section-toggle b{ color:#a68a10; }
+.nav-theme-flights{ background:#eef3ff!important; color:#3f61c9!important; }
+.nav-theme-docs{ background:#eafaf6!important; color:#1f8a76!important; }
+.nav-theme-road{ background:#fff3ef!important; color:#c1502f!important; }
+.nav-theme-gas{ background:#fffbe0!important; color:#a68a10!important; }.road-check-head{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.road-check-head small{font-size:9px;font-weight:900;color:var(--blue)}.road-check-head h3{margin-top:2px}.road-check-head>span{flex:none;padding:5px 8px;border-radius:999px;background:#eaf2ff;color:var(--blue);font-size:9px;font-weight:900}.road-risk-strip{margin:10px 0;padding:9px 10px;border-left:3px solid var(--coral);border-radius:8px;background:#fff3ee;font-size:10.5px;line-height:1.6}.road-link-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.road-link-grid a{padding:11px;border:1px solid #dfe6ee;border-radius:13px;background:#fff;text-decoration:none;color:var(--ink);box-shadow:var(--shadow-sm)}.road-link-grid b,.road-link-grid span{display:block}.road-link-grid b{font-size:11.5px}.road-link-grid span{margin-top:3px;font-size:9.5px;line-height:1.4;color:var(--ink-soft)}.road-decision{margin-top:10px;border-top:1px dashed #dfe4e9;padding-top:9px}.road-decision summary{cursor:pointer;font-size:11px;font-weight:900;color:var(--blue)}.road-decision ol{padding-left:20px;font-size:10.5px;line-height:1.65;color:var(--ink-soft)}
 .fuel-stop{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;padding:11px 0;border-bottom:1px dashed #e5e9e1}.fuel-stop:last-child{border-bottom:0}.fuel-stop-copy{display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.65}.fuel-stop-copy .dot{flex:none}.fuel-nav{display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;text-decoration:none;border:1px solid #adc4ef;border-radius:999px;padding:7px 11px;background:#eef4ff;color:#365fae;font-size:10px;font-weight:900;box-shadow:none}
 @media(max-width:420px){.star-go-card{grid-template-columns:1fr}.star-go-card dl{grid-column:1}.road-link-grid{grid-template-columns:1fr}.fuel-stop{grid-template-columns:1fr}.fuel-nav{justify-self:start;margin-left:24px}.stay-time-editor{grid-template-columns:1fr 1fr}.stay-time-arrow{display:none}}
 
