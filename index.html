@@ -15,7 +15,9 @@
 <body class="family-locked">
 <aside class="desktop-workbench" aria-label="桌機顯示模式">
   <b>🖥️ 桌機工作區</b><span>編輯時用寬版，出發前切手機預覽檢查。</span>
-  <div><button id="wideModeBtn" type="button" onclick="setDesktopLayout('wide')">寬版編輯</button><button id="phoneModeBtn" type="button" onclick="setDesktopLayout('phone')">手機預覽</button></div>
+  <div class="workbench-row"><button id="wideModeBtn" type="button" onclick="setDesktopLayout('wide')">寬版編輯</button><button id="phoneModeBtn" type="button" onclick="setDesktopLayout('phone')">手機預覽</button></div>
+  <span class="workbench-label">使用模式</span><div class="workbench-row"><button class="mode-btn" data-mode="edit" type="button" onclick="setUseMode('edit')">✎ 編輯</button><button class="mode-btn" data-mode="travel" type="button" onclick="setUseMode('travel')">旅行</button></div>
+  <span class="workbench-label">文字大小</span><div class="workbench-row workbench-font-row"><button class="font-size-btn" data-size="standard" type="button" onclick="setDesktopFontSize('standard')">標準</button><button class="font-size-btn" data-size="large" type="button" onclick="setDesktopFontSize('large')">放大</button><button class="font-size-btn" data-size="xlarge" type="button" onclick="setDesktopFontSize('xlarge')">特大</button></div>
 </aside>
 <div id="familyGate" class="family-gate" aria-hidden="false">
   <div class="family-gate-card">
@@ -53,6 +55,7 @@
     <button class="tab-btn" onclick="setTab('guide')">🧳 指南</button>
     <button class="tab-btn" onclick="setTab('weather')">☀️ 天氣</button>
   </div>
+  <div class="mobile-mode-switch" aria-label="使用模式"><button class="mode-btn" data-mode="edit" type="button" onclick="setUseMode('edit')">✎ 編輯</button><button class="mode-btn" data-mode="travel" type="button" onclick="setUseMode('travel')">旅行模式</button></div>
 
   <!-- ================= ITINERARY VIEW ================= -->
   <div class="view active" id="view-itinerary">
@@ -63,6 +66,7 @@
 
   <!-- ================= ROUTE MAP VIEW ================= -->
   <div class="view" id="view-route">
+    <nav class="route-quick-nav" aria-label="環線快捷目錄"><button onclick="jumpRouteSection('route-flights')">✈️ 航班</button><button onclick="jumpRouteSection('route-docs')">📁 票券住宿</button><button onclick="jumpRouteSection('route-road')">❄️ 道路</button><button onclick="jumpRouteSection('route-gas')">⛽ 加油</button><button class="route-toggle-all" onclick="toggleAllRouteSections()">全部展開</button></nav>
     <div class="map-wrap" style="margin-top:0; padding-bottom:24px;">
       <h3 style="margin:0 0 10px; font-size:18px; font-weight:900; text-align:center; color:var(--ink);">🚗 紐西蘭南島自駕路線環線</h3>
       
@@ -77,21 +81,8 @@
       <a href="https://www.google.com/maps/dir/Queenstown+Airport/Wanaka/Lake+Tekapo/Aoraki+Mount+Cook+Village/Oamaru/Dunedin/Te+Anau/Queenstown" target="_blank" rel="noopener" class="btn btn-map" style="display:flex; margin-top:12px; text-decoration:none;">🗺️ 在 Google 地圖開啟完整環線</a>
     </div>
 
-    <section class="section-card road-check-card">
-      <div class="road-check-head"><div><small>出發前 10 分鐘檢查</small><h3>❄️ 道路封閉／積雪快捷查詢</h3></div><span>官方即時資訊</span></div>
-      <div class="road-risk-strip"><b>本行程需特別看：</b> SH8 Lindis Pass／Burkes Pass、SH80 Mt Cook Road、SH94 Milford Road、Crown Range Road</div>
-      <div class="road-link-grid">
-        <a href="https://www.journeys.nzta.govt.nz/highway-conditions" target="_blank" rel="noopener"><b>🚧 NZTA 國道路況</b><span>封路、事故、施工與攝影機</span></a>
-        <a href="https://www.qldc.govt.nz/winter-road-reports" target="_blank" rel="noopener"><b>🏔️ Crown Range／地方道路</b><span>QLDC 冬季路報與雪鏈要求</span></a>
-        <a href="https://www.milfordroad.co.nz/" target="_blank" rel="noopener"><b>🏞️ Milford Road SH94</b><span>開放狀態、雪崩與管制</span></a>
-        <a href="https://www.metservice.com/warnings/home" target="_blank" rel="noopener"><b>🌨️ 道路降雪警報</b><span>MetService 官方警報</span></a>
-      </div>
-      <details class="road-decision"><summary>看到警示時怎麼決定？</summary><ol><li><b>Closed／Road closed：</b>不要出發，不依 Google Maps 小路繞行。</li><li><b>Chains essential：</b>只有車上有合規雪鏈且會安裝才出發；租車規則優先。</li><li><b>Area warning／ice：</b>避開清晨與入夜，放慢速度、加倍跟車距離。</li><li><b>SH94 或 Crown Range 不確定：</b>改走官方開放路線或直接延後，不用硬趕預約。</li></ol></details>
-      <p class="source-note">即時狀態需要網路；離線時仍會保留這份檢查順序與重點道路名稱。</p>
-    </section>
-
     <!-- Flights -->
-    <div class="section-card">
+    <div class="section-card route-fold" id="route-flights" data-route-title="✈️ 飛航資訊" data-route-summary="去回程航班、轉機與抵達時間">
       <h3>✈️ 飛航資訊</h3>
       <div class="flight-box">
         <div class="ftitle">🛫 去程航班 (中華航空 CI53)</div>
@@ -111,36 +102,50 @@
     </div>
 
     <!-- Docs -->
-    <div class="section-card">
+    <div class="section-card route-fold" id="route-docs" data-route-title="📁 行程票券與住宿總匯" data-route-summary="機票、住宿與租車憑證集中管理">
       <h3>📁 行程票券與住宿總匯</h3>
       <div class="sub">可上傳憑證截圖。點擊「出示截圖」即可全螢幕放大給櫃檯人員確認！</div>
       <div id="docsListWrap"></div>
     </div>
     
+    <!-- Road conditions：緊接加油資訊，出發前一起檢查 -->
+    <section class="section-card road-check-card route-fold" id="route-road" data-route-title="❄️ 道路封閉／積雪" data-route-summary="NZTA、Crown Range、Milford Road 與降雪警報">
+      <div class="road-check-head"><div><small>出發前 10 分鐘檢查</small><h3>❄️ 道路封閉／積雪快捷查詢</h3></div><span>官方即時資訊</span></div>
+      <div class="road-risk-strip"><b>本行程需特別看：</b> SH8 Lindis Pass／Burkes Pass、SH80 Mt Cook Road、SH94 Milford Road、Crown Range Road</div>
+      <div class="road-link-grid">
+        <a href="https://www.journeys.nzta.govt.nz/highway-conditions" target="_blank" rel="noopener"><b>🚧 NZTA 國道路況</b><span>封路、事故、施工與攝影機</span></a>
+        <a href="https://www.qldc.govt.nz/winter-road-reports" target="_blank" rel="noopener"><b>🏔️ Crown Range／地方道路</b><span>QLDC 冬季路報與雪鏈要求</span></a>
+        <a href="https://www.milfordroad.co.nz/" target="_blank" rel="noopener"><b>🏞️ Milford Road SH94</b><span>開放狀態、雪崩與管制</span></a>
+        <a href="https://www.metservice.com/warnings/home" target="_blank" rel="noopener"><b>🌨️ 道路降雪警報</b><span>MetService 官方警報</span></a>
+      </div>
+      <details class="road-decision"><summary>看到警示時怎麼決定？</summary><ol><li><b>Closed／Road closed：</b>不要出發，不依 Google Maps 小路繞行。</li><li><b>Chains essential：</b>只有車上有合規雪鏈且會安裝才出發；租車規則優先。</li><li><b>Area warning／ice：</b>避開清晨與入夜，放慢速度、加倍跟車距離。</li><li><b>SH94 或 Crown Range 不確定：</b>改走官方開放路線或直接延後，不用硬趕預約。</li></ol></details>
+      <p class="source-note">即時狀態需要網路；離線時仍會保留這份檢查順序與重點道路名稱。</p>
+    </section>
+
     <!-- Gas -->
-    <div class="section-card">
+    <div class="section-card route-fold" id="route-gas" data-route-title="⛽ 南島自駕加油策略" data-route-summary="5 個關鍵補油點與即時油價入口">
       <h3>⛽ 南島自駕建議加油策略</h3>
       <div class="sub">南島油價城鎮差異大，建議利用大城市超市優惠券或平價站點。</div>
       <a href="https://www.gaspy.nz/stats.html" target="_blank" rel="noopener" class="fuel-live-main">⛽ 查看即時油價</a>
-      <div class="rule-item" style="flex-direction:column;">
-        <div style="display:flex; gap:8px;"><span class="dot">📍</span><span><b>Day 1 / 2 (Wanaka)</b>：機場取車後，於 Wanaka 的 BP 或市區加滿，備戰明日長途與山路。</span></div>
-        <a href="https://www.google.com/maps/search/BP+Wanaka" target="_blank" class="btn btn-map" style="display:inline-flex; width:auto; padding:6px 12px; font-size:11px; margin-left:18px; margin-top:4px;">🗺️ 導航至 BP Wanaka</a>
+      <div class="fuel-stop"><div class="fuel-stop-copy">
+        <span class="dot">📍</span><span><b>Day 1 / 2 (Wanaka)</b>：機場取車後，於 Wanaka 的 BP 或市區加滿，備戰明日長途與山路。</span></div>
+        <a href="https://www.google.com/maps/search/BP+Wanaka" target="_blank" rel="noopener" class="fuel-nav">導航 BP Wanaka</a>
       </div>
-      <div class="rule-item" style="flex-direction:column;">
-        <div style="display:flex; gap:8px;"><span class="dot">📍</span><span><b>Day 3 (Twizel)</b>：前往 Tekapo 前，推薦在 Twizel 的 NPD 加油站補給，通常麥肯齊盆地最便宜。</span></div>
-        <a href="https://www.google.com/maps/search/NPD+Twizel" target="_blank" class="btn btn-map" style="display:inline-flex; width:auto; padding:6px 12px; font-size:11px; margin-left:18px; margin-top:4px;">🗺️ 導航至 NPD Twizel</a>
+      <div class="fuel-stop"><div class="fuel-stop-copy">
+        <span class="dot">📍</span><span><b>Day 3 (Twizel)</b>：前往 Tekapo 前，推薦在 Twizel 的 NPD 加油站補給，通常麥肯齊盆地最便宜。</span></div>
+        <a href="https://www.google.com/maps/search/NPD+Twizel" target="_blank" rel="noopener" class="fuel-nav">導航 NPD Twizel</a>
       </div>
-      <div class="rule-item" style="flex-direction:column;">
-        <div style="display:flex; gap:8px;"><span class="dot">📍</span><span><b>Day 6 / 7 (Oamaru)</b>：離開庫克山後，於 Oamaru 市區的 Z Energy 或 NPD 補滿。</span></div>
-        <a href="https://www.google.com/maps/search/NPD+Oamaru" target="_blank" class="btn btn-map" style="display:inline-flex; width:auto; padding:6px 12px; font-size:11px; margin-left:18px; margin-top:4px;">🗺️ 導航至 NPD Oamaru</a>
+      <div class="fuel-stop"><div class="fuel-stop-copy">
+        <span class="dot">📍</span><span><b>Day 6 / 7 (Oamaru)</b>：離開庫克山後，於 Oamaru 市區的 Z Energy 或 NPD 補滿。</span></div>
+        <a href="https://www.google.com/maps/search/NPD+Oamaru" target="_blank" rel="noopener" class="fuel-nav">導航 NPD Oamaru</a>
       </div>
-      <div class="rule-item" style="flex-direction:column;">
-        <div style="display:flex; gap:8px;"><span class="dot">📍</span><span><b>Day 8 / 9 (Dunedin)</b>：Dunedin 油價相對便宜，強烈建議在 Pak'nSave 採買後領取 Voucher 並於旁邊加油！</span></div>
-        <a href="https://www.google.com/maps/search/Pak'nSave+Dunedin+Fuel" target="_blank" class="btn btn-map" style="display:inline-flex; width:auto; padding:6px 12px; font-size:11px; margin-left:18px; margin-top:4px;">🗺️ 導航至 Pak'nSave Fuel</a>
+      <div class="fuel-stop"><div class="fuel-stop-copy">
+        <span class="dot">📍</span><span><b>Day 8 / 9 (Dunedin)</b>：Dunedin 油價相對便宜，強烈建議在 Pak'nSave 採買後領取 Voucher 並於旁邊加油！</span></div>
+        <a href="https://www.google.com/maps/search/Pak'nSave+Dunedin+Fuel" target="_blank" rel="noopener" class="fuel-nav">導航 Pak'nSave Fuel</a>
       </div>
-      <div class="rule-item" style="flex-direction:column;">
-        <div style="display:flex; gap:8px;"><span class="dot">📍</span><span><b>Day 10 / 11 (Te Anau)</b>：進入峽灣前最後大鎮，務必在 Te Anau 的 NPD 加滿，峽灣內無加油站且極度昂貴。</span></div>
-        <a href="https://www.google.com/maps/search/NPD+Te+Anau" target="_blank" class="btn btn-map" style="display:inline-flex; width:auto; padding:6px 12px; font-size:11px; margin-left:18px; margin-top:4px;">🗺️ 導航至 NPD Te Anau</a>
+      <div class="fuel-stop"><div class="fuel-stop-copy">
+        <span class="dot">📍</span><span><b>Day 10 / 11 (Te Anau)</b>：進入峽灣前最後大鎮，務必在 Te Anau 的 NPD 加滿，峽灣內無加油站且極度昂貴。</span></div>
+        <a href="https://www.google.com/maps/search/NPD+Te+Anau" target="_blank" rel="noopener" class="fuel-nav">導航 NPD Te Anau</a>
       </div>
     </div>
   </div>

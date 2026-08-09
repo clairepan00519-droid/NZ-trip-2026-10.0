@@ -116,7 +116,7 @@ const SUPABASE_URL = "https://xkahhddatpoxuembeiwl.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhrYWhoZGRhdHBveHVlbWJlaXdsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0NDExNDksImV4cCI6MjEwMDAxNzE0OX0.Jdpxpz7rgyK_OikYkRrVQComDWZiaI4fgf5ZV_SdaII";
 
 const SYNC_META_KEY = 'nz_sync_meta_v3';
-const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_nav_links','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_pack','nz_shop','nz_rules','nz_docs'];
+const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_nav_links','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_stay_times','nz_pack','nz_shop','nz_rules','nz_docs'];
 const MEDIA_SYNC_KEYS = new Set(['nz_photos','nz_covers','nz_route_maps']);
 const STRUCTURED_LIST_KEYS = new Set(['nz_shop','nz_rules','nz_docs']);
 const cloudSync = {enabled:false, applyingRemote:false, pending:{}, timer:null, pollTimer:null, lastError:null, ready:false};
@@ -369,7 +369,7 @@ function applyRemoteRow(row, forceApply=false){
 }
 function applyStoreUpdate(key,jsonStr){
   let parsed;try{parsed=JSON.parse(jsonStr);}catch(e){return;}
-  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_nav_links':navLinkStore=parsed;break;case'nz_custom_spots':customSpotsStore=parsed;break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=parsed;break;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=normalizeStructuredList('nz_shop',parsed);renderShopList();return;case'nz_rules':rulesData=normalizeStructuredList('nz_rules',parsed);renderRulesList();return;case'nz_docs':docsData=normalizeStructuredList('nz_docs',parsed);renderDocsList();return;default:return;}
+  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_nav_links':navLinkStore=parsed;break;case'nz_custom_spots':customSpotsStore=parsed;break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=parsed;break;case'nz_stay_times':stayTimeStore=parsed||{};break;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=normalizeStructuredList('nz_shop',parsed);renderShopList();return;case'nz_rules':rulesData=normalizeStructuredList('nz_rules',parsed);renderRulesList();return;case'nz_docs':docsData=normalizeStructuredList('nz_docs',parsed);renderDocsList();return;default:return;}
   if(typeof renderDayContent==='function')renderDayContent();if(typeof updateSpotCount==='function')updateSpotCount();
 }
 function scheduleCloudPush(key,valueObj){
@@ -1049,6 +1049,14 @@ function renderTodayMode(){
 }
 
 function hotelsForDay(day){ return [...(day.spots||[]),...(day.moreSpots||[])].filter(s=>s.cat==='hotel'); }
+let stayTimeStore=JSON.parse(localStorage.getItem('nz_stay_times')||'{}');
+function stayTimeKey(name){return String(name||'').trim().toLowerCase().replace(/\s+/g,'-');}
+function setStayTime(hotelName,field,value){
+  const key=stayTimeKey(hotelName);
+  stayTimeStore[key]={...(stayTimeStore[key]||{}),[field]:value};
+  safeSetItem('nz_stay_times',stayTimeStore);
+  renderDayContent();
+}
 function stayQuickCardHTML(dayIdx){
   const day=days[dayIdx]; const hotels=hotelsForDay(day);
   if(!hotels.length) return '';
@@ -1056,8 +1064,9 @@ function stayQuickCardHTML(dayIdx){
     const prev=dayIdx>0 && hotelsForDay(days[dayIdx-1]).some(h=>h.name===hotel.name);
     const next=dayIdx<days.length-1 && hotelsForDay(days[dayIdx+1]).some(h=>h.name===hotel.name);
     const status=!prev?'今日入住':(next?'連住中':'最後一晚');
-    const checkout=!next?'翌日退房・請確認時間':'免退房';
-    return `<div class="stay-quick-card"><div class="stay-quick-head"><span>🏡 ${status}</span><b>${hotel.name}</b></div><div class="stay-quick-meta"><span>🕒 ${checkout}</span><span>🚗 一鍵開啟導航</span></div><div class="stay-quick-actions"><a href="${mapsLink(hotel.name,hotel._storageKey)}" target="_blank" rel="noopener">🗺️ 導航住宿</a>${hotel.link?`<a href="${hotel.link}" target="_blank" rel="noopener">🔗 訂房頁面</a>`:''}</div></div>`;
+    const times=stayTimeStore[stayTimeKey(hotel.name)]||{};
+    const complete=Boolean(times.checkin&&times.checkout);
+    return `<div class="stay-quick-card"><div class="stay-quick-head"><span>🏡 ${status}</span><b>${hotel.name}</b><em class="stay-time-status ${complete?'complete':'pending'}">${complete?'✓ 時間完成':'! 尚未填寫'}</em></div><div class="stay-time-editor"><label><span>入住時間</span><input type="time" value="${escAttr(times.checkin||'')}" aria-label="${escapeHTMLText(hotel.name)} 入住時間" onchange="setStayTime('${jsQuote(hotel.name)}','checkin',this.value)"></label><span class="stay-time-arrow">→</span><label><span>退房時間</span><input type="time" value="${escAttr(times.checkout||'')}" aria-label="${escapeHTMLText(hotel.name)} 退房時間" onchange="setStayTime('${jsQuote(hotel.name)}','checkout',this.value)"></label></div><div class="stay-quick-actions"><a href="${mapsLink(hotel.name,hotel._storageKey)}" target="_blank" rel="noopener">🗺️ 導航住宿</a></div></div>`;
   }).join('');
 }
 
@@ -1137,7 +1146,7 @@ function spotCardHTML(spot, key, isMainSpot, customMeta, orderInfo){
 
   /* 使用者新增的資訊：可新增多筆，各自獨立刪除，不會互相覆蓋 */
   let userNotes = notesStore[idx] || [];
-  let notesListHTML = userNotes.length ? userNotes.map((n,ni)=>`<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(0,0,0,0.12);"><span style="flex:1; white-space:pre-line;">${escapeHTMLText(n)}</span><button onclick="event.stopPropagation(); deleteNote('${idx}', ${ni})" style="background:none; border:none; color:#c1502f; cursor:pointer; font-size:11px; flex:none; padding:0 0 0 4px;">✕</button></div>`).join('') : '';
+  let notesListHTML = userNotes.length ? userNotes.map((n,ni)=>`<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-top:6px; padding-top:6px; border-top:1px dashed rgba(0,0,0,0.12);"><span style="flex:1; white-space:pre-line;">${escapeHTMLText(n)}</span><button class="structural-edit-control" onclick="event.stopPropagation(); deleteNote('${idx}', ${ni})" style="background:none; border:none; color:#c1502f; cursor:pointer; font-size:11px; flex:none; padding:0 0 0 4px;">✕</button></div>`).join('') : '';
   let displayInfo = '';
   if (spot.customInfo) displayInfo += spot.customInfo;
   if (notesListHTML) displayInfo += `<div style="margin-top:${spot.customInfo ? '8px' : '0'};"><span style="color:#6b7686; font-weight:700; font-size:11px;">✏️ 您新增的資訊：</span>${notesListHTML}</div>`;
@@ -1197,15 +1206,15 @@ function spotCardHTML(spot, key, isMainSpot, customMeta, orderInfo){
   const hasBadgesFlag = badgesHTML ? 'true' : 'false';
   const hasInfoFlag = infoHTML ? 'true' : 'false';
   const reorderableBlocksHTML = orderedBlocks.map((b,pos)=>{
-    const upBtn = pos > 0 ? `<button onclick="event.stopPropagation(); moveBlock('${idx}','${b.id}',-1,${hasBadgesFlag},${hasInfoFlag})" style="background:#eef1e6; border:none; cursor:pointer; font-size:10px; color:#9aa3ad; padding:2px 6px; border-radius:5px;">⬆</button>` : '';
-    const downBtn = pos < orderedBlocks.length - 1 ? `<button onclick="event.stopPropagation(); moveBlock('${idx}','${b.id}',1,${hasBadgesFlag},${hasInfoFlag})" style="background:#eef1e6; border:none; cursor:pointer; font-size:10px; color:#9aa3ad; padding:2px 6px; border-radius:5px;">⬇</button>` : '';
-    return (orderedBlocks.length > 1 ? `<div style="display:flex; justify-content:flex-end; gap:4px; margin:2px 0;">${upBtn}${downBtn}</div>` : '') + b.html;
+    const upBtn = pos > 0 ? `<button class="structural-edit-control" onclick="event.stopPropagation(); moveBlock('${idx}','${b.id}',-1,${hasBadgesFlag},${hasInfoFlag})" style="background:#eef1e6; border:none; cursor:pointer; font-size:10px; color:#9aa3ad; padding:2px 6px; border-radius:5px;">⬆</button>` : '';
+    const downBtn = pos < orderedBlocks.length - 1 ? `<button class="structural-edit-control" onclick="event.stopPropagation(); moveBlock('${idx}','${b.id}',1,${hasBadgesFlag},${hasInfoFlag})" style="background:#eef1e6; border:none; cursor:pointer; font-size:10px; color:#9aa3ad; padding:2px 6px; border-radius:5px;">⬇</button>` : '';
+    return (orderedBlocks.length > 1 ? `<div class="structural-edit-control" style="display:flex; justify-content:flex-end; gap:4px; margin:2px 0;">${upBtn}${downBtn}</div>` : '') + b.html;
   }).join('');
 
   const genLabel = spot.genSource === 'edited' ? '✏️ 簡介已由您編輯' : (spot.genSource === 'online' ? '🔍 簡介已透過網路搜尋生成' : (spot.genSource === 'offline' ? '📝 簡介為簡易生成（未連上網路）' : '🆕 自訂景點'));
-  const orderBtns = orderInfo ? `<button onclick="event.stopPropagation(); moveSpot(${orderInfo.dayIdx}, '${orderInfo.listType}', '${idx}', -1)" style="background:#eef1e6; color:var(--ink-soft); border:none; padding:4px 9px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer;">⬆ 上移</button><button onclick="event.stopPropagation(); moveSpot(${orderInfo.dayIdx}, '${orderInfo.listType}', '${idx}', 1)" style="background:#eef1e6; color:var(--ink-soft); border:none; padding:4px 9px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer;">⬇ 下移</button>` : '';
-  const delBtn = customMeta ? `<button onclick="event.stopPropagation(); delCustomSpot(${customMeta.dayIdx}, ${customMeta.i})" style="background:#fff0ec; color:#c1502f; border:none; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap;">🗑️ 刪除此景點</button>` : '';
-  const editBtn = customMeta ? `<button onclick="event.stopPropagation(); toggleEditSpot('${idx}')" style="background:#eef3fb; color:var(--blue); border:none; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap;">✏️ 編輯簡介</button>` : '';
+  const orderBtns = orderInfo ? `<button class="structural-edit-control" onclick="event.stopPropagation(); moveSpot(${orderInfo.dayIdx}, '${orderInfo.listType}', '${idx}', -1)" style="background:#eef1e6; color:var(--ink-soft); border:none; padding:4px 9px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer;">⬆ 上移</button><button class="structural-edit-control" onclick="event.stopPropagation(); moveSpot(${orderInfo.dayIdx}, '${orderInfo.listType}', '${idx}', 1)" style="background:#eef1e6; color:var(--ink-soft); border:none; padding:4px 9px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer;">⬇ 下移</button>` : '';
+  const delBtn = customMeta ? `<button class="structural-edit-control" onclick="event.stopPropagation(); delCustomSpot(${customMeta.dayIdx}, ${customMeta.i})" style="background:#fff0ec; color:#c1502f; border:none; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap;">🗑️ 刪除此景點</button>` : '';
+  const editBtn = customMeta ? `<button class="structural-edit-control" onclick="event.stopPropagation(); toggleEditSpot('${idx}')" style="background:#eef3fb; color:var(--blue); border:none; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap;">✏️ 編輯簡介</button>` : '';
   const customBar = (customMeta || orderInfo) ? `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px; flex-wrap:wrap;"><span style="display:flex; gap:6px; flex-wrap:wrap;">${customMeta ? `<span class="badge" style="background:#eef3fb; color:var(--blue);">${genLabel}</span>` : ''}</span><span style="display:flex; gap:6px; flex-wrap:wrap;">${orderBtns}${editBtn}${delBtn}</span></div>` : '';
   const editSpotAreaHTML = customMeta ? `<div id="spot-edit-${idx}" style="display:none; margin-bottom:10px; background:#f7f9fc; border:1px dashed #c7d6ea; border-radius:8px; padding:10px;" onclick="event.stopPropagation()">
       <div style="font-size:11px; font-weight:700; color:var(--ink-soft); margin-bottom:4px;">簡短介紹（列表中顯示）</div>
@@ -1218,8 +1227,8 @@ function spotCardHTML(spot, key, isMainSpot, customMeta, orderInfo){
       </div>
     </div>` : '';
 
-  const navEditorHTML=`<div class="nav-edit-box" id="nav-edit-${idx}" ${openNavEditorKeys.has(String(idx))?'':'hidden'} onclick="event.stopPropagation()"><b>📍 修正「${safeSpotName}」導航</b><small>貼上 Google Maps 分享連結，或輸入緯度、經度。</small><input id="nav-input-${idx}" type="text" value="${escAttr(navLinkStore[idx]||'')}" placeholder="https://maps.app.goo.gl/... 或 -45.0312, 168.6626"><div><button onclick="saveNavigationLink(event,'${idx}')">儲存導航</button>${navLinkStore[idx]?`<button class="nav-reset" onclick="resetNavigationLink(event,'${idx}')">恢復自動搜尋</button>`:''}<button class="nav-cancel" onclick="toggleNavEditor(event,'${idx}')">取消</button></div></div>`;
-  const navFixButton=`<button class="btn btn-nav-edit" onclick="toggleNavEditor(event,'${idx}')">✏️ 修正導航</button>`;
+  const navEditorHTML=`<div class="nav-edit-box structural-edit-control" id="nav-edit-${idx}" ${openNavEditorKeys.has(String(idx))?'':'hidden'} onclick="event.stopPropagation()"><b>📍 修正「${safeSpotName}」導航</b><small>貼上 Google Maps 分享連結，或輸入緯度、經度。</small><input id="nav-input-${idx}" type="text" value="${escAttr(navLinkStore[idx]||'')}" placeholder="https://maps.app.goo.gl/... 或 -45.0312, 168.6626"><div><button onclick="saveNavigationLink(event,'${idx}')">儲存導航</button>${navLinkStore[idx]?`<button class="nav-reset" onclick="resetNavigationLink(event,'${idx}')">恢復自動搜尋</button>`:''}<button class="nav-cancel" onclick="toggleNavEditor(event,'${idx}')">取消</button></div></div>`;
+  const navFixButton=`<button class="btn btn-nav-edit structural-edit-control" onclick="toggleNavEditor(event,'${idx}')">✏️ 修正導航</button>`;
 
   if (!isMainSpot) {
     return `<div class="sub-spot-card sub-spot-${spot.cat || 'other'}" id="spot-card-${idx}"><div class="sub-spot-header" onclick="toggleSpotDetails('${idx}')"><div class="sub-spot-header-content"><h4>${safeSpotName}</h4><p class="short-desc">${safeSpotDesc}</p>${miniStripHTML}</div><div class="chevron">▼</div></div><div class="sub-spot-details-wrap"><div class="sub-spot-details" onclick="event.stopPropagation()">${customBar}${editSpotAreaHTML}${navEditorHTML}<p class="full-desc">${safeSpotFullDesc}</p>${spot.recDishes ? `<div class="dish-tag">🍲 必點推薦：${escapeHTMLText(spot.recDishes)}</div>` : ''}${reorderableBlocksHTML}<div class="action-row" style="margin-top:10px;"><a class="btn btn-map" href="${mapsLink(spot.name,idx)}" target="_blank" rel="noopener">🗺️ 導航</a>${navFixButton}${spot.link ? `<a class="btn btn-photo" href="${spot.link}" target="_blank" rel="noopener">🔗 ${escapeHTMLText(spot.linkLabel)}</a>` : ''}<button class="btn btn-photo" onclick="document.getElementById('file-${idx}').click()">📷 上傳照片</button></div><input type="file" accept="image/*" id="file-${idx}" style="display:none" multiple onchange="handlePhoto(event, '${idx}')">${pStrip}</div></div></div>`;
@@ -1359,7 +1368,7 @@ function renderDayContent(){
   if(!secondaryCardsHTML) secondaryCardsHTML = '<div class="empty">此區域今天暫無排定食衣住項目，歡迎在下方新增您的私房景點。</div>';
 
   const addSpotFormHTML = `
-    <div class="section-card" style="margin-top:4px;">
+    <div class="section-card structural-edit-control" style="margin-top:4px;">
       <h3 style="margin:0 0 10px;">✨ 新增我的私房景點</h3>
       <div style="display:flex; flex-direction:column; gap:8px;">
         <input type="text" id="newSpotName-${activeDay}" placeholder="景點名稱（必填）" style="padding:10px 12px; border:1px solid var(--line); border-radius:8px; font-family:inherit; font-size:13px;">
@@ -2002,8 +2011,41 @@ function setDesktopLayout(mode){
   localStorage.setItem('nz_desktop_layout',next);
 }
 
+function setUseMode(mode){
+  const next=mode==='travel'?'travel':'edit';
+  document.body.classList.toggle('travel-mode',next==='travel');
+  document.body.classList.toggle('edit-mode',next==='edit');
+  document.querySelectorAll('.mode-btn').forEach(btn=>btn.classList.toggle('active',btn.dataset.mode===next));
+  localStorage.setItem('nz_use_mode',next);
+  if(next==='travel'){openNavEditorKeys.clear();document.querySelectorAll('.nav-edit-box').forEach(el=>el.hidden=true);}
+}
+function setDesktopFontSize(size){
+  const next=['standard','large','xlarge'].includes(size)?size:'large';
+  document.body.classList.remove('desktop-font-standard','desktop-font-large','desktop-font-xlarge');
+  document.body.classList.add('desktop-font-'+next);
+  document.querySelectorAll('.font-size-btn').forEach(btn=>btn.classList.toggle('active',btn.dataset.size===next));
+  localStorage.setItem('nz_desktop_font_size',next);
+}
+function initRouteSections(){
+  document.querySelectorAll('.route-fold').forEach(section=>{
+    if(section.querySelector(':scope > .route-section-toggle'))return;
+    section.classList.add('route-section-enhanced','route-section-collapsed');
+    const btn=document.createElement('button');btn.type='button';btn.className='route-section-toggle';btn.setAttribute('aria-expanded','false');
+    btn.innerHTML=`<span><b>${section.dataset.routeTitle||'行程資訊'}</b><small>${section.dataset.routeSummary||'點擊展開完整內容'}</small></span><em>展開 ＋</em>`;
+    btn.onclick=()=>toggleRouteSection(section.id);section.prepend(btn);
+  });
+}
+function setRouteSectionOpen(section,open){if(!section)return;section.classList.toggle('route-section-collapsed',!open);const btn=section.querySelector(':scope > .route-section-toggle');if(btn){btn.setAttribute('aria-expanded',String(open));const em=btn.querySelector('em');if(em)em.textContent=open?'收合 −':'展開 ＋';}}
+function toggleRouteSection(id){const section=document.getElementById(id);setRouteSectionOpen(section,section?.classList.contains('route-section-collapsed'));updateRouteToggleAllLabel();}
+function jumpRouteSection(id){const section=document.getElementById(id);setRouteSectionOpen(section,true);updateRouteToggleAllLabel();requestAnimationFrame(()=>section?.scrollIntoView({behavior:'smooth',block:'start'}));}
+function toggleAllRouteSections(){const list=[...document.querySelectorAll('.route-fold')];const open=list.some(el=>el.classList.contains('route-section-collapsed'));list.forEach(el=>setRouteSectionOpen(el,open));updateRouteToggleAllLabel();}
+function updateRouteToggleAllLabel(){const btn=document.querySelector('.route-toggle-all');if(btn)btn.textContent=document.querySelector('.route-fold.route-section-collapsed')?'全部展開':'全部收合';}
+
 /* ============ INIT ============ */
 setDesktopLayout(localStorage.getItem('nz_desktop_layout')||'wide');
+setUseMode(localStorage.getItem('nz_use_mode')||(window.matchMedia('(min-width:1050px)').matches?'edit':'travel'));
+setDesktopFontSize(localStorage.getItem('nz_desktop_font_size')||'large');
+initRouteSections();
 updateSpotCount();
 renderTodayMode();
 renderDayChips();
