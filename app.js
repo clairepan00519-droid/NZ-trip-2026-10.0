@@ -157,7 +157,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const SYNC_META_KEY = 'nz_sync_meta_v3';
 const SYNC_OUTBOX_KEY = 'nz_sync_outbox_v1';
-const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_nav_links','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_stay_times','nz_pack','nz_shop','nz_rules','nz_docs'];
+const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_nav_links','nz_hours_override','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_stay_times','nz_pack','nz_shop','nz_rules','nz_docs'];
 const MEDIA_SYNC_KEYS = new Set(['nz_photos','nz_covers','nz_route_maps']);
 const STRUCTURED_LIST_KEYS = new Set(['nz_shop','nz_rules','nz_docs']);
 function loadSyncOutbox(){try{const value=JSON.parse(localStorage.getItem(SYNC_OUTBOX_KEY));return value&&typeof value==='object'&&!Array.isArray(value)?value:{};}catch(e){return {};}}
@@ -418,7 +418,7 @@ function applyRemoteRow(row, forceApply=false){
 }
 function applyStoreUpdate(key,jsonStr){
   let parsed;try{parsed=JSON.parse(jsonStr);}catch(e){return;}
-  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_nav_links':navLinkStore=parsed;break;case'nz_custom_spots':customSpotsStore=parsed;break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=parsed;break;case'nz_stay_times':stayTimeStore=parsed||{};break;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=normalizeStructuredList('nz_shop',parsed);renderShopList();return;case'nz_rules':rulesData=normalizeStructuredList('nz_rules',parsed);renderRulesList();return;case'nz_docs':docsData=normalizeStructuredList('nz_docs',parsed);renderDocsList();return;default:return;}
+  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_nav_links':navLinkStore=parsed;break;case'nz_hours_override':hoursOverrideStore=parsed||{};break;case'nz_custom_spots':customSpotsStore=parsed;break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=parsed;break;case'nz_stay_times':stayTimeStore=parsed||{};break;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=normalizeStructuredList('nz_shop',parsed);renderShopList();return;case'nz_rules':rulesData=normalizeStructuredList('nz_rules',parsed);renderRulesList();return;case'nz_docs':docsData=normalizeStructuredList('nz_docs',parsed);renderDocsList();return;default:return;}
   if(typeof renderDayContent==='function')renderDayContent();if(typeof updateSpotCount==='function')updateSpotCount();
 }
 function scheduleCloudPush(key,valueObj){
@@ -501,7 +501,7 @@ function S(name, cat, desc, opts={}){
 }
 
 const days = [
-{dayNum:'Flight', date:'9/11', weekday:'五', region:'啟程・飛向紐西蘭', enRegion:'Taipei → Auckland', drive:'✈️ 國際航班：飛行約 14 小時', title:'桃園機場出發，夜航直飛奧克蘭', dayDesc:'今晚從桃園機場搭乘華航班機經布里斯本前往奧克蘭，隔天（9/12）傍晚抵達後可於機場周邊或市區休息一晚，銜接隔天南島國內線。', wear:'機艙冷氣強，建議帶件薄毯', weatherIco:'✈️', spots:[S('CI53 TPE→BNE→AKL','transport','23:55桃園起飛，經布里斯本，隔日約18:25抵達奧克蘭。',{dur:'約14小時', fullDesc:'23:55 由桃園國際機場起飛，經布里斯本轉機，隔日（9/12）約18:25 抵達奧克蘭國際機場。建議提前報到，長程夜航準備頸枕。', img:'https://preview.redd.it/sunrise-from-the-window-of-my-transatlantic-flight-v0-j1b9ou28ou921.jpg?width=1080&crop=smart&auto=webp&s=3465eac9b4e9e804c4e6f7421a37b20420156988'})], moreSpots: []},
+{dayNum:'Flight', date:'9/12', weekday:'六', region:'抵達・長白雲之鄉', enRegion:'Auckland Arrival', drive:'✈️ 國際航班：TPE → BNE → AKL', title:'傍晚抵達奧克蘭，休息一晚銜接南島', dayDesc:'前一晚（9/11）23:55 從桃園 T2 搭乘華航 CI53，經布里斯本轉機 2 小時 20 分，今天 18:00 抵達奧克蘭 T1；前往 Novotel 休息，隔天上午銜接皇后鎮國內線。', wear:'機艙冷氣強，建議帶件薄毯', weatherIco:'✈️', spots:[S('CI53 TPE→BNE→AKL','transport','9/11 23:55 桃園 T2 起飛；10:35 抵達布里斯本、12:55 再出發；9/12 18:00 抵達奧克蘭 T1。',{dur:'8h40＋轉機2h20＋3h05', fullDesc:'9/11 23:55 由桃園國際機場第二航廈起飛，CI53 Airbus A350-900 飛行 8 小時 40 分，隔日 10:35 抵達布里斯本。轉機 2 小時 20 分後於 12:55 再出發，飛行 3 小時 5 分，18:00 抵達奧克蘭國際機場第一航廈，接著前往 Novotel 入住。', img:'https://preview.redd.it/sunrise-from-the-window-of-my-transatlantic-flight-v0-j1b9ou28ou921.jpg?width=1080&crop=smart&auto=webp&s=3465eac9b4e9e804c4e6f7421a37b20420156988'})], moreSpots: []},
 {dayNum:'1', date:'9/13', weekday:'日', region:'啟程・越嶺境', enRegion:'Queenstown → Wanaka', drive:'🚗 約 68 km / 1小時 10分', gas:'⛽ 取車後於 ZQN 或 Wanaka 加滿', title:'降落長白雲之鄉，初探 Lake Wanaka', dayDesc:'從 AKL 飛抵 Queenstown，越過 Cardrona Valley，以湖畔美景與經典漢堡拉開序幕', wear:'長袖＋防風外套，山區早晚偏涼', weatherIco:'⛅', spots:[
   S('NZ617 AKL→ZQN','transport','10:25由奧克蘭起飛，12:20抵達皇后鎮。',{dur:'約1小時55分', fullDesc:'10:25 由奧克蘭起飛，12:20 抵達皇后鎮機場，為 Air New Zealand 國內航班。全程航程約兩小時，高空俯瞰南阿爾卑斯山脈景致絕佳。', img:'https://content.r9cdn.net/rimg/dimg/4b/9f/755cbdd6-al-NZ-16713e9dd45.jpg?width=1366&height=768&crop=true'}), 
   S('Cardrona Valley Road','attraction','連接皇后鎮與瓦納卡的高山山谷公路。',{tags:['必拍'], fullDesc:'連接皇后鎮與瓦納卡的高山山谷公路（Crown Range Road），為紐西蘭海拔最高的常規公路。沿途高山草原開闊，秋末初春時遠方山頭微帶積雪，是明信片等級的景觀公路。開車時需注意陡坡與連續彎路。', tip:'可在高處官方觀景點停車，拍攝髮夾彎山路與河谷地形。順光時段（中午前後）色彩層次最迷人。', park:'沿線設有數個專屬避車彎觀景台，山路陡峭請確認拉好手煞車。', img:'https://www.newzealand.com/assets/Tourism-NZ/Queenstown/img-1536923687-3874-29271-3168459346_753fccfc0d_o__aWxvdmVrZWxseQo_FocalPointCropWzM1MiwxMDI0LDM1LDUwLDc1LCJqcGciLDY1LDIuNV0.jpg'}), 
@@ -642,8 +642,8 @@ const days = [
     S('Mrs Woolly\'s General Store','shopping','格倫諾基小鎮上的可愛雜貨店，兼營咖啡與伴手禮，緊鄰唯一的露營地。',{img:'https://mrswoollysgeneralstore.nz/cdn/shop/files/about_section_2_img_1_x2_1413b23d-5dd0-468c-a676-a0c5133facec.jpg?v=1686144241&width=812', fullDesc:'位於格倫諾基入口處、緊鄰 Mrs Woolly\'s Campground（鎮上唯一的露營地）的雜貨小店。除了販售日常雜貨與紀念品外，也提供咖啡與輕食，是進入格倫諾基前後稍作休息、採買伴手禮的可愛據點。'}), 
     S('Goldrush Escape','hotel','連住第三晚，退房前整理行李。',{link:'https://www.airbnb.com.tw/rooms/16826185', linkLabel:'查看 Airbnb 房源', fullDesc:'連住第三晚，也是本次旅程最後一晚住宿。退房時間為上午10點前，隔天前往機場僅約10分鐘車程。', img:'https://a0.muscache.com/im/pictures/bc4e16f4-6a65-4f6e-8576-bd063d744ec1.jpg?im_w=720'})]},
 {dayNum:'15', date:'9/27', weekday:'日', region:'賦歸・長白雲', enRegion:'Queenstown Departure', drive:'🚗 約 10 km / 15分', title:'告別南十字星，將壯闊山河銘記於心', dayDesc:'帶著滿載視覺與味覺的史詩記憶，從 Queenstown 起飛圓滿南島紀元', wear:'機艙內較涼建議薄長袖', weatherIco:'☀️', spots:[
-  S('NZ630 ZQN→AKL','transport','14:15 皇后鎮起飛，16:05 抵達奧克蘭。請提前 2 小時還車與登機。',{dur:'約1.5小時', fullDesc:'14:15 由皇后鎮機場起飛，16:05 抵達奧克蘭國際機場。請提前至少 2 小時辦理國內線登機與自駕車還車手續，結束這段完美的南島自駕旅程。', img:'https://www.airport-technology.com/wp-content/uploads/sites/14/2023/08/AIR-NZ.jpg'}), 
-  S('CI54 AKL→BNE→TPE','transport','20:35 奧克蘭起飛，經布里斯本轉機，隔日(9/28)約 05:25 抵達桃園。',{dur:'約14小時', fullDesc:'20:35 奧克蘭起飛，經布里斯本轉機，隔日(9/28)約 05:25 抵達桃園。', img:'https://media.licdn.com/dms/image/v2/D5612AQH-SSeXExLoXA/article-cover_image-shrink_720_1280/B56ZfnfXcTHQAI-/0/1751935454439?e=2147483647&v=beta&t=HxF4MjarYVc6oIJqlUb02ok4B5AOzMtPTqRi3_pYCMg'})], 
+  S('NZ630 ZQN→AKL','transport','14:15 皇后鎮起飛，16:05 抵達奧克蘭；20:30 銜接 CI54。',{dur:'1小時50分', fullDesc:'14:15 由皇后鎮機場起飛，16:05 抵達奧克蘭國際機場，轉機 4 小時 25 分後於 20:30 銜接 CI54。請提前至少 2 小時辦理國內線登機與自駕車還車手續。', img:'https://www.airport-technology.com/wp-content/uploads/sites/14/2023/08/AIR-NZ.jpg'}), 
+  S('CI54 AKL→BNE→TPE','transport','20:30 奧克蘭起飛；21:20 抵達布里斯本，22:50 再出發；9/28 05:45 抵達桃園。',{dur:'BNE轉機1小時30分', fullDesc:'9/27 20:30 由奧克蘭起飛，21:20 抵達布里斯本；轉機 1 小時 30 分後於 22:50 再出發，隔日（9/28）05:45 抵達桃園。', img:'https://media.licdn.com/dms/image/v2/D5612AQH-SSeXExLoXA/article-cover_image-shrink_720_1280/B56ZfnfXcTHQAI-/0/1751935454439?e=2147483647&v=beta&t=HxF4MjarYVc6oIJqlUb02ok4B5AOzMtPTqRi3_pYCMg'})], 
   moreSpots: [
     S('市區／機場周邊','shopping','搭機前最後衝刺血拼時間。',{tags:['必買'], fullDesc:'搭機離開南島前的最後衝刺血拼時間。可以利用上午在市區或機場旁的連鎖大賣場，補齊尚未購足的麥蘆卡蜂蜜或巧克力。', img:'https://upload.wikimedia.org/wikipedia/commons/a/a5/Pak%27n_Save_Wanganui.JPG'})]}
 ];
@@ -670,6 +670,10 @@ const days = [
   Object.assign(day25, content26, fixed25);
   Object.assign(day26, content25, fixed26);
 
+  /* 9/26 收尾日改留在 Queenstown：移除 Arrow Town 與 Remarkable Sweet Shop。 */
+  day26.spots = (day26.spots || []).filter(spot=>spot.name!=='Arrow Town');
+  day26.moreSpots = (day26.moreSpots || []).filter(spot=>spot.name!=='Remarkable Sweet Shop');
+
   const iceCreamNames = new Set(['Anita Gelato','Patagonia Chocolate','Mrs Ferg Gelateria','Duck Island Ice Cream']);
   const iceCreamStops = (day24.moreSpots || []).filter(spot=>iceCreamNames.has(spot.name));
   day24.moreSpots = (day24.moreSpots || []).filter(spot=>!iceCreamNames.has(spot.name));
@@ -686,7 +690,11 @@ const days = [
 
   day24.dayDesc = '由 Deer Park Heights 絕美視角登高俯瞰，收攬 Queenstown 百萬湖山景致';
   day25.dayDesc = '沿著瓦卡蒂普湖深入 Glenorchy，走進電影級山谷、濕地與農場風景';
-  day26.dayDesc = '漫步淘金小鎮與皇后鎮湖濱，以人氣漢堡、烘焙與冰淇淋收尾';
+  day26.region = '湖畔・市集日';
+  day26.enRegion = 'Queenstown';
+  day26.drive = '🚶 Queenstown 市區步行為主';
+  day26.title = '湖畔市集、人氣美食與冰淇淋巡禮';
+  day26.dayDesc = '留在 Queenstown 湖濱與市中心，依市集營業狀況彈性安排美食、購物與四間冰淇淋比較';
 
   const hotel25 = (day25.moreSpots || []).find(spot=>spot.cat==='hotel');
   const hotel26 = (day26.moreSpots || []).find(spot=>spot.cat==='hotel');
@@ -818,6 +826,29 @@ function persistCover(){ safeSetItem('nz_covers', coverStore); }
 
 /* 自訂導航：可直接貼 Google Maps 分享網址，或輸入「緯度, 經度」。 */
 let navLinkStore = JSON.parse(localStorage.getItem('nz_nav_links')) || {};
+let hoursOverrideStore = JSON.parse(localStorage.getItem('nz_hours_override')) || {};
+function effectiveHours(spot,key){return Object.prototype.hasOwnProperty.call(hoursOverrideStore,String(key))?hoursOverrideStore[String(key)]:(spot.hours||'');}
+function toggleHoursEditor(event,key){
+  event.stopPropagation();
+  const box=document.getElementById('hours-edit-'+key);
+  if(!box)return;
+  box.hidden=!box.hidden;
+  if(!box.hidden)requestAnimationFrame(()=>document.getElementById('hours-input-'+key)?.focus({preventScroll:true}));
+}
+function saveHoursOverride(event,key){
+  event.stopPropagation();
+  const input=document.getElementById('hours-input-'+key);
+  if(!input)return;
+  hoursOverrideStore[String(key)]=input.value.trim();
+  safeSetItem('nz_hours_override',hoursOverrideStore);
+  renderDayContent();
+}
+function resetHoursOverride(event,key){
+  event.stopPropagation();
+  delete hoursOverrideStore[String(key)];
+  safeSetItem('nz_hours_override',hoursOverrideStore);
+  renderDayContent();
+}
 const openNavEditorKeys = new Set();
 function persistNavLinks(){ safeSetItem('nz_nav_links', navLinkStore); }
 function normalizeNavigationInput(raw){
@@ -1110,14 +1141,14 @@ function renderTodayMode(){
   const todayIdx=tripDayIndexForToday();
   const t=nzTodayParts();
   const todayUTC=Date.UTC(t.year,t.month-1,t.day);
-  const startUTC=Date.UTC(2026,8,11);
+  const startUTC=Date.UTC(2026,8,12);
   const endUTC=Date.UTC(2026,8,28);
   if(todayIdx>=0){
     const d=days[todayIdx];
     bar.innerHTML=`<div class="today-mode-card live"><div><span class="today-kicker">📍 TODAY・紐西蘭時間</span><b>${d.date}｜${d.region}</b><small>${d.title}</small></div><button onclick="setActiveDay(${todayIdx})">查看今天</button></div>`;
   }else if(todayUTC<startUTC){
     const daysLeft=Math.ceil((startUTC-todayUTC)/86400000);
-    bar.innerHTML=`<div class="today-mode-card"><div><span class="today-kicker">🗓️ 旅行倒數</span><b>距離出發還有 ${daysLeft} 天</b><small>旅行期間會自動開啟當日行程</small></div><button onclick="setActiveDay(0)">查看首日</button></div>`;
+    bar.innerHTML=`<div class="today-mode-card"><div><span class="today-kicker">🗓️ 旅行倒數</span><b>距離 9/12 行程開始還有 ${daysLeft} 天</b><small>旅行期間會自動開啟當日行程</small></div><button onclick="setActiveDay(0)">查看首日</button></div>`;
   }else if(todayUTC<=endUTC){
     bar.innerHTML=`<div class="today-mode-card live"><div><span class="today-kicker">📍 TODAY</span><b>今天是移動／轉機日</b><small>可從日期列選擇最接近的行程</small></div></div>`;
   }else{
@@ -1206,7 +1237,8 @@ function spotCardHTML(spot, key, isMainSpot, customMeta, orderInfo){
   
   const infoBits = [];
   if(spot.dur) infoBits.push(`<div class="info-item"><div class="k">建議停留</div><div class="v">${spot.dur}</div></div>`);
-  if(spot.hours) infoBits.push(`<div class="info-item"><div class="k">營業/開放時間</div><div class="v" style="color:#2f8a52;">${spot.hours}</div></div>`);
+  const shownHours=effectiveHours(spot,idx);
+  if(spot.hours||Object.prototype.hasOwnProperty.call(hoursOverrideStore,String(idx))) infoBits.push(`<div class="info-item hours-info-item"><div class="k">營業/開放時間</div><div class="v" style="color:#2f8a52;">${escapeHTMLText(shownHours||'尚未填寫')}</div><button class="hours-edit-trigger structural-edit-control" onclick="toggleHoursEditor(event,'${idx}')">✏️ 修正</button><div class="hours-edit-box structural-edit-control" id="hours-edit-${idx}" hidden onclick="event.stopPropagation()"><input id="hours-input-${idx}" type="text" value="${escAttr(shownHours)}" placeholder="例如：09:00–17:00（週二休）"><div><button onclick="saveHoursOverride(event,'${idx}')">儲存</button>${Object.prototype.hasOwnProperty.call(hoursOverrideStore,String(idx))?`<button class="hours-reset" onclick="resetHoursOverride(event,'${idx}')">恢復原時間</button>`:''}<button class="hours-cancel" onclick="toggleHoursEditor(event,'${idx}')">取消</button></div><small>修改後會保存在此裝置並同步給家人。</small></div></div>`);
   if(spot.note) infoBits.push(`<div class="info-item" style="grid-column: 1 / -1;"><div class="k">重要提點 / 門票</div><div class="v" style="font-weight:500; font-size:11.5px; color:#c1502f;">${spot.note}</div></div>`);
   
   const userPhotos = photoStore[idx] || [];
@@ -1408,6 +1440,7 @@ function fuelPricePanel(day){
 }
 
 const ICE_CREAM_COMPARE_NAMES=new Set(['Anita Gelato','Patagonia Chocolate','Mrs Ferg Gelateria','Duck Island Ice Cream']);
+const iceCompareOpenByDay={};
 function comparisonImageFor(spot,key){
   const photos=photoStore[key]||[]; const sel=coverStore[key];
   if(typeof sel==='number'&&photos[sel])return photos[sel];
@@ -1418,21 +1451,25 @@ function iceCreamComparisonHTML(entries,dayIdx){
   if(!entries.length)return '';
   const rows=entries.map(({spot,key})=>`<div class="ice-compare-row"><img loading="lazy" decoding="async" src="${comparisonImageFor(spot,key)}" alt="${escapeHTMLText(spot.name)}" onerror="handleImageError(this)"><div class="ice-compare-info"><b>${escapeHTMLText(spot.name)}</b><span>${escapeHTMLText(spot.recDishes||spot.desc)}</span><small>🕒 ${escapeHTMLText(spot.hours||'請確認當日營業時間')}</small></div><a href="${mapsLink(spot.name,key)}" target="_blank" rel="noopener">導航</a></div>`).join('');
   const detailCards=entries.map(o=>spotCardHTML(o.spot,o.key,false,o.customMeta,{dayIdx,listType:'life'})).join('');
-  return `<section class="ice-compare-card"><div class="ice-compare-title"><div><span>🍨 9/26 冰淇淋比較卡</span><b>現場依路線與口味挑一間就好</b></div><small>四間都保留，可自行上傳穩定照片與修正導航。</small></div>${rows}<details class="ice-compare-details"><summary>展開四間完整資料、照片與導航設定</summary><div>${detailCards}</div></details></section>`;
+  return `<section class="ice-compare-card"><div class="ice-compare-title"><div><span>🍨 9/26 冰淇淋比較卡</span><b>現場依路線與口味挑一間就好</b></div><small>四間都保留，可自行上傳穩定照片、修正導航與營業時間。</small></div>${rows}<details class="ice-compare-details"${iceCompareOpenByDay[dayIdx]?' open':''} ontoggle="iceCompareOpenByDay[${dayIdx}]=this.open"><summary>展開四間完整資料、照片與導航設定</summary><div>${detailCards}</div></details></section>`;
 }
 
 function constellationStoriesHTML(date){
   if(date!=='9/15'&&date!=='9/16')return '';
   const second=date==='9/16';
-  return `<section class="star-story-panel"><div class="star-story-head"><span>✦ TEKAPO NIGHT SKY · ${date}</span><h3>${second?'深空辨星與南方故事':'抵達夜的星空故事'}</h3><p>建議約 20:30–23:00 觀看；星位為行程規劃參考，當晚仍以雲量、月光與現場地平線為準。</p></div><div class="star-story-grid">
-    <article><b>✦ 南十字座 · Te Punga</b><p>南十字座全年可見。Tainui 傳統將它視為天空大舟的錨「Te Punga」；Wairarapa 則稱 Māhutonga，像銀河之中讓風穿過的開口。</p></article>
-    <article><b>✦ 天蠍座 · 季節的追逐</b><p>9 月晚間可在西方銀河附近找天蠍彎鉤。希臘故事裡，蠍子與獵戶 Orion 被放在天空兩側，一方升起時另一方退場。</p></article>
-    <article><b>✦ 銀河 · Te Ikaroa</b><p>橫跨暗空的銀河在 Māori 傳統中稱 Te Ikaroa「長魚」。先避開燈光、讓眼睛適應約 20 分鐘，才會看見更多雲霧般細節。</p></article>
-    ${second?'<article><b>✦ 麥哲倫雲</b><p>南方夠暗、天空透明時，可找兩團與銀河分離的淡淡雲斑；它們其實是鄰近矮星系，而不是地球大氣中的雲。</p></article>':''}
+  return `<section class="star-story-panel"><div class="star-story-head"><span>✦ LAKE TEKAPO NIGHT SKY · 9/15–9/16</span><h3>${second?'第二夜・沿銀河深空尋星':'第一夜・從天蠍找到南方星空'}</h3><p>建議約 20:00 開始；先避開燈光並讓眼睛適應黑暗。星位仍以當晚雲量、現場地平線與觀星 App 為準。</p></div><div class="star-story-grid">
+    <article><b>♏ 天蠍座 · Scorpius</b><p>找橘紅色的「心宿二 Antares」，就能認出彎曲的蠍身。希臘神話中，巨蠍殺死了自負的獵人 Orion，因此兩者被放在天空兩端，永不相見。</p></article>
+    <article><b>🪝 Māui 的魚鉤 · Te Matau a Māui</b><p>天蠍座彎曲的尾巴，在毛利文化中被視為英雄 Māui 的神奇魚鉤。傳說 Māui 用它從海中釣起巨魚——也就是今日的紐西蘭北島。</p></article>
+    <article><b>🏹 人馬座 · Sagittarius・銀河中心</b><p>天蠍旁可找像「🫖 茶壺」的星群；茶壺壺嘴附近就是銀河系中心方向。這一帶也是當晚銀河最濃密、最漂亮的區域。</p></article>
+    <article><b>✝️ 南十字座 · Crux</b><p>紐西蘭最具代表性的星座之一。旁邊兩顆明亮的南門二、南門增二稱為 The Pointers 指標星，可以幫忙找到南十字。</p></article>
+    <article><b>☁️ 大、小麥哲倫星雲</b><p>南方天空中兩團淡淡的「雲」，其實是距離我們約 16–20 萬光年的鄰近星系；在 Tekapo 夠黑、天空透明時有機會直接用肉眼看見。</p></article>
+    <article class="star-route-card"><b>🌙 當晚觀星重點</b><p>9/15–16 為新月後數日，月光干擾較小。約 20:00 後依序找：<strong>天蠍座 → Māui 魚鉤 → 人馬座茶壺 → 銀河中心 → 南十字座 → 麥哲倫星雲</strong>。</p></article>
   </div><div class="star-story-links"><a href="https://teara.govt.nz/en/southern-cross" target="_blank" rel="noopener">Te Ara：南十字座</a><a href="https://teara.govt.nz/en/night-sky" target="_blank" rel="noopener">Te Ara：紐西蘭夜空</a></div></section>`;
 }
 
 function renderDayContent(){
+  const currentIceDetails=document.querySelector('.ice-compare-details');
+  if(currentIceDetails)iceCompareOpenByDay[activeDay]=currentIceDetails.open;
   rememberOpenSpotCards();
   document.querySelectorAll('textarea[id^="note-input-"]').forEach(input=>{
     noteDraftStore[input.id.replace('note-input-','')] = input.value;
@@ -1979,10 +2016,10 @@ function addRuleItem() {
 
 /* ============ DYNAMIC DOCS/VOUCHERS ============ */
 const defaultDocsData = [
-  { ic: '✈️', t: '去程國際線 CI53', s: '9/11(五) 23:55 TPE → 9/12(六) 約18:25 AKL', chip: '已確認', link: '', img: null },
+  { ic: '✈️', t: '去程國際線 CI53', s: '9/11 23:55 TPE T2 → 10:35 BNE／12:55 → 9/12 18:00 AKL T1', chip: '已確認', link: '', img: null },
   { ic: '✈️', t: '南島國內線 NZ617', s: '9/13 10:25 AKL → 12:20 ZQN', chip: '已確認', link: '', img: null },
   { ic: '✈️', t: '南島國內線 NZ630', s: '9/27 14:15 ZQN → 16:05 AKL', chip: '已確認', link: '', img: null },
-  { ic: '✈️', t: '回程國際線 CI54', s: '9/27 AKL 出發 → 9/28(一) 抵達 TPE', chip: '已確認', link: '', img: null },
+  { ic: '✈️', t: '回程國際線 CI54', s: '9/27 20:30 AKL → 21:20 BNE／22:50 → 9/28 05:45 TPE', chip: '已確認', link: '', img: null },
   { ic: '🏨', t: 'Wanaka Lake View', s: '9/13–9/15・2晚・Airbnb', chip: '已確認', link: 'https://www.airbnb.com.tw/rooms/835936560022815796', img: null },
   { ic: '🏨', t: 'Starview 88 - Tekapo', s: '9/15–9/17・2晚・Agoda', chip: '已確認', link: 'https://www.agoda.com/zh-tw/starview-88/hotel/lake-tekapo-nz.html', img: null },
   { ic: '🏨', t: 'Mt Cook Motels', s: '9/17–9/19・2晚・官網辦理', chip: '已確認', link: 'https://www.hermitage.co.nz/stay/mt-cook-motels/', img: null },
