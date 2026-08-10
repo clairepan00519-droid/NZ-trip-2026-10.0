@@ -1,6 +1,7 @@
-# NZ Trip Family Sync v25
+# NZ Trip Family Sync v26
 
 本版更新：
+- 手機主畫面圖示改為可愛奇異鳥背包客、南島雪山湖泊、彎道路線與銀蕨插畫，並完成圓形／圓角遮罩安全裁切
 - 加入完整 PWA 設定與手機圖示，可從 iPhone／Android 加入主畫面並以獨立 App 視窗開啟
 - 登入畫面加入顯示／隱藏密碼與 Caps Lock 開啟警示
 - 修正圖片預覽空白來源在程式載入前觸發 `handleImageError` 的錯誤
