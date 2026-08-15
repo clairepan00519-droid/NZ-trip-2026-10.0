@@ -28,7 +28,9 @@
   <span class="workbench-label">使用模式</span><div class="workbench-row"><button class="mode-btn" data-mode="edit" type="button" onclick="setUseMode('edit')">✎ 編輯</button><button class="mode-btn" data-mode="travel" type="button" onclick="setUseMode('travel')">旅行</button></div>
   <span class="workbench-label">文字大小</span><div class="workbench-row workbench-font-row"><button class="font-size-btn" data-size="standard" type="button" onclick="setDesktopFontSize('standard')">標準</button><button class="font-size-btn" data-size="large" type="button" onclick="setDesktopFontSize('large')">放大</button><button class="font-size-btn" data-size="xlarge" type="button" onclick="setDesktopFontSize('xlarge')">特大</button></div>
   <button class="workbench-status-btn structural-edit-control" type="button" onclick="openEditStatus()">☑ 編輯狀態篩選</button>
+  <div class="workbench-row structural-edit-control"><button type="button" onclick="exportTripBackup()">⬇ 備份</button><button type="button" onclick="document.getElementById('backupImportFile').click()">⬆ 還原</button></div>
 </aside>
+<input id="backupImportFile" type="file" accept="application/json,.json" hidden onchange="importTripBackup(event)">
 <div id="familyGate" class="family-gate" aria-hidden="false">
   <div class="family-gate-card">
     <div class="family-gate-icon">🌿</div>
@@ -73,14 +75,8 @@
     </div>
   </div>
 
-  <!-- Top Tabs -->
-  <div class="tabbar-top">
-    <button class="tab-btn active" onclick="setTab('itinerary')">🚗 行程</button>
-    <button class="tab-btn" onclick="setTab('route')">🗺️ 環線</button>
-    <button class="tab-btn" onclick="setTab('guide')">🧳 指南</button>
-    <button class="tab-btn" onclick="setTab('weather')">☀️ 天氣</button>
-    <button class="search-open-btn" onclick="openGlobalSearch()">🔍 搜尋</button>
-  </div>
+  <!-- 上方只保留全站搜尋；主要頁面切換使用下方導覽列 -->
+  <div class="tabbar-top search-only-bar"><button class="search-open-btn" onclick="openGlobalSearch()">🔍 搜尋整份行程、住宿、交通與筆記</button></div>
   <div class="mobile-mode-switch" aria-label="使用模式"><button class="mode-btn" data-mode="edit" type="button" onclick="setUseMode('edit')">✎ 編輯</button><button class="mode-btn" data-mode="travel" type="button" onclick="setUseMode('travel')">旅行模式</button><button class="structural-edit-control" type="button" onclick="openEditStatus()">☑ 狀態</button></div>
 
   <!-- ================= ITINERARY VIEW ================= -->
@@ -93,7 +89,10 @@
 
   <!-- ================= ROUTE MAP VIEW ================= -->
   <div class="view" id="view-route">
-    <nav class="route-quick-nav" aria-label="環線快捷目錄"><button class="nav-theme-flights" onclick="jumpRouteSection('route-flights')">✈️ 航班</button><button class="nav-theme-docs" onclick="jumpRouteSection('route-docs')">📁 票券住宿</button><button class="nav-theme-road" onclick="jumpRouteSection('route-road')">❄️ 道路</button><button class="nav-theme-gas" onclick="jumpRouteSection('route-gas')">⛽ 加油</button><button class="route-toggle-all" onclick="toggleAllRouteSections()">全部展開</button></nav>
+    <div class="route-float-nav">
+      <button class="route-nav-launcher" type="button" onclick="handleFloatLauncherClick(event,'route')" aria-expanded="false"><span>🧭</span><b>環線目錄</b></button>
+      <nav class="route-quick-nav" aria-label="環線快捷目錄"><div class="route-nav-title"><span>環線快速前往</span><button type="button" onclick="toggleRouteQuickNav(false)" aria-label="關閉">×</button></div><button class="nav-theme-flights" onclick="jumpRouteSection('route-flights')">✈️ 航班</button><button class="nav-theme-docs" onclick="jumpRouteSection('route-docs')">📁 票券住宿</button><button class="nav-theme-road" onclick="jumpRouteSection('route-road')">❄️ 道路</button><button class="nav-theme-gas" onclick="jumpRouteSection('route-gas')">⛽ 加油</button><button class="route-toggle-all" onclick="toggleAllRouteSections()">全部展開</button></nav>
+    </div>
     <div class="map-wrap" style="margin-top:0; margin-bottom:22px; padding-bottom:24px;">
       <h3 style="margin:0 0 10px; font-size:18px; font-weight:900; text-align:center; color:var(--ink);">🚗 紐西蘭南島自駕路線環線</h3>
       
@@ -164,11 +163,11 @@
         <a href="https://www.metservice.com/warnings/home" target="_blank" rel="noopener"><b>🌨️ 道路降雪警報</b><span>MetService 官方警報</span></a>
       </div>
       <details class="road-decision"><summary>看到警示時怎麼決定？</summary><ol><li><b>Closed／Road closed：</b>不要出發，不依 Google Maps 小路繞行。</li><li><b>Chains essential：</b>只有車上有合規雪鏈且會安裝才出發；租車規則優先。</li><li><b>Area warning／ice：</b>避開清晨與入夜，放慢速度、加倍跟車距離。</li><li><b>SH94 或 Crown Range 不確定：</b>改走官方開放路線或直接延後，不用硬趕預約。</li></ol></details>
-      <details class="road-rules-card"><summary>🚗 自駕快速規則</summary><div class="road-rule-grid">
-        <article><div class="road-rule-visual"><img loading="lazy" src="https://www.nzta.govt.nz/assets/resources/roadcode/gfx/roundabout-sign.gif" alt="紐西蘭圓環警告標誌"></div><b>🔄 ROUNDABOUT</b><p>左轉：左燈。直行：進入通常不打燈，離開前左燈。右轉：右燈，離開前改左燈。</p><a class="road-rule-source" href="https://www.nzta.govt.nz/driving-skills/learn-to-drive/roadcode/general-road-code/about-driving/giving-way/giving-way-at-roundabouts" target="_blank" rel="noopener">NZTA 官方圖解 ↗</a></article>
-        <article><div class="road-rule-visual"><img loading="lazy" src="https://www.nzta.govt.nz/assets/resources/roadcode/gfx/one-lane-bridge-giveway-1.gif" alt="紐西蘭單線橋讓路標誌"></div><b>🌉 ONE LANE BRIDGE</b><p>紅圈小箭頭＝我讓；藍底大白箭頭＝我方優先。有優先權仍先確認橋面淨空。</p><a class="road-rule-source" href="https://www.nzta.govt.nz/driving-skills/learn-to-drive/roadcode/general-road-code/about-driving/giving-way/giving-way-on-one-lane-bridges" target="_blank" rel="noopener">NZTA 官方圖解 ↗</a></article>
-        <article><div class="road-rule-visual"><img loading="lazy" src="https://www.nzta.govt.nz/assets/resources/roadcode/gfx/bus-only-sign.gif" alt="紐西蘭 BUS ONLY 公車專用標誌"></div><b>🚌 BUS LANE ≠ T2</b><p>BUS LANE／BUS ONLY 不因車上多人就能使用；T2／T3 依標誌的人數與時段。</p><a class="road-rule-source" href="https://www.nzta.govt.nz/driving-skills/learn-to-drive/roadcode/general-road-code/about-signs/main-types-of-signs" target="_blank" rel="noopener">NZTA 標誌對照 ↗</a></article>
-        <article><div class="road-rule-visual"><img loading="lazy" src="https://www.nzta.govt.nz/assets/resources/roadcode/gfx/keep-left-unless-pass-sign.gif" alt="紐西蘭 KEEP LEFT 靠左行駛標誌"></div><b>↩️ KEEP LEFT</b><p>停車場、加油站駛出、右轉後與每天首次開車時，再提醒自己靠左行駛。</p><a class="road-rule-source" href="https://www.nzta.govt.nz/driving-skills/learn-to-drive/roadcode/general-road-code/about-driving/key-driving-skills/keeping-left" target="_blank" rel="noopener">NZTA 靠左規則 ↗</a></article>
+      <details class="road-rules-card"><summary><span>🚗 自駕快速規則・NZTA 標誌圖解</span><em>點開看 4 張圖 ＋</em></summary><div class="road-rule-grid">
+        <article><div class="road-rule-visual"><img loading="lazy" src="https://www.nzta.govt.nz/assets/resources/roadcode/gfx/roundabout-sign.gif" onerror="this.onerror=null;this.src='images/road-rules/roundabout.svg'" alt="紐西蘭圓環警告標誌"></div><b>🔄 ROUNDABOUT</b><p>左轉：左燈。直行：進入通常不打燈，離開前左燈。右轉：右燈，離開前改左燈。</p><a class="road-rule-source" href="https://www.nzta.govt.nz/driving-skills/learn-to-drive/roadcode/general-road-code/about-driving/giving-way/giving-way-at-roundabouts" target="_blank" rel="noopener">NZTA 圓環完整規則 ↗</a></article>
+        <article><div class="road-rule-visual"><img loading="lazy" src="https://www.nzta.govt.nz/assets/resources/roadcode/gfx/one-lane-bridge-giveway-1.gif" onerror="this.onerror=null;this.src='images/road-rules/one-lane-bridge.svg'" alt="紐西蘭單線橋讓路標誌"></div><b>🌉 ONE LANE BRIDGE</b><p>紅圈小箭頭＝我讓；藍底大白箭頭＝我方優先。有優先權仍先確認橋面淨空。</p><a class="road-rule-source" href="https://www.nzta.govt.nz/driving-skills/learn-to-drive/roadcode/general-road-code/about-driving/giving-way/giving-way-on-one-lane-bridges" target="_blank" rel="noopener">NZTA 單線橋完整規則 ↗</a></article>
+        <article><div class="road-rule-visual"><img loading="lazy" src="https://www.nzta.govt.nz/assets/resources/roadcode/gfx/bus-only-sign.gif" onerror="this.onerror=null;this.src='images/road-rules/bus-only.svg'" alt="紐西蘭 BUS ONLY 公車專用標誌"></div><b>🚌 BUS LANE ≠ T2</b><p>BUS LANE／BUS ONLY 不因車上多人就能使用；T2／T3 依標誌的人數與時段。</p><a class="road-rule-source" href="https://www.nzta.govt.nz/driving-skills/learn-to-drive/roadcode/general-road-code/about-signs/main-types-of-signs" target="_blank" rel="noopener">NZTA 交通標誌對照 ↗</a></article>
+        <article><div class="road-rule-visual"><img loading="lazy" src="https://www.nzta.govt.nz/assets/resources/roadcode/gfx/keep-left-unless-pass-sign.gif" onerror="this.onerror=null;this.src='images/road-rules/keep-left.svg'" alt="紐西蘭 KEEP LEFT 靠左行駛標誌"></div><b>↩️ KEEP LEFT</b><p>停車場、加油站駛出、右轉後與每天首次開車時，再提醒自己靠左行駛。</p><a class="road-rule-source" href="https://www.nzta.govt.nz/driving-skills/learn-to-drive/roadcode/general-road-code/about-driving/key-driving-skills/keeping-left" target="_blank" rel="noopener">NZTA 靠左完整規則 ↗</a></article>
       </div></details>
       <details class="road-top-five"><summary>⭐ 本趟自駕 Top 5</summary><ol><li><b>Dunedin：</b>ONE WAY＋提前選車道</li><li><b>Frankton：</b>Bus Hub／BUS ONLY</li><li><b>Crown Range：</b>9月積雪、結冰與管制</li><li><b>Lindis Pass：</b>低溫、積雪／黑冰</li><li><b>ONE LANE BRIDGE：</b>先確認誰有優先權</li></ol><p>若臨時改成自駕 Milford Sound，Milford Road／SH94 直接提升為最高注意等級，出發前查官方開放狀態。</p></details>
       <p class="source-note">即時狀態需要網路；離線時仍會保留這份檢查順序與重點道路名稱。</p>
@@ -221,6 +220,12 @@
       <h3>📋 旅遊規範與提醒</h3>
       <div class="sub">您可以自行新增行前準備規範或攜帶物品注意事項，並附上截圖（如海關申報單範例）。</div>
       <div id="rulesListWrap"></div>
+    </div>
+
+    <div class="section-card backup-card structural-edit-control">
+      <h3>🛟 資料備份與還原</h3>
+      <div class="sub">建議出發前下載一次完整備份；網站每天首次開啟也會自動保留最近 3 份本機快照。</div>
+      <div class="backup-actions"><button type="button" onclick="exportTripBackup()">⬇️ 下載完整備份</button><button type="button" onclick="document.getElementById('backupImportFile').click()">⬆️ 從備份還原</button></div>
     </div>
 
   </div>

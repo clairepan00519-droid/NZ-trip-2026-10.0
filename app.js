@@ -202,6 +202,14 @@ async function uploadMediaBlob(blob, folder='uploads'){
   return url;
 }
 async function uploadMediaFile(file, folder){ return uploadMediaBlob(await compressImageToBlob(file),folder); }
+const MEDIA_QUEUE_COUNT_KEY='nz_media_queue_count_v1';
+function mediaQueueCount(){return Number(localStorage.getItem(MEDIA_QUEUE_COUNT_KEY)||0)||0;}
+function openMediaQueueDB(){return new Promise((resolve,reject)=>{const r=indexedDB.open('nz-trip-media-queue',1);r.onupgradeneeded=()=>r.result.createObjectStore('uploads',{keyPath:'id'});r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
+async function queueMediaFile(file,kind,target){const db=await openMediaQueueDB(),item={id:crypto.randomUUID(),kind,target,file,createdAt:Date.now()};await new Promise((resolve,reject)=>{const tx=db.transaction('uploads','readwrite');tx.objectStore('uploads').put(item);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();localStorage.setItem(MEDIA_QUEUE_COUNT_KEY,String(mediaQueueCount()+1));updateSyncStatus(null,'queued');}
+async function mediaQueueItems(){const db=await openMediaQueueDB(),items=await new Promise((resolve,reject)=>{const r=db.transaction('uploads').objectStore('uploads').getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error);});db.close();return items;}
+async function deleteMediaQueueItem(id){const db=await openMediaQueueDB();await new Promise((resolve,reject)=>{const tx=db.transaction('uploads','readwrite');tx.objectStore('uploads').delete(id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();localStorage.setItem(MEDIA_QUEUE_COUNT_KEY,String(Math.max(0,mediaQueueCount()-1)));}
+function applyQueuedMedia(item,url){if(item.kind==='spot'){(photoStore[item.target]||(photoStore[item.target]=[])).push(url);persistPhotos();renderDayContent();}else if(item.kind==='route'){(routeMapStore[item.target]||(routeMapStore[item.target]=[])).push(url);persistRouteMaps();renderDayContent();}else if(item.kind==='shop'){const x=shopData.find(v=>v.id===item.target);if(x){x.imgs=mergeUniqueUrls(shopImgs(x),[url]);x.img=null;persistShop();renderShopList();}}else if(item.kind==='rule'){const x=rulesData.find(v=>v.id===item.target);if(x){x.img=url;persistRules();renderRulesList();}}else if(item.kind==='doc'){const x=docsData.find(v=>v.id===item.target);if(x){x.img=url;persistDocs();renderDocsList();}}}
+async function flushMediaUploadQueue(){if(!navigator.onLine||!familyAuthSession)return;for(const item of await mediaQueueItems()){try{const url=await uploadMediaFile(item.file,`offline-${item.kind}`);applyQueuedMedia(item,url);await deleteMediaQueueItem(item.id);}catch(e){updateSyncStatus(e,'queued');return;}}updateSyncStatus(null,syncOutboxCount()?'queued':null);}
 async function uploadLegacyDataUrl(dataUrl, folder){ const blob=await (await fetch(dataUrl)).blob(); return uploadMediaBlob(blob,folder); }
 function isLegacyDataUrl(v){ return typeof v==='string' && /^data:image\//i.test(v); }
 
@@ -455,7 +463,7 @@ async function flushCloudPush(){
 }
 function updateSyncStatus(err,state){
   const el=document.getElementById('cloudSyncStatus');if(!el)return;el.style.display='inline-flex';el.classList.toggle('sync-error',!!err);el.classList.toggle('sync-saving',state==='saving'||state==='connecting');
-  const queued=syncOutboxCount();
+  const queued=syncOutboxCount()+mediaQueueCount();
   if(err){el.textContent=`⚠️ ${queued?queued+' 項等待同步':'同步失敗'}・${friendlySyncError(err)}`;el.title=String(err&&err.message||err);}
   else if(state==='connecting')el.textContent='☁️ 正在連接家人同步';
   else if(state==='saving')el.textContent=`☁️ 正在同步${queued?' '+queued+' 項變更':''}`;
@@ -732,6 +740,15 @@ function safeSetItem(key, valueObj){
   return true;
 }
 
+/* 損壞的本機資料不應讓整個網站白屏；保留原始內容供備份診斷後回到預設值。 */
+function safeLocalJSON(key,fallback){
+  const raw=localStorage.getItem(key);if(raw==null)return fallback;
+  try{return JSON.parse(raw);}catch(e){
+    try{localStorage.setItem(`nz_corrupt_${key}_${Date.now()}`,raw);}catch(_e){}
+    console.warn('已隔離無法解析的本機資料：',key,e);return fallback;
+  }
+}
+
 /* 可復原刪除：所有主要刪除操作共用同一個 7 秒復原提示。 */
 let pendingUndoAction=null;
 let undoToastTimer=null;
@@ -754,7 +771,7 @@ function offerUndo(label, undoFn){
   undoToastTimer=setTimeout(()=>{pendingUndoAction=null;toast.classList.remove('show');},7000);
 }
 
-let notesStore = JSON.parse(localStorage.getItem('nz_notes')) || {};
+let notesStore = safeLocalJSON('nz_notes',{}) || {};
 const openNoteEditorKeys = new Set();
 const noteDraftStore = {};
 function escapeHTMLText(value){
@@ -816,17 +833,17 @@ function toggleEditNote(event, key) {
 /* 景點照片：改用 base64 存進 LocalStorage，重新整理／關閉頁面後仍會保留。
    上傳時會先自動壓縮（最長邊 1600px、JPEG 品質 0.82），
    避免手機原圖動輒 3-8MB，很快就把裝置的 localStorage 容量塞滿導致上傳失敗。 */
-let photoStore = JSON.parse(localStorage.getItem('nz_photos')) || {};
+let photoStore = safeLocalJSON('nz_photos',{}) || {};
 function persistPhotos(){ return safeSetItem('nz_photos', photoStore); }
 
 /* 景點封面：使用者可指定某張照片（或原始配圖）作為主要亮點卡片的封面，
    而不是每次上傳新照片就自動覆蓋原本的封面 */
-let coverStore = JSON.parse(localStorage.getItem('nz_covers')) || {};
+let coverStore = safeLocalJSON('nz_covers',{}) || {};
 function persistCover(){ safeSetItem('nz_covers', coverStore); }
 
 /* 自訂導航：可直接貼 Google Maps 分享網址，或輸入「緯度, 經度」。 */
-let navLinkStore = JSON.parse(localStorage.getItem('nz_nav_links')) || {};
-let hoursOverrideStore = JSON.parse(localStorage.getItem('nz_hours_override')) || {};
+let navLinkStore = safeLocalJSON('nz_nav_links',{}) || {};
+let hoursOverrideStore = safeLocalJSON('nz_hours_override',{}) || {};
 function effectiveHours(spot,key){return Object.prototype.hasOwnProperty.call(hoursOverrideStore,String(key))?hoursOverrideStore[String(key)]:(spot.hours||'');}
 function toggleHoursEditor(event,key){
   event.stopPropagation();
@@ -892,7 +909,7 @@ function setCoverPhoto(key, sel) {
 }
 
 /* 自訂新增景點：依「天」儲存在 LocalStorage，重新整理後仍會保留 */
-let customSpotsStore = JSON.parse(localStorage.getItem('nz_custom_spots')) || {};
+let customSpotsStore = safeLocalJSON('nz_custom_spots',{}) || {};
 function persistCustomSpots(){ safeSetItem('nz_custom_spots', customSpotsStore); }
 function getCustomSpots(dayIdx){ return customSpotsStore[dayIdx] || []; }
 
@@ -1028,7 +1045,7 @@ function updateSpotCount(){
 /* ============ 景點排序 (LocalStorage 永久保存) ============ */
 const MAIN_CATS = ['attraction','activity','transport'];
 const LIFE_CATS = ['food','shopping','hotel'];
-let orderStore = JSON.parse(localStorage.getItem('nz_order')) || {};
+let orderStore = safeLocalJSON('nz_order',{}) || {};
 function persistOrder(){ safeSetItem('nz_order', orderStore); }
 function getOrderKey(dayIdx, listType){ return dayIdx + '-' + listType; }
 
@@ -1073,7 +1090,7 @@ function moveSpot(dayIdx, listType, key, dir){
 }
 
 /* ============ 景點內「資訊與評論」區塊排序 (LocalStorage 永久保存) ============ */
-let blockOrderStore = JSON.parse(localStorage.getItem('nz_block_order')) || {};
+let blockOrderStore = safeLocalJSON('nz_block_order',{}) || {};
 function persistBlockOrder(){ safeSetItem('nz_block_order', blockOrderStore); }
 function moveBlock(spotKey, blockId, dir, hasBadges, hasInfo){
   const naturalIds = [];
@@ -1096,11 +1113,12 @@ function moveBlock(spotKey, blockId, dir, hasBadges, hasInfo){
 }
 
 
-let routeMapStore = JSON.parse(localStorage.getItem('nz_route_maps')) || {};
+let routeMapStore = safeLocalJSON('nz_route_maps',{}) || {};
 function persistRouteMaps(){ safeSetItem('nz_route_maps', routeMapStore); }
 async function handleRouteMapUpload(e, dayIdx){
   const files = Array.from(e.target.files || []); e.target.value='';
   if(!files.length) return;
+  if(!navigator.onLine){for(const f of files)await queueMediaFile(f,'route',String(dayIdx));alert(`📷 已保留 ${files.length} 張路線圖，恢復網路後會自動上傳。`);return;}
   if(!routeMapStore[dayIdx]) routeMapStore[dayIdx] = [];
   updateSyncStatus(null,'saving');
   try{
@@ -1157,7 +1175,7 @@ function renderTodayMode(){
 }
 
 function hotelsForDay(day){ return [...(day.spots||[]),...(day.moreSpots||[])].filter(s=>s.cat==='hotel'); }
-let stayTimeStore=JSON.parse(localStorage.getItem('nz_stay_times')||'{}');
+let stayTimeStore=safeLocalJSON('nz_stay_times',{})||{};
 function stayTimeKey(name){return String(name||'').trim().toLowerCase().replace(/\s+/g,'-');}
 function setStayTime(hotelName,field,value){
   const key=stayTimeKey(hotelName);
@@ -1300,6 +1318,7 @@ function buildEditStatusResults(){
   (shopData||[]).filter(it=>shopImgs(it).length).forEach(it=>items.push({status:'photos',group:'guide',title:it.name,subtitle:`購物清單・有 ${shopImgs(it).length} 張圖片`,snippet:it.location||'',guideTarget:'shopListWrap',shopCat:it.cat}));
   (rulesData||[]).filter(it=>it.img).forEach(it=>items.push({status:'photos',group:'guide',title:it.title||'旅遊提醒',subtitle:'旅遊提醒・已有附圖',snippet:it.text||'',guideTarget:'rulesListWrap'}));
   Object.keys(cloudSync.pending||{}).forEach(key=>items.push({status:'sync',group:'guide',title:syncKeyLabel(key),subtitle:'等待家人共享同步',snippet:'資料已安全保留在此裝置，連線恢復後會再上傳。',action:'none'}));
+  if(mediaQueueCount())items.push({status:'sync',group:'guide',title:`${mediaQueueCount()} 張離線圖片`,subtitle:'等待恢復網路後自動上傳',snippet:'圖片原檔已安全保留在此裝置。',action:'none'});
   return items;
 }
 function syncKeyLabel(key){return ({nz_notes:'評論與資訊',nz_photos:'景點圖片',nz_covers:'封面設定',nz_nav_links:'導航修正',nz_hours_override:'營業時間',nz_custom_spots:'自訂景點',nz_route_maps:'路線圖',nz_stay_times:'住宿時間',nz_pack:'行李清單',nz_shop:'購物清單',nz_rules:'旅遊提醒',nz_docs:'票券住宿'})[key]||key;}
@@ -1327,7 +1346,7 @@ function openGlobalSearchResult(i){
     setTab('itinerary');activeDay=r.dayIdx;if(r.subTab)activeSubTabStore[r.dayIdx]=r.subTab;renderDayChips();renderDayContent();
     setTimeout(()=>{
       if(r.anchor==='stay'){const el=document.querySelector('.stay-quick-card');if(el){el.open=true;el.scrollIntoView({behavior:'smooth',block:'center'});}return;}
-      if(r.anchor==='road'){document.querySelector('.daily-road-wrap')?.scrollIntoView({behavior:'smooth',block:'center'});return;}
+      if(r.anchor==='road'){switchSubTab(activeDay,'routemap');setTimeout(()=>document.querySelector('.daily-road-wrap')?.scrollIntoView({behavior:'smooth',block:'center'}),40);return;}
       if(r.key){const card=document.getElementById('spot-card-'+r.key);if(card){card.classList.add('open');openSpotCardKeys.add(String(r.key));card.scrollIntoView({behavior:'smooth',block:'center'});}return;}
       if(r.anchor==='subtab'){document.querySelector(`.subtab-content[data-type="${r.subTab}"]`)?.scrollIntoView({behavior:'smooth',block:'start'});return;}
       document.querySelector('.day-card-head')?.scrollIntoView({behavior:'smooth',block:'start'});
@@ -1344,7 +1363,7 @@ function renderDayQuickNav(day){
   const wrap=document.getElementById('dayQuickNav');if(!wrap)return;
   const hasRoad=(DAILY_ROAD_ALERTS[day.date]||[]).length>0,hasStay=hotelsForDay(day).length>0;
   wrap.innerHTML=`<div class="day-float-nav ${dayQuickNavOpen?'open':''}">
-    <button class="day-nav-launcher" onclick="toggleDayQuickNav()" aria-expanded="${dayQuickNavOpen}" aria-label="開啟當日快捷目錄"><span>🧭</span><b>當日目錄</b></button>
+    <button class="day-nav-launcher" onclick="handleFloatLauncherClick(event,'day')" aria-expanded="${dayQuickNavOpen}" aria-label="開啟當日快捷目錄"><span>🧭</span><b>當日目錄</b></button>
     <nav class="day-quick-nav" aria-label="當日快捷目錄">
       <div class="day-nav-title"><span>今天要去哪裡？</span><button onclick="toggleDayQuickNav(false)" aria-label="關閉">×</button></div>
       ${hasRoad?'<button class="nav-road" onclick="jumpDaySection(\'road\')">🚗 <span>自駕提醒</span></button>':''}
@@ -1354,11 +1373,29 @@ function renderDayQuickNav(day){
       <button class="nav-map" onclick="jumpDaySection('routemap')">🗺️ <span>路線圖</span></button>
     </nav>
   </div>`;
+  enableFloatingDrag(wrap.querySelector('.day-float-nav'),'day');
 }
 function toggleDayQuickNav(force){dayQuickNavOpen=typeof force==='boolean'?force:!dayQuickNavOpen;document.querySelector('.day-float-nav')?.classList.toggle('open',dayQuickNavOpen);document.querySelector('.day-nav-launcher')?.setAttribute('aria-expanded',String(dayQuickNavOpen));}
+let suppressFloatClick=false;
+function floatPositionKey(kind){return`nz_float_pos_${kind}`;}
+function applyFloatingPosition(wrap,kind){
+  const p=safeLocalJSON(floatPositionKey(kind),null);if(!p||!Number.isFinite(p.x)||!Number.isFinite(p.y))return;
+  const maxX=Math.max(0,innerWidth-wrap.offsetWidth),maxY=Math.max(0,innerHeight-wrap.offsetHeight);
+  wrap.style.left=Math.round(Math.max(0,Math.min(1,p.x))*maxX)+'px';wrap.style.top=Math.round(Math.max(0,Math.min(1,p.y))*maxY)+'px';wrap.style.right='auto';wrap.style.bottom='auto';
+}
+function enableFloatingDrag(wrap,kind){
+  if(!wrap)return;requestAnimationFrame(()=>applyFloatingPosition(wrap,kind));
+  const handle=wrap.querySelector(kind==='day'?'.day-nav-launcher':'.route-nav-launcher');if(!handle||handle.dataset.dragReady)return;handle.dataset.dragReady='1';
+  handle.addEventListener('pointerdown',e=>{if(e.button!==0)return;const rect=wrap.getBoundingClientRect(),sx=e.clientX,sy=e.clientY;let moved=false;handle.setPointerCapture?.(e.pointerId);
+    const move=ev=>{const dx=ev.clientX-sx,dy=ev.clientY-sy;if(!moved&&Math.hypot(dx,dy)<6)return;moved=true;suppressFloatClick=true;wrap.classList.remove('open');wrap.style.right='auto';wrap.style.bottom='auto';wrap.style.left=Math.max(6,Math.min(innerWidth-rect.width-6,rect.left+dx))+'px';wrap.style.top=Math.max(6,Math.min(innerHeight-rect.height-6,rect.top+dy))+'px';};
+    const up=()=>{handle.removeEventListener('pointermove',move);handle.removeEventListener('pointerup',up);handle.removeEventListener('pointercancel',up);if(moved){const r=wrap.getBoundingClientRect();localStorage.setItem(floatPositionKey(kind),JSON.stringify({x:r.left/Math.max(1,innerWidth-r.width),y:r.top/Math.max(1,innerHeight-r.height)}));setTimeout(()=>suppressFloatClick=false,80);}};
+    handle.addEventListener('pointermove',move);handle.addEventListener('pointerup',up);handle.addEventListener('pointercancel',up);
+  });
+}
+function handleFloatLauncherClick(e,kind){if(suppressFloatClick){e?.preventDefault();return;}if(kind==='day')toggleDayQuickNav();else toggleRouteQuickNav();}
 function jumpDaySection(section){
   toggleDayQuickNav(false);
-  if(section==='road'){document.querySelector('.daily-road-wrap')?.scrollIntoView({behavior:'smooth',block:'center'});return;}
+  if(section==='road'){switchSubTab(activeDay,'routemap');setTimeout(()=>document.querySelector('.daily-road-wrap')?.scrollIntoView({behavior:'smooth',block:'center'}),40);return;}
   if(section==='stay'){const el=document.querySelector('.stay-quick-card');if(el){el.open=true;el.scrollIntoView({behavior:'smooth',block:'center'});}return;}
   const tab=section==='more'?'more':(section==='routemap'?'routemap':'main');switchSubTab(activeDay,tab);setTimeout(()=>document.querySelector(`.subtab-content[data-type="${tab}"]`)?.scrollIntoView({behavior:'smooth',block:'start'}),30);
 }
@@ -1564,6 +1601,7 @@ function fileToDataURL(file){
 async function handlePhoto(e, idx){
   const files = Array.from(e.target.files || []); e.target.value='';
   if(!files.length) return;
+  if(!navigator.onLine){for(const f of files)await queueMediaFile(f,'spot',idx);alert(`📷 已保留 ${files.length} 張照片，恢復網路後會自動上傳。`);return;}
   if(!photoStore[idx]) photoStore[idx] = [];
   updateSyncStatus(null,'saving');
   try{
@@ -1691,6 +1729,7 @@ function renderDayContent(){
   const routeMaps = routeMapStore[activeDay] || [];
   const routeMapGalleryHTML = routeMaps.length ? `<div class="route-map-gallery">${routeMaps.map((u,i)=>`<div class="route-map-item"><img loading="lazy" decoding="async" src="${u}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)" alt="Day ${d.dayNum} 路線圖"><button class="route-map-remove" onclick="removeRouteMap(${activeDay}, ${i})">✕</button></div>`).join('')}</div>` : '<div class="empty">尚未上傳今天的行動路線圖。</div>';
   const routeMapHTML = `
+    ${dailyRoadAlertsHTML(d.date)}
     <div class="section-card" style="margin-top:4px;">
       <h3 style="margin:0 0 10px;">🗺️ 我的當日行動路線圖</h3>
       ${routeMapGalleryHTML}
@@ -1704,7 +1743,6 @@ function renderDayContent(){
       <div class="region">【Day ${d.dayNum}｜${d.date}】<br>${d.region}</div>
       ${d.drive ? `<div class="drive-info">${d.drive}</div>` : ''}
       ${d.gas ? `<div class="gas-info">${d.gas}</div>` : ''}
-      ${dailyRoadAlertsHTML(d.date)}
       <h2>${d.title}</h2>
       ${d.dayDesc ? `<div class="day-desc-box">${d.dayDesc}</div>` : ''}
       <div class="weather-strip"><div class="ico">${d.weatherIco}</div><div class="txt"><b style="font-family:'Zen Kaku Gothic New', sans-serif; font-size:14px;">${d.enRegion}</b><br><span style="font-size:11.5px; opacity:0.85;">${d.wear}</span></div></div>
@@ -2017,11 +2055,11 @@ function migratePackCategoryNames(data){
   });
   return data;
 }
-let packData = migratePackCategoryNames(JSON.parse(localStorage.getItem('nz_pack')) || structuredClone(defaultPackData));
+let packData = migratePackCategoryNames(safeLocalJSON('nz_pack',structuredClone(defaultPackData)) || structuredClone(defaultPackData));
 function persistPack(){ safeSetItem('nz_pack', packData); }
 
 const defaultShopData = [{name:'牛奶／優格', qty:1, checked:false, img:null, cat:'fresh', location:''},{name:'Manuka 麥蘆卡蜂蜜', qty:1, checked:false, img:null, cat:'food', location:''},{name:'美麗諾羊毛製品', qty:1, checked:false, img:null, cat:'souvenir', location:''},{name:'Whittaker\'s 巧克力', qty:1, checked:false, img:null, cat:'food', location:''}];
-let shopData = normalizeStructuredList('nz_shop', JSON.parse(localStorage.getItem('nz_shop')) || defaultShopData);
+let shopData = normalizeStructuredList('nz_shop', safeLocalJSON('nz_shop',defaultShopData) || defaultShopData);
 function persistShop(){ safeSetItem('nz_shop', shopData); }
 const SHOP_CATS = {fresh:{label:'🥬 超市・生鮮', color:'#2f8a52'}, food:{label:'🥫 超市・食品', color:'#9b6a24'}, souvenir:{label:'🎁 紀念品', color:'#c1502f'}};
 
@@ -2124,6 +2162,7 @@ async function handleShopPhoto(e,i){
   const files=Array.from(e.target.files||[]);
   e.target.value='';
   if(!files.length)return;
+  if(!navigator.onLine){for(const f of files)await queueMediaFile(f,'shop',shopData[i].id);alert(`📷 已保留 ${files.length} 張商品圖片，恢復網路後會自動上傳。`);return;}
   try{
     if(!Array.isArray(shopData[i].imgs))shopData[i].imgs=shopImgs(shopData[i]);
     shopData[i].img=null;
@@ -2147,7 +2186,7 @@ const defaultRulesData = [
   { title: '靠左行駛', text: '右駕靠左通行，山路多彎、單線橋需禮讓標誌方向。', img: null, cat:'drive' },
   { title: '國際駕照', text: '需攜帶台灣駕照＋國際駕照（IDP）。', img: null, cat:'entry' }
 ];
-let rulesData = normalizeStructuredList('nz_rules', JSON.parse(localStorage.getItem('nz_rules')) || defaultRulesData);
+let rulesData = normalizeStructuredList('nz_rules', safeLocalJSON('nz_rules',defaultRulesData) || defaultRulesData);
 const RULE_CATS=[['entry','🛂 入境與證件'],['drive','🚗 自駕與交通'],['weather','🌦️ 天候與安全'],['booking','🎫 預約與住宿'],['other','📌 其他提醒']];
 const ruleSectionOpen={entry:false,drive:false,weather:false,booking:false,other:false};
 function inferRuleCat(r){if(r.cat&&RULE_CATS.some(c=>c[0]===r.cat))return r.cat;const s=`${r.title||''} ${r.text||''}`;if(/駕|車|路|圓環|橋|加油|停車/.test(s))return'drive';if(/雨|雪|風|冷|天候|安全/.test(s))return'weather';if(/住宿|入住|退房|票|預約/.test(s))return'booking';if(/入境|護照|駕照|申報|證件|簽證/.test(s))return'entry';return'other';}
@@ -2196,7 +2235,7 @@ function renderRulesList() {
     </div>
   `;
 }
-async function handleRulePhoto(e,i){const f=e.target.files[0];e.target.value='';if(!f)return;try{rulesData[i].img=await uploadMediaFile(f,'rules');persistRules();renderRulesList();}catch(err){alert('⚠️ '+friendlySyncError(err)+'\n'+String(err.message||err));updateSyncStatus(err);}}
+async function handleRulePhoto(e,i){const f=e.target.files[0];e.target.value='';if(!f)return;if(!navigator.onLine){await queueMediaFile(f,'rule',rulesData[i].id);alert('📷 圖片已保留，恢復網路後會自動上傳。');return;}try{rulesData[i].img=await uploadMediaFile(f,'rules');persistRules();renderRulesList();}catch(err){alert('⚠️ '+friendlySyncError(err)+'\n'+String(err.message||err));updateSyncStatus(err);}}
 function removeRuleImg(i) { const removed=rulesData[i].img; rulesData[i].img = null; persistRules(); renderRulesList(); offerUndo('已移除提醒附圖',()=>{rulesData[i].img=removed;persistRules();renderRulesList();}); }
 function delRule(i) { const [removed]=rulesData.splice(i, 1); persistRules(); renderRulesList(); offerUndo(`已刪除「${removed?.title||'旅遊提醒'}」`,()=>{rulesData.splice(i,0,removed);persistRules();renderRulesList();}); }
 function addRuleItem() {
@@ -2225,7 +2264,7 @@ const defaultDocsData = [
   { ic: '🏨', t: 'Goldrush Escape', s: '9/24–9/27・3晚・Airbnb', chip: '已確認', link: 'https://www.airbnb.com.tw/rooms/16826185', img: null },
   { ic: '🚗', t: '自駕租車憑證', s: 'ZQN 機場取還車', chip: '待上傳', link: '', img: null }
 ];
-let docsData = normalizeStructuredList('nz_docs', JSON.parse(localStorage.getItem('nz_docs')) || defaultDocsData);
+let docsData = normalizeStructuredList('nz_docs', safeLocalJSON('nz_docs',defaultDocsData) || defaultDocsData);
 function persistDocs(){ safeSetItem('nz_docs', docsData); }
 
 function renderDocsList() {
@@ -2251,7 +2290,7 @@ function renderDocsList() {
   `).join('');
 }
 function handleDocClick(i) { const d = docsData[i]; if(d.img) openAttachModal(d.img); else if(d.link) window.open(d.link, '_blank'); }
-async function handleDocPhoto(e,i){const f=e.target.files[0];e.target.value='';if(!f)return;try{docsData[i].img=await uploadMediaFile(f,'documents');persistDocs();renderDocsList();}catch(err){alert('⚠️ '+friendlySyncError(err)+'\n'+String(err.message||err));updateSyncStatus(err);}}
+async function handleDocPhoto(e,i){const f=e.target.files[0];e.target.value='';if(!f)return;if(!navigator.onLine){await queueMediaFile(f,'doc',docsData[i].id);alert('📷 憑證已保留，恢復網路後會自動上傳。');return;}try{docsData[i].img=await uploadMediaFile(f,'documents');persistDocs();renderDocsList();}catch(err){alert('⚠️ '+friendlySyncError(err)+'\n'+String(err.message||err));updateSyncStatus(err);}}
 function removeDocImg(i) { const removed=docsData[i].img; docsData[i].img = null; persistDocs(); renderDocsList(); offerUndo('已移除憑證截圖',()=>{docsData[i].img=removed;persistDocs();renderDocsList();}); }
 
 
@@ -2292,6 +2331,7 @@ async function startFamilyCloud(){
     updateSyncStatus(null,'connecting');
     await migrateLegacyMediaToCloud();
     await initCloudSync();
+    await flushMediaUploadQueue();
     warmEssentialOfflineMedia();
   }catch(err){console.error('圖片搬移／同步啟動失敗',err);updateSyncStatus(err);}
 }
@@ -2324,7 +2364,16 @@ function updateNetStatus(){
     ? '<span class="net-dot online"></span><span class="net-txt">線上</span>'
     : '<span class="net-dot offline"></span><span class="net-txt">離線</span>';
 }
-window.addEventListener('online', ()=>{ updateNetStatus(); loadLiveWeather(); refreshRainRadar(); if(cloudSync.enabled) flushCloudPush(); });
+
+/* 完整資料備份／還原：更新前與每日首次開啟時保留最近 3 份本機快照。 */
+const BACKUP_KEYS=[...SYNC_KEYS,'nz_desktop_layout','nz_use_mode','nz_desktop_font_size','nz_float_pos_day','nz_float_pos_route'];
+function collectTripBackup(){const data={};BACKUP_KEYS.forEach(k=>{const v=localStorage.getItem(k);if(v!=null)data[k]=v;});return{app:'NZ Trip 2026',schema:1,createdAt:new Date().toISOString(),data};}
+function createLocalSnapshot(reason='auto'){
+  try{const list=safeLocalJSON('nz_local_snapshots',[])||[];list.unshift({...collectTripBackup(),reason});localStorage.setItem('nz_local_snapshots',JSON.stringify(list.slice(0,3)));localStorage.setItem('nz_last_snapshot_day',new Date().toISOString().slice(0,10));}catch(e){console.warn('本機快照建立失敗',e);}
+}
+function exportTripBackup(){const backup=collectTripBackup(),blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`NZ-Trip-2026-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+async function importTripBackup(event){const file=event.target.files?.[0];event.target.value='';if(!file)return;try{const backup=JSON.parse(await file.text());if(backup?.app!=='NZ Trip 2026'||!backup.data||typeof backup.data!=='object')throw new Error('不是有效的 NZ Trip 備份檔');if(!confirm(`要還原 ${new Date(backup.createdAt||Date.now()).toLocaleString()} 的備份嗎？目前資料會先自動保存。`))return;createLocalSnapshot('before-import');Object.entries(backup.data).forEach(([k,v])=>{if(BACKUP_KEYS.includes(k)&&typeof v==='string')localStorage.setItem(k,v);});location.reload();}catch(e){alert('⚠️ 無法還原備份：'+String(e.message||e));}}
+window.addEventListener('online', ()=>{ updateNetStatus(); loadLiveWeather(); refreshRainRadar(); if(cloudSync.enabled){flushCloudPush();flushMediaUploadQueue();} });
 window.addEventListener('offline', updateNetStatus);
 
 /* ============ Service Worker（離線快取整個網頁） ============ */
@@ -2391,7 +2440,8 @@ function initRouteSections(){
 }
 function setRouteSectionOpen(section,open){if(!section)return;section.classList.toggle('route-section-collapsed',!open);const btn=section.querySelector(':scope > .route-section-toggle');if(btn){btn.setAttribute('aria-expanded',String(open));const em=btn.querySelector('em');if(em)em.textContent=open?'收合 −':'展開 ＋';}}
 function toggleRouteSection(id){const section=document.getElementById(id);setRouteSectionOpen(section,section?.classList.contains('route-section-collapsed'));updateRouteToggleAllLabel();}
-function jumpRouteSection(id){const section=document.getElementById(id);setRouteSectionOpen(section,true);updateRouteToggleAllLabel();requestAnimationFrame(()=>section?.scrollIntoView({behavior:'smooth',block:'start'}));}
+function toggleRouteQuickNav(force){const wrap=document.querySelector('.route-float-nav');if(!wrap)return;const open=typeof force==='boolean'?force:!wrap.classList.contains('open');wrap.classList.toggle('open',open);wrap.querySelector('.route-nav-launcher')?.setAttribute('aria-expanded',String(open));}
+function jumpRouteSection(id){toggleRouteQuickNav(false);const section=document.getElementById(id);setRouteSectionOpen(section,true);updateRouteToggleAllLabel();requestAnimationFrame(()=>section?.scrollIntoView({behavior:'smooth',block:'start'}));}
 function toggleAllRouteSections(){const list=[...document.querySelectorAll('.route-fold')];const open=list.some(el=>el.classList.contains('route-section-collapsed'));list.forEach(el=>setRouteSectionOpen(el,open));updateRouteToggleAllLabel();}
 function updateRouteToggleAllLabel(){const btn=document.querySelector('.route-toggle-all');if(btn)btn.textContent=document.querySelector('.route-fold.route-section-collapsed')?'全部展開':'全部收合';}
 
@@ -2400,6 +2450,9 @@ setDesktopLayout(localStorage.getItem('nz_desktop_layout')||'wide');
 setUseMode(localStorage.getItem('nz_use_mode')||(window.matchMedia('(min-width:1050px)').matches?'edit':'travel'));
 setDesktopFontSize(localStorage.getItem('nz_desktop_font_size')||'large');
 initRouteSections();
+enableFloatingDrag(document.querySelector('.route-float-nav'),'route');
+window.addEventListener('resize',()=>{applyFloatingPosition(document.querySelector('.day-float-nav'),'day');applyFloatingPosition(document.querySelector('.route-float-nav'),'route');});
+if(localStorage.getItem('nz_last_snapshot_day')!==new Date().toISOString().slice(0,10))createLocalSnapshot('daily');
 updateSpotCount();
 renderTodayMode();
 renderDayChips();
