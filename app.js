@@ -1339,12 +1339,25 @@ document.addEventListener('keydown',e=>{
   if(e.key==='/'&&!/input|textarea|select/i.test(document.activeElement?.tagName||'')){e.preventDefault();openGlobalSearch();}
 });
 
+let dayQuickNavOpen=false;
 function renderDayQuickNav(day){
   const wrap=document.getElementById('dayQuickNav');if(!wrap)return;
   const hasRoad=(DAILY_ROAD_ALERTS[day.date]||[]).length>0,hasStay=hotelsForDay(day).length>0;
-  wrap.innerHTML=`<nav class="day-quick-nav" aria-label="當日快捷目錄">${hasRoad?'<button onclick="jumpDaySection(\'road\')">🚗 自駕</button>':''}<button onclick="jumpDaySection('main')">📌 亮點</button><button onclick="jumpDaySection('more')">🍴 食衣住</button>${hasStay?'<button onclick="jumpDaySection(\'stay\')">🏡 住宿</button>':''}<button onclick="jumpDaySection('routemap')">🗺️ 路線圖</button></nav>`;
+  wrap.innerHTML=`<div class="day-float-nav ${dayQuickNavOpen?'open':''}">
+    <button class="day-nav-launcher" onclick="toggleDayQuickNav()" aria-expanded="${dayQuickNavOpen}" aria-label="開啟當日快捷目錄"><span>🧭</span><b>當日目錄</b></button>
+    <nav class="day-quick-nav" aria-label="當日快捷目錄">
+      <div class="day-nav-title"><span>今天要去哪裡？</span><button onclick="toggleDayQuickNav(false)" aria-label="關閉">×</button></div>
+      ${hasRoad?'<button class="nav-road" onclick="jumpDaySection(\'road\')">🚗 <span>自駕提醒</span></button>':''}
+      <button class="nav-main" onclick="jumpDaySection('main')">📌 <span>主要亮點</span></button>
+      <button class="nav-more" onclick="jumpDaySection('more')">🍴 <span>食衣住</span></button>
+      ${hasStay?'<button class="nav-stay" onclick="jumpDaySection(\'stay\')">🏡 <span>今日住宿</span></button>':''}
+      <button class="nav-map" onclick="jumpDaySection('routemap')">🗺️ <span>路線圖</span></button>
+    </nav>
+  </div>`;
 }
+function toggleDayQuickNav(force){dayQuickNavOpen=typeof force==='boolean'?force:!dayQuickNavOpen;document.querySelector('.day-float-nav')?.classList.toggle('open',dayQuickNavOpen);document.querySelector('.day-nav-launcher')?.setAttribute('aria-expanded',String(dayQuickNavOpen));}
 function jumpDaySection(section){
+  toggleDayQuickNav(false);
   if(section==='road'){document.querySelector('.daily-road-wrap')?.scrollIntoView({behavior:'smooth',block:'center'});return;}
   if(section==='stay'){const el=document.querySelector('.stay-quick-card');if(el){el.open=true;el.scrollIntoView({behavior:'smooth',block:'center'});}return;}
   const tab=section==='more'?'more':(section==='routemap'?'routemap':'main');switchSubTab(activeDay,tab);setTimeout(()=>document.querySelector(`.subtab-content[data-type="${tab}"]`)?.scrollIntoView({behavior:'smooth',block:'start'}),30);
@@ -2130,17 +2143,24 @@ function setShopLocation(i, val){ shopData[i].location = val; persistShop(); }
 
 /* ============ CUSTOM TRAVEL RULES ============ */
 const defaultRulesData = [
-  { title: '生物安全申報', text: '入境卡需誠實申報戶外裝備、登山鞋，鞋底務必清潔。', img: null },
-  { title: '靠左行駛', text: '右駕靠左通行，山路多彎、單線橋需禮讓標誌方向。', img: null },
-  { title: '國際駕照', text: '需攜帶台灣駕照＋國際駕照（IDP）。', img: null }
+  { title: '生物安全申報', text: '入境卡需誠實申報戶外裝備、登山鞋，鞋底務必清潔。', img: null, cat:'entry' },
+  { title: '靠左行駛', text: '右駕靠左通行，山路多彎、單線橋需禮讓標誌方向。', img: null, cat:'drive' },
+  { title: '國際駕照', text: '需攜帶台灣駕照＋國際駕照（IDP）。', img: null, cat:'entry' }
 ];
 let rulesData = normalizeStructuredList('nz_rules', JSON.parse(localStorage.getItem('nz_rules')) || defaultRulesData);
+const RULE_CATS=[['entry','🛂 入境與證件'],['drive','🚗 自駕與交通'],['weather','🌦️ 天候與安全'],['booking','🎫 預約與住宿'],['other','📌 其他提醒']];
+const ruleSectionOpen={entry:false,drive:false,weather:false,booking:false,other:false};
+function inferRuleCat(r){if(r.cat&&RULE_CATS.some(c=>c[0]===r.cat))return r.cat;const s=`${r.title||''} ${r.text||''}`;if(/駕|車|路|圓環|橋|加油|停車/.test(s))return'drive';if(/雨|雪|風|冷|天候|安全/.test(s))return'weather';if(/住宿|入住|退房|票|預約/.test(s))return'booking';if(/入境|護照|駕照|申報|證件|簽證/.test(s))return'entry';return'other';}
+rulesData.forEach(r=>{r.cat=inferRuleCat(r);});
 function persistRules(){ safeSetItem('nz_rules', rulesData); }
+function toggleRuleSection(cat){ruleSectionOpen[cat]=!ruleSectionOpen[cat];renderRulesList();}
+function setRuleCat(i,val){rulesData[i].cat=val;persistRules();ruleSectionOpen[val]=true;renderRulesList();}
 
 function renderRulesList() {
   const wrap = document.getElementById('rulesListWrap');
   if(!wrap) return;
-  wrap.innerHTML = rulesData.map((r, i) => {
+  rulesData.forEach(r=>{r.cat=inferRuleCat(r);});
+  const itemHTML=(r,i) => {
     // 相容舊資料：舊格式把標題用 <b>...</b> 包在 text 開頭，這裡拆出來當標題
     let title = r.title, body = r.text;
     if(!title && body){
@@ -2153,6 +2173,7 @@ function renderRulesList() {
       <div style="flex:1;">
         ${title ? `<div style="font-weight:900; font-size:13.5px; color:var(--ink); margin-bottom:3px;">${escapeHTMLText(title)}</div>` : ''}
         <div style="font-size:12.5px; color:var(--ink-soft); line-height:1.6;">${escapeHTMLText(body)}</div>
+        <select class="rule-cat-select structural-edit-control" onchange="setRuleCat(${i},this.value)" aria-label="提醒分類">${RULE_CATS.map(([v,n])=>`<option value="${v}" ${r.cat===v?'selected':''}>${n}</option>`).join('')}</select>
         <div style="margin-top:8px; display:flex; gap:8px;">
           ${r.img ? `<button onclick="openAttachModal('${r.img}')" style="background:var(--teal); color:#fff; border:none; padding:6px 12px; border-radius:6px; font-size:11.5px; font-weight:700; cursor:pointer; box-shadow:var(--shadow-sm);">🖼️ 檢視附圖</button>
                      <button onclick="removeRuleImg(${i})" style="background:#f2f3ec; color:var(--ink); border:none; padding:6px 12px; border-radius:6px; font-size:11.5px; font-weight:700; cursor:pointer;">✕ 移除</button>` 
@@ -2163,8 +2184,10 @@ function renderRulesList() {
       <button class="del" onclick="delRule(${i})" style="margin-top:2px;">✕</button>
     </div>
   `;
-  }).join('') + `
+  };
+  wrap.innerHTML = RULE_CATS.map(([cat,label])=>{const entries=rulesData.map((r,i)=>({r,i})).filter(x=>inferRuleCat(x.r)===cat);if(!entries.length)return'';return `<section class="checklist-group rule-group rule-${cat}"><button class="checklist-group-head" onclick="toggleRuleSection('${cat}')"><span>${label}</span><small>${entries.length} 則</small><b>${ruleSectionOpen[cat]?'−':'＋'}</b></button><div class="checklist-group-body ${ruleSectionOpen[cat]?'open':''}">${entries.map(x=>itemHTML(x.r,x.i)).join('')}</div></section>`;}).join('') + `
     <div class="add-row" style="flex-direction:column; align-items:stretch; gap:8px;">
+      <select id="newRuleCat" aria-label="新增提醒分類">${RULE_CATS.map(([v,n])=>`<option value="${v}">${n}</option>`).join('')}</select>
       <input type="text" id="newRuleTitle" placeholder="標題（例如：行李限重）...">
       <div style="display:flex; gap:8px;">
         <input type="text" id="newRuleItem" placeholder="內文說明...">
@@ -2180,7 +2203,9 @@ function addRuleItem() {
   const titleInput = document.getElementById('newRuleTitle');
   const input = document.getElementById('newRuleItem');
   if(input && input.value.trim()){
-    rulesData.push({ id:'rule-'+crypto.randomUUID(), title: titleInput ? titleInput.value.trim() : '', text: input.value.trim(), img: null });
+    const cat=document.getElementById('newRuleCat')?.value||'other';
+    rulesData.push({ id:'rule-'+crypto.randomUUID(), title: titleInput ? titleInput.value.trim() : '', text: input.value.trim(), img: null, cat });
+    ruleSectionOpen[cat]=true;
     persistRules(); renderRulesList();
   }
 }
