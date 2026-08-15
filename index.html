@@ -27,6 +27,7 @@
   <div class="workbench-row"><button id="wideModeBtn" type="button" onclick="setDesktopLayout('wide')">寬版編輯</button><button id="phoneModeBtn" type="button" onclick="setDesktopLayout('phone')">手機預覽</button></div>
   <span class="workbench-label">使用模式</span><div class="workbench-row"><button class="mode-btn" data-mode="edit" type="button" onclick="setUseMode('edit')">✎ 編輯</button><button class="mode-btn" data-mode="travel" type="button" onclick="setUseMode('travel')">旅行</button></div>
   <span class="workbench-label">文字大小</span><div class="workbench-row workbench-font-row"><button class="font-size-btn" data-size="standard" type="button" onclick="setDesktopFontSize('standard')">標準</button><button class="font-size-btn" data-size="large" type="button" onclick="setDesktopFontSize('large')">放大</button><button class="font-size-btn" data-size="xlarge" type="button" onclick="setDesktopFontSize('xlarge')">特大</button></div>
+  <button class="workbench-status-btn structural-edit-control" type="button" onclick="openEditStatus()">☑ 編輯狀態篩選</button>
 </aside>
 <div id="familyGate" class="family-gate" aria-hidden="false">
   <div class="family-gate-card">
@@ -43,6 +44,17 @@
     <button id="familyOfflineButton" class="family-offline-button" type="button" hidden>離線查看此裝置快取</button>
     <div id="familyGateError" class="family-gate-error" role="alert"></div>
   </div>
+</div>
+
+<div id="globalSearchModal" class="global-search-modal" hidden onclick="if(event.target===this)closeGlobalSearch()">
+  <section class="global-search-sheet" role="dialog" aria-modal="true" aria-labelledby="globalSearchTitle">
+    <div class="global-search-head"><div><small>NZ TRIP 2026</small><h2 id="globalSearchTitle">🔍 全站搜尋</h2></div><button type="button" onclick="closeGlobalSearch()" aria-label="關閉搜尋">✕</button></div>
+    <label class="global-search-input-wrap"><span>⌕</span><input id="globalSearchInput" type="search" autocomplete="off" placeholder="搜尋日期、景點、美食、住宿、交通或筆記…" oninput="runGlobalSearch()"><kbd>/</kbd></label>
+    <div id="globalSearchFilters" class="global-search-filters"></div>
+    <div id="globalSearchStatusFilters" class="global-search-filters status-filters" hidden></div>
+    <div id="globalSearchSummary" class="global-search-summary"></div>
+    <div id="globalSearchResults" class="global-search-results"></div>
+  </section>
 </div>
 
 <div class="app">
@@ -67,13 +79,15 @@
     <button class="tab-btn" onclick="setTab('route')">🗺️ 環線</button>
     <button class="tab-btn" onclick="setTab('guide')">🧳 指南</button>
     <button class="tab-btn" onclick="setTab('weather')">☀️ 天氣</button>
+    <button class="search-open-btn" onclick="openGlobalSearch()">🔍 搜尋</button>
   </div>
-  <div class="mobile-mode-switch" aria-label="使用模式"><button class="mode-btn" data-mode="edit" type="button" onclick="setUseMode('edit')">✎ 編輯</button><button class="mode-btn" data-mode="travel" type="button" onclick="setUseMode('travel')">旅行模式</button></div>
+  <div class="mobile-mode-switch" aria-label="使用模式"><button class="mode-btn" data-mode="edit" type="button" onclick="setUseMode('edit')">✎ 編輯</button><button class="mode-btn" data-mode="travel" type="button" onclick="setUseMode('travel')">旅行模式</button><button class="structural-edit-control" type="button" onclick="openEditStatus()">☑ 狀態</button></div>
 
   <!-- ================= ITINERARY VIEW ================= -->
   <div class="view active" id="view-itinerary">
     <div id="todayModeBar"></div>
     <div class="day-scroll" id="dayScroll"></div>
+    <div id="dayQuickNav"></div>
     <div id="dayContent"></div>
   </div>
 
@@ -150,6 +164,13 @@
         <a href="https://www.metservice.com/warnings/home" target="_blank" rel="noopener"><b>🌨️ 道路降雪警報</b><span>MetService 官方警報</span></a>
       </div>
       <details class="road-decision"><summary>看到警示時怎麼決定？</summary><ol><li><b>Closed／Road closed：</b>不要出發，不依 Google Maps 小路繞行。</li><li><b>Chains essential：</b>只有車上有合規雪鏈且會安裝才出發；租車規則優先。</li><li><b>Area warning／ice：</b>避開清晨與入夜，放慢速度、加倍跟車距離。</li><li><b>SH94 或 Crown Range 不確定：</b>改走官方開放路線或直接延後，不用硬趕預約。</li></ol></details>
+      <details class="road-rules-card"><summary>🚗 自駕快速規則</summary><div class="road-rule-grid">
+        <article><b>🔄 ROUNDABOUT</b><p>左轉：左燈。直行：進入通常不打燈，離開前左燈。右轉：右燈，離開前改左燈。</p></article>
+        <article><b>🌉 ONE LANE BRIDGE</b><p>紅圈小箭頭＝我讓；藍底大白箭頭＝我方優先。有優先權仍先確認橋面淨空。</p></article>
+        <article><b>🚌 BUS LANE ≠ T2</b><p>BUS LANE／BUS ONLY 不因車上多人就能使用；T2／T3 依標誌的人數與時段。</p></article>
+        <article><b>↩️ KEEP LEFT</b><p>停車場、加油站駛出、右轉後與每天首次開車時，再提醒自己靠左行駛。</p></article>
+      </div></details>
+      <details class="road-top-five"><summary>⭐ 本趟自駕 Top 5</summary><ol><li><b>Dunedin：</b>ONE WAY＋提前選車道</li><li><b>Frankton：</b>Bus Hub／BUS ONLY</li><li><b>Crown Range：</b>9月積雪、結冰與管制</li><li><b>Lindis Pass：</b>低溫、積雪／黑冰</li><li><b>ONE LANE BRIDGE：</b>先確認誰有優先權</li></ol><p>若臨時改成自駕 Milford Sound，Milford Road／SH94 直接提升為最高注意等級，出發前查官方開放狀態。</p></details>
       <p class="source-note">即時狀態需要網路；離線時仍會保留這份檢查順序與重點道路名稱。</p>
     </section>
 

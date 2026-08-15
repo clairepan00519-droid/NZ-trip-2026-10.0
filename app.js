@@ -1164,6 +1164,7 @@ function setStayTime(hotelName,field,value){
   stayTimeStore[key]={...(stayTimeStore[key]||{}),[field]:value};
   safeSetItem('nz_stay_times',stayTimeStore);
   renderDayContent();
+  document.querySelector('.stay-quick-card')?.setAttribute('open','');
 }
 function stayQuickCardHTML(dayIdx){
   const day=days[dayIdx]; const hotels=hotelsForDay(day);
@@ -1174,11 +1175,180 @@ function stayQuickCardHTML(dayIdx){
     const status=!prev?'今日入住':(next?'連住中':'最後一晚');
     const times=stayTimeStore[stayTimeKey(hotel.name)]||{};
     const complete=Boolean(times.checkin&&times.checkout);
-    return `<div class="stay-quick-card"><div class="stay-quick-head"><span>🏡 ${status}</span><b>${hotel.name}</b><em class="stay-time-status ${complete?'complete':'pending'}">${complete?'✓ 時間完成':'! 尚未填寫'}</em></div><div class="stay-time-editor"><label><span>入住時間</span><input type="time" value="${escAttr(times.checkin||'')}" aria-label="${escapeHTMLText(hotel.name)} 入住時間" onchange="setStayTime('${jsQuote(hotel.name)}','checkin',this.value)"></label><span class="stay-time-arrow">→</span><label><span>退房時間</span><input type="time" value="${escAttr(times.checkout||'')}" aria-label="${escapeHTMLText(hotel.name)} 退房時間" onchange="setStayTime('${jsQuote(hotel.name)}','checkout',this.value)"></label></div><div class="stay-quick-actions"><a href="${mapsLink(hotel.name,hotel._storageKey)}" target="_blank" rel="noopener">🗺️ 導航住宿</a></div></div>`;
+    const timeSummary=complete?`${times.checkin} 入住・${times.checkout} 退房`:'點擊填寫入住／退房時間';
+    return `<details class="stay-quick-card"><summary class="stay-quick-head"><span>🏡 ${status}</span><span class="stay-quick-title"><b>${hotel.name}</b><small>${timeSummary}</small></span><em class="stay-time-status ${complete?'complete':'pending'}">${complete?'✓ 已完成':'! 尚未填寫'}</em><i aria-hidden="true">⌄</i></summary><div class="stay-quick-body"><div class="stay-time-editor"><label><span>入住時間</span><input type="time" value="${escAttr(times.checkin||'')}" aria-label="${escapeHTMLText(hotel.name)} 入住時間" onchange="setStayTime('${jsQuote(hotel.name)}','checkin',this.value)"></label><span class="stay-time-arrow">→</span><label><span>退房時間</span><input type="time" value="${escAttr(times.checkout||'')}" aria-label="${escapeHTMLText(hotel.name)} 退房時間" onchange="setStayTime('${jsQuote(hotel.name)}','checkout',this.value)"></label></div><div class="stay-quick-actions"><a href="${mapsLink(hotel.name,hotel._storageKey)}" target="_blank" rel="noopener">🗺️ 導航住宿</a></div></div></details>`;
   }).join('');
 }
 
+const DAILY_ROAD_ALERTS={
+  '9/13':[
+    {level:'red',label:'🔴 特別注意',title:'Frankton Bus Hub｜BUS ONLY',text:'機場取車經 Frankton 時，不要跟公車駛入 Bus Hub／BUS ONLY；現場標誌與號誌優先於導航。'},
+    {level:'orange',label:'🟠 9月冬季路況',title:'Crown Range Road',text:'出發前確認積雪、結冰、管制與雪鏈要求；狀況不佳改走 SH6 經 Cromwell。'}
+  ],
+  '9/15':[{level:'orange',label:'🟠 9月冬季路況',title:'Lindis Pass',text:'留意低溫、積雪、黑冰與能見度；只在標線允許且視距充足時超車。'}],
+  '9/16':[{level:'green',label:'🟢 一般提醒',title:'Tekapo 夜間觀星',text:'天黑後注意行人與臨停遊客；拍星空請進安全停車區，勿停在車道或危險路肩。'}],
+  '9/17':[{level:'yellow',label:'🟡 NZ特殊交通規則',title:'SH80｜側風＋臨停',text:'開闊路段注意強風／側風；拍照請使用正式停車區，不要急煞或停在狹窄路肩。'}],
+  '9/19':[{level:'yellow',label:'🟡 NZ特殊交通規則',title:'ONE LANE BRIDGE｜單線橋',text:'進橋前先減速看箭頭：紅圈小箭頭我方讓；藍底大白箭頭我方優先，仍須確認橋面淨空。'}],
+  '9/20':[{level:'red',label:'🔴 特別注意',title:'抵達 Dunedin｜ONE WAY',text:'進城後單行道與轉向車道增加，提前選車道；不要最後一刻跨線，也不要只盯導航。'}],
+  '9/21':[{level:'red',label:'🔴 特別注意',title:'Dunedin 市區駕駛',text:'先看 ONE WAY、現場箭頭與車道標示；BUS ONLY／BUS LANE／SPECIAL VEHICLE LANE 不要自行駛入。'}],
+  '9/22':[{level:'yellow',label:'🟡 NZ特殊交通規則',title:'Dunedin → Te Anau｜長距離',text:'留意疲勞、牲畜、農用慢車與天候變化；不要為了導航預計抵達時間趕路。'}],
+  '9/24':[{level:'yellow',label:'🟡 NZ特殊交通規則',title:'接近 Queenstown／Frankton',text:'車流與圓環增加，提前選車道；再次留意 BUS ONLY、Bus Hub 入口與公車專用號誌。'}],
+  '9/25':[{level:'yellow',label:'🟡 NZ特殊交通規則',title:'Queenstown／Frankton 圓環',text:'靠左通行；直行在離開前打左燈，右轉進入前打右燈、離開前改打左燈。'}],
+  '9/27':[{level:'red',label:'🔴 特別注意',title:'前往 Queenstown Airport',text:'經 Frankton 時提前選車道；不要駛入 Bus Hub／BUS ONLY，以現場標誌為準。'}]
+};
+function dailyRoadAlertsHTML(date){
+  const alerts=DAILY_ROAD_ALERTS[date]||[];
+  if(!alerts.length)return '';
+  return `<section class="daily-road-wrap" aria-label="今日自駕提醒"><div class="daily-road-heading"><b>🚗 今日自駕</b><button type="button" onclick="openRoadChecks()">查即時道路</button></div>${alerts.map(a=>`<article class="daily-road-alert ${a.level}"><span>${a.label}</span><b>${a.title}</b><p>${a.text}</p></article>`).join('')}</section>`;
+}
+function openRoadChecks(){setTab('route');setTimeout(()=>jumpRouteSection('route-road'),80);}
+
 function mapsLink(name,key){ return (key && navLinkStore[key]) || 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(name + ' New Zealand'); }
+
+/* ============ 全站搜尋／編輯狀態篩選 ============ */
+let globalSearchMode='search';
+let globalSearchCategory='all';
+let globalStatusFilter='all';
+let currentGlobalResults=[];
+const SEARCH_CATEGORIES={all:'全部',day:'每日行程',food:'美食購物',hotel:'住宿',transport:'交通',note:'筆記',guide:'指南'};
+const STATUS_FILTERS={all:'全部狀態',stay:'住宿未填',nav:'導航已修正',hours:'時間已修正',notes:'有筆記',photos:'有圖片',sync:'待同步'};
+const SEARCH_ALIASES={
+  '庫克山':'mt cook aoraki', '蒂卡波':'tekapo lake tekapo', '皇后鎮':'queenstown', '瓦納卡':'wanaka',
+  '但尼丁':'dunedin', '奧瑪魯':'oamaru', '蒂阿瑙':'te anau', '公車專用':'bus only bus lane',
+  '單線橋':'one lane bridge', '圓環':'roundabout', '住宿':'hotel stay check in check out'
+};
+function normalizeSearchText(v){return String(v||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();}
+function expandedSearchQuery(q){const n=normalizeSearchText(q);let out=n;Object.entries(SEARCH_ALIASES).forEach(([k,v])=>{if(n.includes(k))out+=' '+v;});return out;}
+function allSpotSearchEntries(){
+  const out=[];
+  days.forEach((day,dayIdx)=>{
+    ['main','life'].forEach(listType=>getNaturalList(dayIdx,listType).forEach(o=>out.push({...o,day,dayIdx,subTab:listType==='main'?'main':'more'})));
+  });
+  return out;
+}
+function spotSearchEntry(o){
+  const s=o.spot,key=String(o.key),notes=(notesStore[key]||[]).join(' '),hours=effectiveHours(s,key);
+  const group=s.cat==='hotel'?'hotel':(s.cat==='food'||s.cat==='shopping'?'food':(s.cat==='transport'?'transport':'day'));
+  return {group,title:s.name,subtitle:`${o.day.date}・${o.day.region}｜${CAT[s.cat]?.label||'行程'}`,snippet:notes||hours||s.desc,dayIdx:o.dayIdx,key,subTab:o.subTab,
+    search:[s.name,s.desc,s.fullDesc,s.customInfo,s.recDishes,s.tags?.join(' '),hours,notes,o.day.date,o.day.region,o.day.enRegion,CAT[s.cat]?.label].join(' ')};
+}
+function buildGlobalSearchIndex(){
+  const items=[],seenStays=new Set();
+  days.forEach((d,i)=>{
+    items.push({group:'day',title:`${d.date}｜${d.region}`,subtitle:`Day ${d.dayNum}・${d.enRegion}`,snippet:d.title,dayIdx:i,subTab:'main',search:[d.date,d.dayNum,d.region,d.enRegion,d.title,d.dayDesc,d.drive,d.gas,d.wear].join(' ')});
+    (DAILY_ROAD_ALERTS[d.date]||[]).forEach(a=>items.push({group:'transport',title:a.title,subtitle:`${d.date}・今日自駕提醒`,snippet:a.text,dayIdx:i,anchor:'road',search:[a.label,a.title,a.text,d.date,d.region].join(' ')}));
+    hotelsForDay(d).forEach(h=>{const hk=stayTimeKey(h.name);if(seenStays.has(hk))return;seenStays.add(hk);const t=stayTimeStore[hk]||{},complete=Boolean(t.checkin&&t.checkout);items.push({group:'hotel',title:h.name,subtitle:`${d.date}・每日住宿卡`,snippet:complete?`${t.checkin} 入住・${t.checkout} 退房`:'入住／退房時間尚未填寫',dayIdx:i,anchor:'stay',search:[h.name,d.date,'住宿 hotel stay check in check out',complete?'已完成':`尚未填寫 ${t.checkin||''} ${t.checkout||''}`].join(' ')});});
+  });
+  allSpotSearchEntries().forEach(o=>{
+    items.push(spotSearchEntry(o));
+    const personalNotes=notesStore[String(o.key)]||[];
+    if(personalNotes.length)items.push({group:'note',title:o.spot.name,subtitle:`${o.day.date}・個人筆記`,snippet:personalNotes.join('・'),dayIdx:o.dayIdx,key:String(o.key),subTab:o.subTab,search:[o.spot.name,personalNotes.join(' '),'評論 資訊 筆記'].join(' ')});
+  });
+  (docsData||[]).forEach(d=>items.push({group:d.ic==='🏨'?'hotel':'transport',title:`${d.ic||'📁'} ${d.t}`,subtitle:'環線・票券住宿總匯',snippet:d.s||d.chip||'',routeSection:'route-docs',search:[d.t,d.s,d.chip].join(' ')}));
+  items.push(
+    {group:'transport',title:'道路封閉／積雪快捷查詢',subtitle:'環線・道路',snippet:'NZTA、Crown Range、Milford Road、MetService',routeSection:'route-road',search:'道路 封閉 積雪 雪鏈 黑冰 crown range lindis pass milford road nzta'},
+    {group:'transport',title:'自駕快速規則',subtitle:'環線・道路',snippet:'Roundabout、One Lane Bridge、Bus Lane、Keep Left',routeSection:'route-road',search:'圓環 roundabout 單線橋 one lane bridge bus lane bus only t2 t3 keep left 靠左'},
+    {group:'transport',title:'南島自駕加油策略',subtitle:'環線・加油',snippet:'Wanaka、Twizel、Oamaru、Dunedin、Te Anau',routeSection:'route-gas',search:'加油 油價 fuel petrol bp npd paknsave wanaka twizel oamaru dunedin te anau'}
+  );
+  Object.entries(packData||{}).forEach(([cat,list])=>(list||[]).forEach(it=>items.push({group:'guide',title:it.name,subtitle:`指南・${cat}`,snippet:it.subcat||'行李清單',guideTarget:'packListWrap',packCat:cat,search:[it.name,cat,it.subcat,'行李'].join(' ')})));
+  (shopData||[]).forEach(it=>items.push({group:'guide',title:it.name,subtitle:`指南・${SHOP_CATS[it.cat]?.label||'購物清單'}`,snippet:it.location||'購物清單',guideTarget:'shopListWrap',shopCat:it.cat,search:[it.name,it.location,SHOP_CATS[it.cat]?.label,'購物 超市'].join(' ')}));
+  (rulesData||[]).forEach(it=>items.push({group:'guide',title:it.title||'旅遊提醒',subtitle:'指南・旅遊提醒',snippet:it.text||'',guideTarget:'rulesListWrap',search:[it.title,it.text,'指南 提醒'].join(' ')}));
+  return items;
+}
+function searchScore(item,query){
+  const q=expandedSearchQuery(query),tokens=q.split(' ').filter(Boolean),title=normalizeSearchText(item.title),hay=normalizeSearchText([item.title,item.subtitle,item.snippet,item.search].join(' '));
+  if(!tokens.every(t=>hay.includes(t)))return -1;
+  let score=0;if(title===q)score+=150;if(title.startsWith(q))score+=90;if(title.includes(q))score+=60;tokens.forEach(t=>{if(title.includes(t))score+=18;if(hay.includes(t))score+=5;});return score;
+}
+function openGlobalSearch(){
+  globalSearchMode='search';globalSearchCategory='all';
+  const modal=document.getElementById('globalSearchModal');modal.hidden=false;document.body.classList.add('search-open');
+  document.getElementById('globalSearchTitle').textContent='🔍 全站搜尋';
+  document.getElementById('globalSearchInput').hidden=false;document.querySelector('.global-search-input-wrap').hidden=false;
+  document.getElementById('globalSearchStatusFilters').hidden=true;document.getElementById('globalSearchFilters').hidden=false;
+  renderGlobalSearchFilters();runGlobalSearch();requestAnimationFrame(()=>document.getElementById('globalSearchInput')?.focus());
+}
+function openEditStatus(){
+  globalSearchMode='status';globalStatusFilter='all';
+  const modal=document.getElementById('globalSearchModal');modal.hidden=false;document.body.classList.add('search-open');
+  document.getElementById('globalSearchTitle').textContent='☑ 編輯狀態篩選';
+  document.querySelector('.global-search-input-wrap').hidden=true;document.getElementById('globalSearchFilters').hidden=true;document.getElementById('globalSearchStatusFilters').hidden=false;
+  renderStatusFilters();renderEditStatusResults();
+}
+function closeGlobalSearch(){document.getElementById('globalSearchModal').hidden=true;document.body.classList.remove('search-open');}
+function renderGlobalSearchFilters(){
+  document.getElementById('globalSearchFilters').innerHTML=Object.entries(SEARCH_CATEGORIES).map(([k,v])=>`<button class="${globalSearchCategory===k?'active':''}" onclick="globalSearchCategory='${k}';renderGlobalSearchFilters();runGlobalSearch()">${v}</button>`).join('');
+}
+function runGlobalSearch(){
+  if(globalSearchMode!=='search')return;
+  const q=document.getElementById('globalSearchInput')?.value.trim()||'',wrap=document.getElementById('globalSearchResults'),summary=document.getElementById('globalSearchSummary');
+  if(!q){currentGlobalResults=[];summary.textContent='可搜尋中英文名稱、日期、交通規則與自己新增的內容';wrap.innerHTML='<div class="search-empty"><b>試著搜尋</b><span>Tekapo・9/20・冰淇淋・單線橋・住宿・心宿二</span></div>';return;}
+  currentGlobalResults=buildGlobalSearchIndex().map(x=>({...x,_score:searchScore(x,q)})).filter(x=>x._score>=0&&(globalSearchCategory==='all'||x.group===globalSearchCategory)).sort((a,b)=>b._score-a._score).slice(0,80);
+  summary.textContent=`找到 ${currentGlobalResults.length} 筆結果${navigator.onLine?'':'・離線搜尋可用'}`;
+  renderGlobalResultList();
+}
+function spotLookupByKey(){const out={};allSpotSearchEntries().forEach(o=>out[String(o.key)]=o);return out;}
+function buildEditStatusResults(){
+  const items=[],lookup=spotLookupByKey(),seenHotels=new Set();
+  days.forEach((d,dayIdx)=>hotelsForDay(d).forEach(h=>{const hk=stayTimeKey(h.name);if(seenHotels.has(hk))return;seenHotels.add(hk);const t=stayTimeStore[hk]||{};if(!(t.checkin&&t.checkout))items.push({status:'stay',group:'hotel',title:h.name,subtitle:`${d.date}・住宿時間未完成`,snippet:`入住 ${t.checkin||'尚未填寫'}・退房 ${t.checkout||'尚未填寫'}`,dayIdx,anchor:'stay'});}));
+  const addSpotStatus=(store,status,label)=>Object.keys(store||{}).forEach(key=>{const o=lookup[key];if(!o)return;items.push({...spotSearchEntry(o),status,subtitle:`${o.day.date}・${label}`});});
+  addSpotStatus(navLinkStore,'nav','導航已自行修正');addSpotStatus(hoursOverrideStore,'hours','營業時間已自行修正');
+  Object.keys(notesStore||{}).filter(k=>(notesStore[k]||[]).length).forEach(key=>{const o=lookup[key];if(o)items.push({...spotSearchEntry(o),status:'notes',group:'note',subtitle:`${o.day.date}・有 ${(notesStore[key]||[]).length} 筆個人筆記`});});
+  Object.keys(photoStore||{}).filter(k=>(photoStore[k]||[]).length).forEach(key=>{const o=lookup[key];if(o)items.push({...spotSearchEntry(o),status:'photos',subtitle:`${o.day.date}・有 ${(photoStore[key]||[]).length} 張上傳圖片`});});
+  Object.entries(routeMapStore||{}).filter(([,v])=>(v||[]).length).forEach(([dayIdx,v])=>{const d=days[Number(dayIdx)];if(d)items.push({status:'photos',group:'day',title:`${d.date} 當日路線圖`,subtitle:`Day ${d.dayNum}・有 ${v.length} 張圖片`,snippet:d.region,dayIdx:Number(dayIdx),subTab:'routemap',anchor:'subtab'});});
+  (docsData||[]).filter(d=>d.img).forEach(d=>items.push({status:'photos',group:d.ic==='🏨'?'hotel':'transport',title:d.t,subtitle:'票券住宿總匯・已有圖片',snippet:d.s||'',routeSection:'route-docs'}));
+  (shopData||[]).filter(it=>shopImgs(it).length).forEach(it=>items.push({status:'photos',group:'guide',title:it.name,subtitle:`購物清單・有 ${shopImgs(it).length} 張圖片`,snippet:it.location||'',guideTarget:'shopListWrap',shopCat:it.cat}));
+  (rulesData||[]).filter(it=>it.img).forEach(it=>items.push({status:'photos',group:'guide',title:it.title||'旅遊提醒',subtitle:'旅遊提醒・已有附圖',snippet:it.text||'',guideTarget:'rulesListWrap'}));
+  Object.keys(cloudSync.pending||{}).forEach(key=>items.push({status:'sync',group:'guide',title:syncKeyLabel(key),subtitle:'等待家人共享同步',snippet:'資料已安全保留在此裝置，連線恢復後會再上傳。',action:'none'}));
+  return items;
+}
+function syncKeyLabel(key){return ({nz_notes:'評論與資訊',nz_photos:'景點圖片',nz_covers:'封面設定',nz_nav_links:'導航修正',nz_hours_override:'營業時間',nz_custom_spots:'自訂景點',nz_route_maps:'路線圖',nz_stay_times:'住宿時間',nz_pack:'行李清單',nz_shop:'購物清單',nz_rules:'旅遊提醒',nz_docs:'票券住宿'})[key]||key;}
+function renderStatusFilters(){
+  const all=buildEditStatusResults(),counts={};Object.keys(STATUS_FILTERS).forEach(k=>counts[k]=k==='all'?all.length:all.filter(x=>x.status===k).length);
+  document.getElementById('globalSearchStatusFilters').innerHTML=Object.entries(STATUS_FILTERS).map(([k,v])=>`<button class="${globalStatusFilter===k?'active':''}" onclick="globalStatusFilter='${k}';renderStatusFilters();renderEditStatusResults()">${v}<em>${counts[k]}</em></button>`).join('');
+}
+function renderEditStatusResults(){
+  const all=buildEditStatusResults();currentGlobalResults=globalStatusFilter==='all'?all:all.filter(x=>x.status===globalStatusFilter);
+  document.getElementById('globalSearchSummary').textContent=`${currentGlobalResults.length} 個項目符合目前狀態`;
+  renderGlobalResultList();
+}
+function renderGlobalResultList(){
+  const wrap=document.getElementById('globalSearchResults');
+  if(!currentGlobalResults.length){wrap.innerHTML='<div class="search-empty"><b>目前沒有符合項目</b><span>可以切換其他分類或搜尋詞。</span></div>';return;}
+  const labels={day:'行程',food:'美食購物',hotel:'住宿',transport:'交通',note:'筆記',guide:'指南'};
+  wrap.innerHTML=currentGlobalResults.map((r,i)=>`<button class="global-search-result" onclick="openGlobalSearchResult(${i})"><span class="search-result-kind kind-${r.group}">${labels[r.group]||'資料'}</span><span class="search-result-copy"><b>${escapeHTMLText(r.title)}</b><small>${escapeHTMLText(r.subtitle||'')}</small><p>${escapeHTMLText(String(r.snippet||'').replace(/<[^>]*>/g,' ').slice(0,150))}</p></span><i>${r.action==='none'?'留存中':'›'}</i></button>`).join('');
+}
+function openGlobalSearchResult(i){
+  const r=currentGlobalResults[i];if(!r||r.action==='none')return;
+  closeGlobalSearch();
+  if(r.routeSection){setTab('route');setTimeout(()=>jumpRouteSection(r.routeSection),100);return;}
+  if(r.guideTarget){if(r.shopCat){listSectionOpen.shop[r.shopCat]=true;renderShopList();}if(r.packCat){listSectionOpen.pack[r.packCat]=true;renderPackList();}setTab('guide');setTimeout(()=>document.getElementById(r.guideTarget)?.scrollIntoView({behavior:'smooth',block:'start'}),100);return;}
+  if(Number.isInteger(r.dayIdx)){
+    setTab('itinerary');activeDay=r.dayIdx;if(r.subTab)activeSubTabStore[r.dayIdx]=r.subTab;renderDayChips();renderDayContent();
+    setTimeout(()=>{
+      if(r.anchor==='stay'){const el=document.querySelector('.stay-quick-card');if(el){el.open=true;el.scrollIntoView({behavior:'smooth',block:'center'});}return;}
+      if(r.anchor==='road'){document.querySelector('.daily-road-wrap')?.scrollIntoView({behavior:'smooth',block:'center'});return;}
+      if(r.key){const card=document.getElementById('spot-card-'+r.key);if(card){card.classList.add('open');openSpotCardKeys.add(String(r.key));card.scrollIntoView({behavior:'smooth',block:'center'});}return;}
+      if(r.anchor==='subtab'){document.querySelector(`.subtab-content[data-type="${r.subTab}"]`)?.scrollIntoView({behavior:'smooth',block:'start'});return;}
+      document.querySelector('.day-card-head')?.scrollIntoView({behavior:'smooth',block:'start'});
+    },140);
+  }
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&!document.getElementById('globalSearchModal')?.hidden)closeGlobalSearch();
+  if(e.key==='/'&&!/input|textarea|select/i.test(document.activeElement?.tagName||'')){e.preventDefault();openGlobalSearch();}
+});
+
+function renderDayQuickNav(day){
+  const wrap=document.getElementById('dayQuickNav');if(!wrap)return;
+  const hasRoad=(DAILY_ROAD_ALERTS[day.date]||[]).length>0,hasStay=hotelsForDay(day).length>0;
+  wrap.innerHTML=`<nav class="day-quick-nav" aria-label="當日快捷目錄">${hasRoad?'<button onclick="jumpDaySection(\'road\')">🚗 自駕</button>':''}<button onclick="jumpDaySection('main')">📌 亮點</button><button onclick="jumpDaySection('more')">🍴 食衣住</button>${hasStay?'<button onclick="jumpDaySection(\'stay\')">🏡 住宿</button>':''}<button onclick="jumpDaySection('routemap')">🗺️ 路線圖</button></nav>`;
+}
+function jumpDaySection(section){
+  if(section==='road'){document.querySelector('.daily-road-wrap')?.scrollIntoView({behavior:'smooth',block:'center'});return;}
+  if(section==='stay'){const el=document.querySelector('.stay-quick-card');if(el){el.open=true;el.scrollIntoView({behavior:'smooth',block:'center'});}return;}
+  const tab=section==='more'?'more':(section==='routemap'?'routemap':'main');switchSubTab(activeDay,tab);setTimeout(()=>document.querySelector(`.subtab-content[data-type="${tab}"]`)?.scrollIntoView({behavior:'smooth',block:'start'}),30);
+}
 
 function renderDayChips(){
   const todayIdx=tripDayIndexForToday();
@@ -1476,6 +1646,7 @@ function renderDayContent(){
   });
   const previousScrollY = window.scrollY;
   const d = days[activeDay];
+  renderDayQuickNav(d);
   const curSubTab = activeSubTabStore[activeDay] || 'main';
 
   const mainList = applyOrder(activeDay, 'main', getNaturalList(activeDay, 'main'));
@@ -1520,10 +1691,10 @@ function renderDayContent(){
       <div class="region">【Day ${d.dayNum}｜${d.date}】<br>${d.region}</div>
       ${d.drive ? `<div class="drive-info">${d.drive}</div>` : ''}
       ${d.gas ? `<div class="gas-info">${d.gas}</div>` : ''}
+      ${dailyRoadAlertsHTML(d.date)}
       <h2>${d.title}</h2>
       ${d.dayDesc ? `<div class="day-desc-box">${d.dayDesc}</div>` : ''}
       <div class="weather-strip"><div class="ico">${d.weatherIco}</div><div class="txt"><b style="font-family:'Zen Kaku Gothic New', sans-serif; font-size:14px;">${d.enRegion}</b><br><span style="font-size:11.5px; opacity:0.85;">${d.wear}</span></div></div>
-      <div class="stay-line">🏡 ${[...(d.spots||[]), ...(d.moreSpots||[])].filter(s=>s.cat==='hotel').map(s=>s.name).join('、') || '—'}</div>
       ${stayQuickCardHTML(activeDay)}
     </div>
     <div id="day-card-${activeDay}">
