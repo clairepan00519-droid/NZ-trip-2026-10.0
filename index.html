@@ -76,7 +76,7 @@
   </div>
 
   <!-- 上方只保留全站搜尋；主要頁面切換使用下方導覽列 -->
-  <div class="tabbar-top search-only-bar"><button class="search-open-btn" onclick="openGlobalSearch()">🔍 搜尋整份行程、住宿、交通與筆記</button></div>
+  <div class="context-quick-bar"><button class="context-search-btn" onclick="openGlobalSearch()"><span>⌕</span><b>搜尋</b></button><div id="contextQuickActions" class="context-quick-actions" aria-label="本頁快捷入口"></div></div>
   <div class="mobile-mode-switch" aria-label="使用模式"><button class="mode-btn" data-mode="edit" type="button" onclick="setUseMode('edit')">✎ 編輯</button><button class="mode-btn" data-mode="travel" type="button" onclick="setUseMode('travel')">旅行模式</button><button class="structural-edit-control" type="button" onclick="openEditStatus()">☑ 狀態</button></div>
 
   <!-- ================= ITINERARY VIEW ================= -->

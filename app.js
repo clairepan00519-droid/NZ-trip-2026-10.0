@@ -2389,12 +2389,25 @@ function setTab(tab) {
   document.querySelectorAll(`[onclick="setTab('${tab}')"]`).forEach(b => b.classList.add('active'));
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-'+tab).classList.add('active');
+  renderContextQuickBar(tab);
   window.scrollTo({top:0, behavior:'smooth'});
   if(tab === 'weather'){ setTimeout(refreshRainRadar, 100); }
 }
 
+const CONTEXT_QUICK_ACTIONS={
+  itinerary:[['📍','今天',"openContextShortcut('today')"],['📌','亮點',"jumpDaySection('main')"],['🗺️','路線圖',"jumpDaySection('routemap')"]],
+  route:[['✈️','航班',"jumpRouteSection('route-flights')"],['❄️','道路',"jumpRouteSection('route-road')"],['⛽','加油',"jumpRouteSection('route-gas')"]],
+  guide:[['🎒','行李',"openContextShortcut('pack')"],['🛍️','購物',"openContextShortcut('shop')"],['📋','提醒',"openContextShortcut('rules')"]],
+  weather:[['☀️','即時天氣',"openContextShortcut('live-weather')"],['🌌','觀星判斷',"openContextShortcut('stargazing')"],['🛰️','雲圖',"openContextShortcut('radar')"]]
+};
+function renderContextQuickBar(tab='itinerary'){const wrap=document.getElementById('contextQuickActions');if(!wrap)return;wrap.innerHTML=(CONTEXT_QUICK_ACTIONS[tab]||[]).map(([ic,label,action],i)=>`<button class="context-action context-action-${i+1}" onclick="${action}"><span>${ic}</span><b>${label}</b></button>`).join('');}
+function openContextShortcut(target){
+  if(target==='today'){const i=tripDayIndexForToday();setActiveDay(i>=0?i:activeDay);return;}
+  const ids={pack:'packListWrap',shop:'shopListWrap',rules:'rulesListWrap','live-weather':'liveWeatherList',stargazing:'liveWeatherList',radar:'rainRadarMap'};const el=document.getElementById(ids[target]);el?.closest('.section-card')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
 function removeUnneededUtilityUI(){
-  const patterns=[/跨裝置資料備份/,/匯出備份/,/匯入備份/,/輸出.*行程/,/儲存.*行程/];
+  const patterns=[/輸出.*行程/,/儲存.*行程/];
   document.querySelectorAll('button,a,section,.card,.guide-card,.utility-card').forEach(el=>{
     const text=(el.textContent||'').replace(/\s+/g,' ').trim();
     if(patterns.some(r=>r.test(text))){
@@ -2450,6 +2463,7 @@ setDesktopLayout(localStorage.getItem('nz_desktop_layout')||'wide');
 setUseMode(localStorage.getItem('nz_use_mode')||(window.matchMedia('(min-width:1050px)').matches?'edit':'travel'));
 setDesktopFontSize(localStorage.getItem('nz_desktop_font_size')||'large');
 initRouteSections();
+renderContextQuickBar('itinerary');
 enableFloatingDrag(document.querySelector('.route-float-nav'),'route');
 window.addEventListener('resize',()=>{applyFloatingPosition(document.querySelector('.day-float-nav'),'day');applyFloatingPosition(document.querySelector('.route-float-nav'),'route');});
 if(localStorage.getItem('nz_last_snapshot_day')!==new Date().toISOString().slice(0,10))createLocalSnapshot('daily');
