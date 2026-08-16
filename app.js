@@ -698,6 +698,10 @@ const days = [
 
   day24.dayDesc = '由 Deer Park Heights 絕美視角登高俯瞰，收攬 Queenstown 百萬湖山景致';
   day25.dayDesc = '沿著瓦卡蒂普湖深入 Glenorchy，走進電影級山谷、濕地與農場風景';
+  if(!(day25.moreSpots||[]).some(spot=>/Frank.?s Corner/i.test(spot.name))){
+    const frank=S("Frank's Corner Glenorchy",'shopping','專賣紐西蘭製手作選物，可找羊毛、陶藝、珠寶、藝術印刷與在地伴手禮。',{tags:['必買'],hours:'營業時間請於出發前確認',fullDesc:'Frank’s Corner 位於 Glenorchy 鎮上的 27 Argyle Street，集合 90 多位紐西蘭獨立創作者作品，包含 Merino 羊毛、手工陶器、珠寶、天然石飾品、藝術印刷與文具。比一般紀念品店更有在地感，適合與碼頭、潟湖步道安排在同一段小鎮散步。',link:'https://www.frankscorner.co.nz/',linkLabel:'查看官方網站'});
+    const hotelIndex=day25.moreSpots.findIndex(spot=>spot.cat==='hotel');if(hotelIndex>=0)day25.moreSpots.splice(hotelIndex,0,frank);else day25.moreSpots.push(frank);
+  }
   day26.region = '湖畔・市集日';
   day26.enRegion = 'Queenstown';
   day26.drive = '🚶 Queenstown 市區步行為主';
@@ -1154,6 +1158,7 @@ function tripDayIndexForToday(){
 const initialTodayIndex=tripDayIndexForToday();
 let activeDay = initialTodayIndex>=0 ? initialTodayIndex : 0;
 
+let todayPreviewActive=false;
 function renderTodayMode(){
   const bar=document.getElementById('todayModeBar'); if(!bar)return;
   const todayIdx=tripDayIndexForToday();
@@ -1161,18 +1166,19 @@ function renderTodayMode(){
   const todayUTC=Date.UTC(t.year,t.month-1,t.day);
   const startUTC=Date.UTC(2026,8,12);
   const endUTC=Date.UTC(2026,8,28);
-  if(todayIdx>=0){
-    const d=days[todayIdx];
-    bar.innerHTML=`<div class="today-mode-card live"><div><span class="today-kicker">📍 TODAY・紐西蘭時間</span><b>${d.date}｜${d.region}</b><small>${d.title}</small></div><button onclick="setActiveDay(${todayIdx})">查看今天</button></div>`;
+  if(todayPreviewActive||todayIdx>=0){
+    const preview=todayIdx<0,d=days[preview?activeDay:todayIdx],idx=preview?activeDay:todayIdx;
+    bar.innerHTML=`<div class="today-mode-card live ${preview?'preview':''}"><div><span class="today-kicker">📍 TODAY・紐西蘭時間${preview?'・預覽':''}</span><b>${d.date}｜${d.region}</b><small>${d.title}</small></div><div class="today-actions"><button onclick="setActiveDay(${idx})">查看今天</button>${preview?'<button class="today-preview-close" onclick="toggleTodayPreview(false)">結束預覽</button>':''}</div></div>`;
   }else if(todayUTC<startUTC){
     const daysLeft=Math.ceil((startUTC-todayUTC)/86400000);
-    bar.innerHTML=`<div class="today-mode-card"><div><span class="today-kicker">🗓️ 旅行倒數</span><b>距離 9/12 行程開始還有 ${daysLeft} 天</b><small>旅行期間會自動開啟當日行程</small></div><button onclick="setActiveDay(0)">查看首日</button></div>`;
+    bar.innerHTML=`<div class="today-mode-card"><div><span class="today-kicker">🗓️ 旅行倒數</span><b>距離 9/12 行程開始還有 ${daysLeft} 天</b><small>旅行期間會自動開啟當日行程</small></div><div class="today-actions"><button onclick="toggleTodayPreview(true)">預覽旅行中</button><button class="today-secondary" onclick="setActiveDay(0)">查看首日</button></div></div>`;
   }else if(todayUTC<=endUTC){
     bar.innerHTML=`<div class="today-mode-card live"><div><span class="today-kicker">📍 TODAY</span><b>今天是移動／轉機日</b><small>可從日期列選擇最接近的行程</small></div></div>`;
   }else{
     bar.innerHTML=`<div class="today-mode-card"><div><span class="today-kicker">🌿 TRIP MEMORY</span><b>旅程已完成</b><small>照片、評論與清單仍會保留在這裡</small></div><button onclick="setActiveDay(0)">回顧行程</button></div>`;
   }
 }
+function toggleTodayPreview(on){todayPreviewActive=Boolean(on);renderTodayMode();}
 
 function hotelsForDay(day){ return [...(day.spots||[]),...(day.moreSpots||[])].filter(s=>s.cat==='hotel'); }
 let stayTimeStore=safeLocalJSON('nz_stay_times',{})||{};
@@ -1764,6 +1770,7 @@ function renderDayContent(){
 
 /* ============ RENDER: ENHANCED LIVE WEATHER & OUTFIT ============ */
 const CITIES = {
+  'Auckland': {lat:-36.8509, lon:174.7645, label:'Auckland'},
   'Wanaka': {lat:-44.7000, lon:169.1500, label:'Wanaka'},
   'Tekapo': {lat:-44.0058, lon:170.4790, label:'Lake Tekapo'},
   'MtCook': {lat:-43.7340, lon:170.0960, label:'Mt Cook Village'},
@@ -2395,7 +2402,7 @@ function setTab(tab) {
 }
 
 const CONTEXT_QUICK_ACTIONS={
-  itinerary:[['📍','今天',"openContextShortcut('today')"],['📌','亮點',"jumpDaySection('main')"],['🗺️','路線圖',"jumpDaySection('routemap')"]],
+  itinerary:[['☀️','當日天氣',"openCurrentDayWeather()"],['🛍️','購物',"openContextShortcut('shop')"],['🗺️','路線圖',"jumpDaySection('routemap')"]],
   route:[['✈️','航班',"jumpRouteSection('route-flights')"],['❄️','道路',"jumpRouteSection('route-road')"],['⛽','加油',"jumpRouteSection('route-gas')"]],
   guide:[['🎒','行李',"openContextShortcut('pack')"],['🛍️','購物',"openContextShortcut('shop')"],['📋','提醒',"openContextShortcut('rules')"]],
   weather:[['☀️','即時天氣',"openContextShortcut('live-weather')"],['🌌','觀星判斷',"openContextShortcut('stargazing')"],['🛰️','雲圖',"openContextShortcut('radar')"]]
@@ -2403,8 +2410,13 @@ const CONTEXT_QUICK_ACTIONS={
 function renderContextQuickBar(tab='itinerary'){const wrap=document.getElementById('contextQuickActions');if(!wrap)return;wrap.innerHTML=(CONTEXT_QUICK_ACTIONS[tab]||[]).map(([ic,label,action],i)=>`<button class="context-action context-action-${i+1}" onclick="${action}"><span>${ic}</span><b>${label}</b></button>`).join('');}
 function openContextShortcut(target){
   if(target==='today'){const i=tripDayIndexForToday();setActiveDay(i>=0?i:activeDay);return;}
-  const ids={pack:'packListWrap',shop:'shopListWrap',rules:'rulesListWrap','live-weather':'liveWeatherList',stargazing:'liveWeatherList',radar:'rainRadarMap'};const el=document.getElementById(ids[target]);el?.closest('.section-card')?.scrollIntoView({behavior:'smooth',block:'start'});
+  const ids={pack:'packListWrap',shop:'shopListWrap',rules:'rulesListWrap','live-weather':'liveWeatherList',stargazing:'liveWeatherList',radar:'rainRadarMap'};
+  const reveal=()=>{const el=document.getElementById(ids[target]);(el?.closest('.section-card')||el)?.scrollIntoView({behavior:'smooth',block:'start'});};
+  if(['pack','shop','rules'].includes(target)){setTab('guide');setTimeout(reveal,180);return;}
+  reveal();
 }
+const DAY_WEATHER_CITY={'9/12':'Auckland','9/13':'Wanaka','9/14':'Wanaka','9/15':'Tekapo','9/16':'Tekapo','9/17':'MtCook','9/18':'MtCook','9/19':'Oamaru','9/20':'Dunedin','9/21':'Dunedin','9/22':'TeAnau','9/23':'TeAnau','9/24':'Queenstown','9/25':'Queenstown','9/26':'Queenstown','9/27':'Queenstown'};
+function openCurrentDayWeather(){const key=DAY_WEATHER_CITY[days[activeDay]?.date]||'Queenstown';weatherOpenKeys.add(key);setTab('weather');if(!liveWeatherCache[key])loadLiveWeather();else renderOneLiveCity(key);setTimeout(()=>document.getElementById('live-'+key)?.scrollIntoView({behavior:'smooth',block:'center'}),180);}
 
 function removeUnneededUtilityUI(){
   const patterns=[/輸出.*行程/,/儲存.*行程/];

@@ -120,6 +120,10 @@ body.search-open{overflow:hidden}.global-search-modal[hidden]{display:none}.glob
 .today-mode-card b{font-size:13px;color:var(--ink);}
 .today-mode-card small{font-size:10.5px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .today-mode-card button{flex:none;border:0;border-radius:999px;background:var(--blue);color:#fff;padding:8px 12px;font-family:inherit;font-size:10.5px;font-weight:900;cursor:pointer;}
+.today-mode-card .today-actions{display:flex;flex-direction:row;align-items:center;gap:7px;min-width:max-content}
+.today-mode-card .today-secondary,.today-mode-card .today-preview-close{background:#fff;color:var(--blue);box-shadow:inset 0 0 0 1px rgba(84,124,215,.32)}
+.today-mode-card.preview{border-style:dashed;box-shadow:0 0 0 3px rgba(75,178,137,.08),var(--shadow-sm)}
+@media(max-width:430px){.today-mode-card{align-items:flex-start}.today-mode-card .today-actions{flex-direction:column;align-items:stretch}.today-mode-card .today-actions button{padding:7px 10px}.today-mode-card small{white-space:normal}}
 
 /* ---------- Adjusted Day Headers ---------- */
 .day-card-head{
