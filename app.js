@@ -1509,7 +1509,7 @@ function spotCardHTML(spot, key, isMainSpot, customMeta, orderInfo){
   const noteDraft = escapeHTMLText(noteDraftStore[idx] || '');
   let noteEditArea = `<div class="note-edit-area" style="margin-top:10px; display:${isNoteEditorOpen ? 'block' : 'none'};" id="edit-note-${idx}" onclick="event.stopPropagation()"><textarea id="note-input-${idx}" oninput="updateNoteDraft('${idx}', this.value)" placeholder="新增一筆攻略、必點菜單或提醒...（可重複新增多筆）" style="width:100%; border:1px solid var(--line); border-radius:8px; padding:8px; font-size:12px; font-family:inherit; resize:vertical; min-height:60px; outline:none; margin-bottom:6px;">${noteDraft}</textarea><div style="display:flex; gap:6px;"><button onclick="event.stopPropagation(); addNote('${idx}')" style="padding:6px 14px; font-size:11px; background:var(--blue); color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:700;">💾 新增這筆</button><button onclick="toggleEditNote(event, '${idx}')" style="padding:6px 14px; font-size:11px; background:#f2f3ec; color:var(--ink); border:none; border-radius:6px; cursor:pointer; font-weight:700;">收合</button></div></div>${!displayInfo ? `<button class="btn-note-toggle" onclick="toggleEditNote(event, '${idx}')" style="display:${isNoteEditorOpen ? 'none' : 'inline-block'}; background:transparent; border:1px dashed #c1c8cf; border-radius:999px; padding:6px 12px; font-size:11.5px; color:#6b7686; cursor:pointer; font-family:inherit; margin-top:6px; margin-bottom:10px;" id="btn-note-${idx}">➕ 添加評論或資訊</button>` : ''}`;
 
-  let miniStripHTML = thumbImgs.length > 0 ? `<div class="mini-photo-strip" onclick="event.stopPropagation();">` + thumbImgs.map((u, i) => `<div style="position:relative; display:inline-block;"><img loading="lazy" decoding="async" src="${u}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)">${thumbImgsAreUserPhotos ? `<button onclick="removePhoto(event, '${idx}', ${i})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:16px; height:16px; font-size:8px; cursor:pointer;">✕</button>` : ''}</div>`).join('') + `</div>` : '';
+  let miniStripHTML = thumbImgs.length > 0 ? `<div class="mini-photo-strip" onclick="event.stopPropagation();">` + thumbImgs.map((u, i) => `<div style="position:relative; display:inline-block;"><img loading="lazy" decoding="async" src="${u}" onerror="handleImageError(this)" onclick="openSpotGallery('${idx}',this.src,'${jsQuote(spot.img||'')}')">${thumbImgsAreUserPhotos ? `<button onclick="removePhoto(event, '${idx}', ${i})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:16px; height:16px; font-size:8px; cursor:pointer;">✕</button>` : ''}</div>`).join('') + `</div>` : '';
 
   /* 照片區：主要亮點卡片會列出「原始配圖 + 所有使用者上傳的照片」，並可個別指定作為封面；
      次要（食衣住）景點沒有封面概念，維持原本只顯示使用者照片的邏輯 */
@@ -1528,11 +1528,11 @@ function spotCardHTML(spot, key, isMainSpot, customMeta, orderInfo){
         const removeBtn = (g.sel !== 'original')
           ? `<button onclick="removePhoto(event, '${idx}', ${g.sel})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:20px; height:20px; font-size:10px; cursor:pointer;">✕</button>`
           : '';
-        return `<div class="photo-item-wrap"><img loading="lazy" decoding="async" src="${g.url}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)">${removeBtn}${coverTag}</div>`;
+        return `<div class="photo-item-wrap"><img loading="lazy" decoding="async" src="${g.url}" onerror="handleImageError(this)" onclick="openSpotGallery('${idx}',this.src,'${jsQuote(spot.img||'')}')">${removeBtn}${coverTag}</div>`;
       }).join('') + `</div>`;
     }
   } else {
-    pStrip = (userPhotos.length) ? `<div class="photo-strip" onclick="event.stopPropagation()">` + userPhotos.map((u, i)=>`<div class="photo-item-wrap"><img loading="lazy" decoding="async" src="${u}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)"><button onclick="removePhoto(event, '${idx}', ${i})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:20px; height:20px; font-size:10px; cursor:pointer;">✕</button></div>`).join('') + `</div>` : '';
+    pStrip = (userPhotos.length) ? `<div class="photo-strip" onclick="event.stopPropagation()">` + userPhotos.map((u, i)=>`<div class="photo-item-wrap"><img loading="lazy" decoding="async" src="${u}" onerror="handleImageError(this)" onclick="openSpotGallery('${idx}',this.src,'${jsQuote(spot.img||'')}')"><button onclick="removePhoto(event, '${idx}', ${i})" style="position:absolute; top:2px; right:2px; background:rgba(0,0,0,0.5); color:#fff; border:none; border-radius:50%; width:20px; height:20px; font-size:10px; cursor:pointer;">✕</button></div>`).join('') + `</div>` : '';
   }
 
   const badgesHTML = badges.length ? `<div class="badges" style="margin-bottom:6px;">${badges.join('')}</div>` : '';
@@ -1646,14 +1646,32 @@ function removePhoto(e, idx, photoIdx) {
   offerUndo('已移除景點照片',()=>{photoStore[idx].splice(photoIdx,0,removed);if(typeof oldCover==='undefined')delete coverStore[idx];else coverStore[idx]=oldCover;persistPhotos();persistCover();renderDayContent();});
 }
 
-function openAttachModal(src) {
-  const img=document.getElementById('attachModalImg');
-  if(!img||!src)return;
-  delete img.dataset.fallbackApplied;
-  img.onerror=()=>handleImageError(img);
-  img.src=src;
+let attachGalleryUrls=[],attachGalleryIndex=0,attachTouchStartX=0;
+function openAttachGallery(urls,startIndex=0) {
+  attachGalleryUrls=mergeUniqueUrls(urls,[]);
+  if(!attachGalleryUrls.length)return;
+  attachGalleryIndex=Math.max(0,Math.min(Number(startIndex)||0,attachGalleryUrls.length-1));
+  renderAttachGallery();
   document.getElementById('attachModal').classList.add('active');
 }
+function renderAttachGallery(){
+  const img=document.getElementById('attachModalImg');
+  if(!img||!attachGalleryUrls.length)return;
+  delete img.dataset.fallbackApplied;
+  img.onerror=()=>handleImageError(img);
+  img.src=attachGalleryUrls[attachGalleryIndex];
+  const multi=attachGalleryUrls.length>1;
+  document.getElementById('attachModalPrev').hidden=!multi;
+  document.getElementById('attachModalNext').hidden=!multi;
+  document.getElementById('attachModalCount').textContent=multi?`${attachGalleryIndex+1} / ${attachGalleryUrls.length}`:'';
+}
+function openAttachModal(src){openAttachGallery([src],0);}
+function openSpotGallery(key,src,original){const urls=mergeUniqueUrls(original?[original]:[],photoStore[key]||[]),at=urls.findIndex(u=>{try{return new URL(u,location.href).href===src;}catch(e){return u===src;}});openAttachGallery(urls,at<0?0:at);}
+function openRuleGallery(ruleId,index){const rule=rulesData.find(r=>r.id===ruleId);if(rule)openAttachGallery(ruleImgs(rule),index);}
+function changeAttachPhoto(delta){if(attachGalleryUrls.length<2)return;attachGalleryIndex=(attachGalleryIndex+delta+attachGalleryUrls.length)%attachGalleryUrls.length;renderAttachGallery();}
+document.addEventListener('keydown',e=>{if(!document.getElementById('attachModal')?.classList.contains('active'))return;if(e.key==='ArrowLeft')changeAttachPhoto(-1);else if(e.key==='ArrowRight')changeAttachPhoto(1);else if(e.key==='Escape')closeAttachModal();});
+document.addEventListener('touchstart',e=>{if(document.getElementById('attachModal')?.classList.contains('active'))attachTouchStartX=e.changedTouches[0].clientX;},{passive:true});
+document.addEventListener('touchend',e=>{if(!document.getElementById('attachModal')?.classList.contains('active')||attachGalleryUrls.length<2)return;const dx=e.changedTouches[0].clientX-attachTouchStartX;if(Math.abs(dx)>45)changeAttachPhoto(dx>0?-1:1);},{passive:true});
 function handleImageError(img){
   if(!img || img.dataset.fallbackApplied==='1') return;
   img.dataset.fallbackApplied='1';
@@ -1664,6 +1682,7 @@ function closeAttachModal() {
   document.getElementById('attachModal').classList.remove('active');
   const img=document.getElementById('attachModalImg');
   if(img){img.onerror=null;img.removeAttribute('src');delete img.dataset.fallbackApplied;}
+  attachGalleryUrls=[];attachGalleryIndex=0;
 }
 
 function switchSubTab(dayIdx, tabType) {
@@ -2234,7 +2253,7 @@ function renderRulesList() {
         <div style="font-size:12.5px; color:var(--ink-soft); line-height:1.6;">${escapeHTMLText(body)}</div>
         <select class="rule-cat-select structural-edit-control" onchange="setRuleCat(${i},this.value)" aria-label="提醒分類">${RULE_CATS.map(([v,n])=>`<option value="${v}" ${r.cat===v?'selected':''}>${n}</option>`).join('')}</select>
         <div class="rule-photo-actions"><button onclick="document.getElementById('ruleFile-${i}').click()">📷 ${ruleImgs(r).length?'繼續新增圖片':'新增附圖'}</button><span>${ruleImgs(r).length?`${ruleImgs(r).length} 張圖片`:''}</span><input type="file" id="ruleFile-${i}" accept="image/*" multiple style="display:none" onchange="handleRulePhoto(event, ${i})"></div>
-        ${ruleImgs(r).length?`<div class="rule-photo-row">${ruleImgs(r).map((url,pi)=>`<figure class="rule-photo"><img src="${escAttr(url)}" alt="${escapeHTMLText(title||'旅遊提醒')} 附圖 ${pi+1}" loading="lazy" onclick="openAttachModal('${jsQuote(url)}')"><button type="button" onclick="removeRuleImg(${i},${pi})" aria-label="刪除第 ${pi+1} 張圖片">✕</button></figure>`).join('')}</div>`:''}
+        ${ruleImgs(r).length?`<div class="rule-photo-row">${ruleImgs(r).map((url,pi)=>`<figure class="rule-photo"><img src="${escAttr(url)}" alt="${escapeHTMLText(title||'旅遊提醒')} 附圖 ${pi+1}" loading="lazy" onclick="openRuleGallery('${jsQuote(r.id)}',${pi})"><button type="button" onclick="removeRuleImg(${i},${pi})" aria-label="刪除第 ${pi+1} 張圖片">✕</button></figure>`).join('')}</div>`:''}
       </div>
       <button class="del" onclick="delRule(${i})" style="margin-top:2px;">✕</button>
     </div>

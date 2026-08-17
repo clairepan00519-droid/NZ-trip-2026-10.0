@@ -285,7 +285,10 @@
 <!-- Modal for Images -->
 <div class="attach-modal" id="attachModal" onclick="closeAttachModal()">
   <button class="attach-modal-close" aria-label="關閉圖片" onclick="event.stopPropagation(); closeAttachModal()">✕</button>
+  <button class="attach-modal-nav attach-modal-prev" id="attachModalPrev" aria-label="上一張圖片" onclick="event.stopPropagation(); changeAttachPhoto(-1)">‹</button>
   <img id="attachModalImg" alt="放大的旅程圖片" onclick="event.stopPropagation()">
+  <button class="attach-modal-nav attach-modal-next" id="attachModalNext" aria-label="下一張圖片" onclick="event.stopPropagation(); changeAttachPhoto(1)">›</button>
+  <div class="attach-modal-count" id="attachModalCount" aria-live="polite"></div>
 </div>
 
 <script src="app.js"></script>
