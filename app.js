@@ -208,7 +208,7 @@ function openMediaQueueDB(){return new Promise((resolve,reject)=>{const r=indexe
 async function queueMediaFile(file,kind,target){const db=await openMediaQueueDB(),item={id:crypto.randomUUID(),kind,target,file,createdAt:Date.now()};await new Promise((resolve,reject)=>{const tx=db.transaction('uploads','readwrite');tx.objectStore('uploads').put(item);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();localStorage.setItem(MEDIA_QUEUE_COUNT_KEY,String(mediaQueueCount()+1));updateSyncStatus(null,'queued');}
 async function mediaQueueItems(){const db=await openMediaQueueDB(),items=await new Promise((resolve,reject)=>{const r=db.transaction('uploads').objectStore('uploads').getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error);});db.close();return items;}
 async function deleteMediaQueueItem(id){const db=await openMediaQueueDB();await new Promise((resolve,reject)=>{const tx=db.transaction('uploads','readwrite');tx.objectStore('uploads').delete(id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();localStorage.setItem(MEDIA_QUEUE_COUNT_KEY,String(Math.max(0,mediaQueueCount()-1)));}
-function applyQueuedMedia(item,url){if(item.kind==='spot'){photoStore[item.target]=mergeUniqueUrls(photoStore[item.target],[url]);persistPhotos();renderDayContent();}else if(item.kind==='route'){routeMapStore[item.target]=mergeUniqueRouteMaps(routeMapStore[item.target],[url]);persistRouteMaps();renderDayContent();}else if(item.kind==='shop'){const x=shopData.find(v=>v.id===item.target);if(x){x.imgs=mergeUniqueUrls(shopImgs(x),[url]);x.img=null;persistShop();renderShopList();}}else if(item.kind==='rule'){const x=rulesData.find(v=>v.id===item.target);if(x){x.img=url;persistRules();renderRulesList();}}else if(item.kind==='doc'){const x=docsData.find(v=>v.id===item.target);if(x){x.img=url;persistDocs();renderDocsList();}}}
+function applyQueuedMedia(item,url){if(item.kind==='spot'){photoStore[item.target]=mergeUniqueUrls(photoStore[item.target],[url]);persistPhotos();renderDayContent();}else if(item.kind==='route'){routeMapStore[item.target]=mergeUniqueRouteMaps(routeMapStore[item.target],[url]);persistRouteMaps();renderDayContent();}else if(item.kind==='shop'){const x=shopData.find(v=>v.id===item.target);if(x){x.imgs=mergeUniqueUrls(shopImgs(x),[url]);x.img=null;persistShop();renderShopList();}}else if(item.kind==='rule'){const x=rulesData.find(v=>v.id===item.target);if(x){x.imgs=mergeUniqueUrls(ruleImgs(x),[url]);x.img=null;persistRules();renderRulesList();}}else if(item.kind==='doc'){const x=docsData.find(v=>v.id===item.target);if(x){x.img=url;persistDocs();renderDocsList();}}}
 async function flushMediaUploadQueue(){if(!navigator.onLine||!familyAuthSession)return;for(const item of await mediaQueueItems()){try{const url=await uploadMediaFile(item.file,`offline-${item.kind}`);applyQueuedMedia(item,url);await deleteMediaQueueItem(item.id);}catch(e){updateSyncStatus(e,'queued');return;}}updateSyncStatus(null,syncOutboxCount()?'queued':null);}
 async function uploadLegacyDataUrl(dataUrl, folder){ const blob=await (await fetch(dataUrl)).blob(); return uploadMediaBlob(blob,folder); }
 function isLegacyDataUrl(v){ return typeof v==='string' && /^data:image\//i.test(v); }
@@ -310,6 +310,8 @@ function normalizeStructuredList(key,value){
       item.id=item.id||stableItemId('shop',[item.cat,item.name,item.location]);
     }else if(key==='nz_rules'){
       item.id=item.id||stableItemId('rule',[item.title,item.text]);
+      item.imgs=mergeUniqueUrls(item.imgs,item.img?[item.img]:[]);
+      item.img=null;
     }else if(key==='nz_docs'){
       item.id=item.id||stableItemId('doc',[item.ic,item.t,item.s]);
     }
@@ -319,6 +321,8 @@ function normalizeStructuredList(key,value){
     const prev=map.get(id);
     if(key==='nz_shop'){
       map.set(id,{...prev,...item,imgs:mergeUniqueUrls(prev.imgs,item.imgs),qty:Math.max(Number(prev.qty)||1,Number(item.qty)||1),checked:Boolean(prev.checked||item.checked)});
+    }else if(key==='nz_rules'){
+      map.set(id,{...prev,...item,imgs:mergeUniqueUrls(prev.imgs,item.imgs),img:null});
     }else{
       map.set(id,{...prev,...item,img:item.img||prev.img||null});
     }
@@ -1331,7 +1335,7 @@ function buildEditStatusResults(){
   Object.entries(routeMapStore||{}).filter(([,v])=>(v||[]).length).forEach(([dayIdx,v])=>{const d=days[Number(dayIdx)];if(d)items.push({status:'photos',group:'day',title:`${d.date} 當日路線圖`,subtitle:`Day ${d.dayNum}・有 ${v.length} 張圖片`,snippet:d.region,dayIdx:Number(dayIdx),subTab:'routemap',anchor:'subtab'});});
   (docsData||[]).filter(d=>d.img).forEach(d=>items.push({status:'photos',group:d.ic==='🏨'?'hotel':'transport',title:d.t,subtitle:'票券住宿總匯・已有圖片',snippet:d.s||'',routeSection:'route-docs'}));
   (shopData||[]).filter(it=>shopImgs(it).length).forEach(it=>items.push({status:'photos',group:'guide',title:it.name,subtitle:`購物清單・有 ${shopImgs(it).length} 張圖片`,snippet:it.location||'',guideTarget:'shopListWrap',shopCat:it.cat}));
-  (rulesData||[]).filter(it=>it.img).forEach(it=>items.push({status:'photos',group:'guide',title:it.title||'旅遊提醒',subtitle:'旅遊提醒・已有附圖',snippet:it.text||'',guideTarget:'rulesListWrap'}));
+  (rulesData||[]).filter(it=>ruleImgs(it).length).forEach(it=>items.push({status:'photos',group:'guide',title:it.title||'旅遊提醒',subtitle:`旅遊提醒・已有 ${ruleImgs(it).length} 張附圖`,snippet:it.text||'',guideTarget:'rulesListWrap'}));
   Object.keys(cloudSync.pending||{}).forEach(key=>items.push({status:'sync',group:'guide',title:syncKeyLabel(key),subtitle:'等待家人共享同步',snippet:'資料已安全保留在此裝置，連線恢復後會再上傳。',action:'none'}));
   if(mediaQueueCount())items.push({status:'sync',group:'guide',title:`${mediaQueueCount()} 張離線圖片`,subtitle:'等待恢復網路後自動上傳',snippet:'圖片原檔已安全保留在此裝置。',action:'none'});
   return items;
@@ -2207,6 +2211,7 @@ const ruleSectionOpen={entry:false,drive:false,weather:false,booking:false,other
 function inferRuleCat(r){if(r.cat&&RULE_CATS.some(c=>c[0]===r.cat))return r.cat;const s=`${r.title||''} ${r.text||''}`;if(/駕|車|路|圓環|橋|加油|停車/.test(s))return'drive';if(/雨|雪|風|冷|天候|安全/.test(s))return'weather';if(/住宿|入住|退房|票|預約/.test(s))return'booking';if(/入境|護照|駕照|申報|證件|簽證/.test(s))return'entry';return'other';}
 rulesData.forEach(r=>{r.cat=inferRuleCat(r);});
 function persistRules(){ safeSetItem('nz_rules', rulesData); }
+function ruleImgs(rule){return mergeUniqueUrls(rule?.imgs,rule?.img?[rule.img]:[]);}
 function toggleRuleSection(cat){ruleSectionOpen[cat]=!ruleSectionOpen[cat];renderRulesList();}
 function setRuleCat(i,val){rulesData[i].cat=val;persistRules();ruleSectionOpen[val]=true;renderRulesList();}
 
@@ -2228,12 +2233,8 @@ function renderRulesList() {
         ${title ? `<div style="font-weight:900; font-size:13.5px; color:var(--ink); margin-bottom:3px;">${escapeHTMLText(title)}</div>` : ''}
         <div style="font-size:12.5px; color:var(--ink-soft); line-height:1.6;">${escapeHTMLText(body)}</div>
         <select class="rule-cat-select structural-edit-control" onchange="setRuleCat(${i},this.value)" aria-label="提醒分類">${RULE_CATS.map(([v,n])=>`<option value="${v}" ${r.cat===v?'selected':''}>${n}</option>`).join('')}</select>
-        <div style="margin-top:8px; display:flex; gap:8px;">
-          ${r.img ? `<button onclick="openAttachModal('${r.img}')" style="background:var(--teal); color:#fff; border:none; padding:6px 12px; border-radius:6px; font-size:11.5px; font-weight:700; cursor:pointer; box-shadow:var(--shadow-sm);">🖼️ 檢視附圖</button>
-                     <button onclick="removeRuleImg(${i})" style="background:#f2f3ec; color:var(--ink); border:none; padding:6px 12px; border-radius:6px; font-size:11.5px; font-weight:700; cursor:pointer;">✕ 移除</button>` 
-                  : `<button onclick="document.getElementById('ruleFile-${i}').click()" style="background:#fff; border:1px dashed #ccc; color:var(--ink-soft); padding:6px 12px; border-radius:6px; font-size:11.5px; font-weight:700; cursor:pointer;">📷 新增附圖</button>`}
-          <input type="file" id="ruleFile-${i}" accept="image/*" style="display:none" onchange="handleRulePhoto(event, ${i})">
-        </div>
+        <div class="rule-photo-actions"><button onclick="document.getElementById('ruleFile-${i}').click()">📷 ${ruleImgs(r).length?'繼續新增圖片':'新增附圖'}</button><span>${ruleImgs(r).length?`${ruleImgs(r).length} 張圖片`:''}</span><input type="file" id="ruleFile-${i}" accept="image/*" multiple style="display:none" onchange="handleRulePhoto(event, ${i})"></div>
+        ${ruleImgs(r).length?`<div class="rule-photo-row">${ruleImgs(r).map((url,pi)=>`<figure class="rule-photo"><img src="${escAttr(url)}" alt="${escapeHTMLText(title||'旅遊提醒')} 附圖 ${pi+1}" loading="lazy" onclick="openAttachModal('${jsQuote(url)}')"><button type="button" onclick="removeRuleImg(${i},${pi})" aria-label="刪除第 ${pi+1} 張圖片">✕</button></figure>`).join('')}</div>`:''}
       </div>
       <button class="del" onclick="delRule(${i})" style="margin-top:2px;">✕</button>
     </div>
@@ -2250,15 +2251,15 @@ function renderRulesList() {
     </div>
   `;
 }
-async function handleRulePhoto(e,i){const f=e.target.files[0];e.target.value='';if(!f)return;if(!navigator.onLine){await queueMediaFile(f,'rule',rulesData[i].id);alert('📷 圖片已保留，恢復網路後會自動上傳。');return;}try{rulesData[i].img=await uploadMediaFile(f,'rules');persistRules();renderRulesList();}catch(err){alert('⚠️ '+friendlySyncError(err)+'\n'+String(err.message||err));updateSyncStatus(err);}}
-function removeRuleImg(i) { const removed=rulesData[i].img; rulesData[i].img = null; persistRules(); renderRulesList(); offerUndo('已移除提醒附圖',()=>{rulesData[i].img=removed;persistRules();renderRulesList();}); }
+async function handleRulePhoto(e,i){const files=[...e.target.files];e.target.value='';if(!files.length)return;if(!navigator.onLine){for(const f of files)await queueMediaFile(f,'rule',rulesData[i].id);alert(`📷 ${files.length} 張圖片已保留，恢復網路後會自動上傳。`);return;}try{const urls=await Promise.all(files.map(f=>uploadMediaFile(f,'rules')));rulesData[i].imgs=mergeUniqueUrls(ruleImgs(rulesData[i]),urls);rulesData[i].img=null;persistRules();renderRulesList();}catch(err){alert('⚠️ '+friendlySyncError(err)+'\n'+String(err.message||err));updateSyncStatus(err);}}
+function removeRuleImg(i,photoIdx) { const imgs=ruleImgs(rulesData[i]),removed=imgs.splice(photoIdx,1)[0];if(!removed)return;rulesData[i].imgs=imgs;rulesData[i].img=null;persistRules();renderRulesList();offerUndo('已移除一張提醒附圖',()=>{const restored=ruleImgs(rulesData[i]);restored.splice(photoIdx,0,removed);rulesData[i].imgs=restored;persistRules();renderRulesList();}); }
 function delRule(i) { const [removed]=rulesData.splice(i, 1); persistRules(); renderRulesList(); offerUndo(`已刪除「${removed?.title||'旅遊提醒'}」`,()=>{rulesData.splice(i,0,removed);persistRules();renderRulesList();}); }
 function addRuleItem() {
   const titleInput = document.getElementById('newRuleTitle');
   const input = document.getElementById('newRuleItem');
   if(input && input.value.trim()){
     const cat=document.getElementById('newRuleCat')?.value||'other';
-    rulesData.push({ id:'rule-'+crypto.randomUUID(), title: titleInput ? titleInput.value.trim() : '', text: input.value.trim(), img: null, cat });
+    rulesData.push({ id:'rule-'+crypto.randomUUID(), title: titleInput ? titleInput.value.trim() : '', text: input.value.trim(), imgs: [], img: null, cat });
     ruleSectionOpen[cat]=true;
     persistRules(); renderRulesList();
   }
@@ -2361,7 +2362,7 @@ async function warmEssentialOfflineMedia(){
   Object.values(photoStore||{}).flat().forEach(add);
   Object.values(routeMapStore||{}).flat().forEach(add);
   (shopData||[]).forEach(item=>shopImgs(item).forEach(add));
-  (rulesData||[]).forEach(item=>add(item.img));
+  (rulesData||[]).forEach(item=>ruleImgs(item).forEach(add));
   (docsData||[]).forEach(item=>add(item.img));
   const queue=[...urls];
   const worker=async()=>{while(queue.length){const url=queue.shift();try{await fetch(url,{mode:'no-cors',cache:'reload'});}catch(e){}}};
