@@ -27,6 +27,7 @@ body{
 .header::after{ content:"⛰"; position:absolute; right:-10px; bottom:-30px; font-size:120px; opacity:.12; transform:rotate(-8deg); }
 .header .eyebrow{ font-size:12px; letter-spacing:.14em; opacity:.85; font-weight:500; position:relative; z-index:2; }
 .header h1{ margin:4px 0 10px; font-size:22px; font-weight:900; line-height:1.35; position:relative; z-index:2; }
+.header h1 .brand-main,.header h1 .brand-sub{display:block}
 .header .dates{
   display:inline-flex; align-items:center; gap:6px; background:rgba(255,255,255,.22);
   backdrop-filter:blur(4px); padding:6px 14px; border-radius:999px; font-size:13px; font-weight:500; position:relative; z-index:2;
@@ -549,6 +550,14 @@ html.dark-theme body{--yellow:#d7bd75;--blue:#6fa9ba;--pale:#c8ddd9;--teal:#4f9b
 html.dark-theme body:before{content:"";position:fixed;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(255,255,255,.018),transparent 35%);z-index:-1}
 html.dark-theme .header:before{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(180deg,rgba(10,25,31,.12),rgba(10,29,31,.48))}
 html.dark-theme .header{box-shadow:0 18px 38px -18px rgba(0,0,0,.58)}
+html.dark-theme .header{padding:28px 24px 24px;border-radius:0 0 30px 30px;min-height:290px;display:flex;flex-direction:column;justify-content:flex-end;background-size:cover!important}
+html.dark-theme .header .eyebrow{font-size:9px;letter-spacing:.2em;color:#d6bd83;opacity:1}
+html.dark-theme .header h1{margin:7px 0 12px;line-height:1.15}
+html.dark-theme .header h1 .brand-main{font-family:'Zen Kaku Gothic New',sans-serif;font-size:clamp(28px,6vw,38px);font-weight:500;letter-spacing:.08em}
+html.dark-theme .header h1 .brand-sub{margin-top:7px;font-size:clamp(11px,2.7vw,15px);font-weight:500;letter-spacing:.06em;color:#efe8da}
+html.dark-theme .header .dates{align-self:flex-start;border:1px solid rgba(255,255,255,.18);background:rgba(11,34,36,.42);padding:6px 11px;font-size:10px;backdrop-filter:blur(10px)}
+html.dark-theme .header .stat-row{display:none}
+html.dark-theme .header::after{content:'✦';right:22px;bottom:14px;font-size:46px;color:#cfa76b;opacity:.72;transform:none;z-index:2}
 html.dark-theme .context-quick-bar{border-color:rgba(217,229,220,.12);background:rgba(16,39,40,.84);box-shadow:0 12px 30px rgba(0,0,0,.2)}
 html.dark-theme .context-search-btn{background:linear-gradient(135deg,#315f63,#427b7a);box-shadow:none}
 html.dark-theme .context-action{background:rgba(247,245,239,.075);color:#eee9dc;box-shadow:inset 0 0 0 1px rgba(247,245,239,.07)}
@@ -583,10 +592,40 @@ html.dark-theme .workbench-status-btn{background:rgba(111,169,186,.14)!important
 html.dark-theme .family-gate{background:linear-gradient(145deg,rgba(20,42,42,.97),rgba(27,45,49,.98))}
 html.dark-theme .family-gate-card{border-color:rgba(255,255,255,.12);background:#f7f5ef}
 html.dark-theme input,html.dark-theme textarea,html.dark-theme select{accent-color:#315f69}
+html.dark-theme .premium-day-summary{margin-bottom:14px;padding:17px;border:1px solid #dedbd0;border-radius:22px;background:#f7f5ef;box-shadow:0 15px 34px rgba(0,0,0,.18);color:#26363a}
+html.dark-theme .premium-day-summary>header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding-bottom:11px;border-bottom:1px solid #e3ded2}
+html.dark-theme .premium-day-summary>header span{display:block;font-size:8px;font-weight:900;letter-spacing:.16em;color:#6c9998}
+html.dark-theme .premium-day-summary>header h2{margin:4px 0 2px;font-family:'Zen Kaku Gothic New',sans-serif;font-size:20px;letter-spacing:.02em;color:#263f42}
+html.dark-theme .premium-day-summary>header p{margin:0;color:#788284;font-size:10px;line-height:1.45}
+html.dark-theme .premium-day-summary>header em{flex:none;border:1px solid #cfa76b;border-radius:999px;padding:5px 9px;color:#8d6a36;font-size:8px;font-style:normal;font-weight:900}
+html.dark-theme .premium-summary-grid{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(112px,.8fr);gap:0;margin-top:11px}
+html.dark-theme .premium-summary-grid article{min-width:0;padding:4px 10px 5px 0}
+html.dark-theme .premium-summary-grid article+article{padding-left:12px;border-left:1px solid #e4dfd3}
+html.dark-theme .premium-summary-grid label,html.dark-theme .premium-stay-label{display:flex;align-items:center;gap:5px;color:#466c70;font-size:9px;font-weight:900}
+html.dark-theme .premium-summary-grid b,html.dark-theme .premium-summary-grid small{display:block}
+html.dark-theme .premium-summary-grid b{margin-top:7px;font-size:11px;line-height:1.45;color:#26363a}
+html.dark-theme .premium-summary-grid small{margin-top:4px;color:#768184;font-size:8.5px;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+html.dark-theme .premium-gas{margin-top:8px;padding:7px 9px;border-radius:9px;background:#f0eadc;color:#765c35;font-size:8.5px;font-weight:800}
+html.dark-theme .premium-stay-label{margin-top:12px;padding-top:10px;border-top:1px solid #e4dfd3}
+html.dark-theme .premium-day-summary .stay-quick-card{margin-top:7px;border:0;background:#edf2ee;box-shadow:none}
+html.dark-theme .premium-day-summary .stay-quick-head{padding:10px}
+html.dark-theme .subtab-content[data-type="main"].active{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:11px 8px 0;background:#edeae1}
+html.dark-theme .subtab-content[data-type="main"]>.guide-card{margin:0;border-radius:15px;box-shadow:0 4px 13px rgba(20,38,39,.09)}
+html.dark-theme .subtab-content[data-type="main"]>.guide-card .guide-header{height:148px}
+html.dark-theme .subtab-content[data-type="main"]>.guide-card .guide-header-content{padding:11px}
+html.dark-theme .subtab-content[data-type="main"]>.guide-card .guide-header-content h3{font-size:13px;line-height:1.25}
+html.dark-theme .subtab-content[data-type="main"]>.guide-card .guide-header-content p{font-size:9px;-webkit-line-clamp:1}
+html.dark-theme .subtab-content[data-type="main"]>.guide-card .cat-label{font-size:7px;margin-bottom:4px;padding:3px 6px}
+html.dark-theme .subtab-content[data-type="main"]>.guide-card.open{grid-column:1/-1}
+html.dark-theme .subtab-content[data-type="main"]>.guide-card.open .guide-header{height:220px}
+html.dark-theme .subtab-content[data-type="main"]>.star-story-panel,html.dark-theme .subtab-content[data-type="main"]>.empty{grid-column:1/-1}
+html.dark-theme .bottom-nav{padding:5px;bottom:11px}
+html.dark-theme .bottom-nav button{padding:6px 0}
 @media(max-width:600px){html.dark-theme body.travel-mode .section-card,html.dark-theme body.travel-mode .guide-card,html.dark-theme body.travel-mode .sub-spot-card{border-color:#dedbd0;box-shadow:0 5px 16px rgba(0,0,0,.15)}}
+@media(max-width:390px){html.dark-theme .header{min-height:270px;padding:25px 18px 20px}html.dark-theme .premium-day-summary{padding:14px}html.dark-theme .premium-summary-grid{grid-template-columns:1fr}html.dark-theme .premium-summary-grid article+article{margin-top:8px;padding:9px 0 0;border-left:0;border-top:1px solid #e4dfd3}}
 @media(min-width:1050px){
   body{padding-left:230px}.desktop-workbench{display:flex;position:fixed;left:22px;top:24px;width:186px;z-index:10000;flex-direction:column;gap:8px;padding:14px;border:1px solid #dfe6ef;border-radius:18px;background:rgba(255,255,255,.94);box-shadow:var(--shadow);backdrop-filter:blur(10px)}.desktop-workbench>b{font-size:13px}.desktop-workbench>span{font-size:10.5px;line-height:1.55;color:var(--ink-soft)}.desktop-workbench .workbench-label{margin-top:3px;font-size:9px;font-weight:900;letter-spacing:.04em}.desktop-workbench .workbench-row{display:grid;grid-template-columns:1fr 1fr;gap:5px}.desktop-workbench .workbench-font-row{grid-template-columns:repeat(3,1fr)}.desktop-workbench button{border:1px solid #d9e1ed;border-radius:10px;background:#fff;padding:8px 4px;font:inherit;font-size:10px;font-weight:900;color:var(--ink);cursor:pointer}.desktop-workbench button.active{border-color:var(--blue);background:var(--blue);color:#fff}.mobile-control-row{display:none}
-  body.desktop-wide .app{max-width:1080px}.desktop-wide .view{padding-left:26px;padding-right:26px}.desktop-wide #dayContent{display:grid;grid-template-columns:minmax(280px,340px) minmax(0,1fr);align-items:start;gap:18px}.desktop-wide #dayContent>.day-card-head{position:sticky;top:16px}.desktop-wide #dayContent>[id^="day-card-"]{min-width:0}.desktop-wide .star-story-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.desktop-wide .star-story-grid .star-route-card{grid-column:1/-1}.desktop-wide .route-map-gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  body.desktop-wide .app{max-width:1080px}.desktop-wide .view{padding-left:26px;padding-right:26px}.desktop-wide #dayContent{display:grid;grid-template-columns:minmax(280px,340px) minmax(0,1fr);align-items:start;gap:18px}.desktop-wide #dayContent>.day-card-head,.desktop-wide #dayContent>.premium-day-summary{position:sticky;top:16px}.desktop-wide #dayContent>[id^="day-card-"]{min-width:0}.desktop-wide .star-story-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.desktop-wide .star-story-grid .star-route-card{grid-column:1/-1}.desktop-wide .route-map-gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
   body.desktop-phone .app{max-width:430px}.desktop-phone .bottom-nav{width:410px}
   body.desktop-wide{font-size:17px}.desktop-wide .header h1{font-size:clamp(25px,1.8vw,31px)}.desktop-wide .header .dates{font-size:15px}.desktop-wide .tabbar-top button{font-size:14px}.desktop-wide .day-chip .d{font-size:18px}.desktop-wide .day-chip .m{font-size:11px}.desktop-wide .day-card-head h2{font-size:clamp(21px,1.6vw,27px)}.desktop-wide .day-card-head .region{font-size:15px}.desktop-wide .section-card h3{font-size:clamp(18px,1.35vw,22px)}.desktop-wide .section-card .sub{font-size:14px}.desktop-wide .guide-header h3{font-size:20px}.desktop-wide .guide-header p,.desktop-wide .guide-details p.full-desc{font-size:15px}.desktop-wide .sub-spot-header h4{font-size:17px}.desktop-wide .sub-spot-header p,.desktop-wide .sub-spot-details p.full-desc{font-size:14px}.desktop-wide .spot-subtab{font-size:14px}.desktop-wide .fuel-stop-copy{font-size:15px}.desktop-wide .fuel-nav{font-size:13px;padding:8px 13px}.desktop-wide .stay-quick-head{font-size:13px}.desktop-wide .stay-quick-head b{font-size:16px}.desktop-wide .stay-time-editor label span{font-size:11px}.desktop-wide .stay-time-editor input{font-size:14px}.desktop-wide .stay-quick-actions a{font-size:13px}
 }
