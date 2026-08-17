@@ -167,7 +167,7 @@ body.search-open{overflow:hidden}.global-search-modal[hidden]{display:none}.glob
 .day-utility-grid .weather-strip .txt{min-width:0;line-height:1.35}
 .day-utility-grid .weather-strip .txt b,.day-utility-grid .weather-strip .txt span{display:block;min-width:0}
 .day-utility-grid .weather-strip .txt b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Zen Kaku Gothic New',sans-serif;font-size:11px}
-.day-utility-grid .weather-strip .txt span{margin-top:3px;font-size:9px;line-height:1.45;word-break:normal;overflow-wrap:break-word;line-break:strict}
+.day-utility-grid .weather-strip .txt span{margin-top:3px;font-size:10.5px;font-weight:700;line-height:1.5;word-break:normal;overflow-wrap:break-word;line-break:strict}
 .day-utility-grid .stay-quick-card{min-width:0;margin:0;background:linear-gradient(135deg,#f2f8f4,#fff)}
 .day-utility-grid .stay-quick-card[open]{grid-column:1/-1}
 .day-utility-grid .stay-quick-head{grid-template-columns:minmax(0,1fr) auto;gap:5px;padding:9px;min-width:0}
@@ -176,6 +176,7 @@ body.search-open{overflow:hidden}.global-search-modal[hidden]{display:none}.glob
 .day-utility-grid .stay-quick-title b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px}
 .day-utility-grid .stay-quick-title small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:8px}
 .day-utility-grid .stay-time-status{grid-column:1;grid-row:2;justify-self:start;margin-top:2px;padding:3px 6px;font-size:7.5px}
+.travel-mode .stay-time-status.complete{display:none}
 .day-utility-grid .stay-quick-head i{grid-column:2;grid-row:1/3;align-self:center}
 .day-desc-box{ font-size:12px; color:var(--ink-soft); margin-bottom:12px; line-height:1.6; padding:10px 12px; background:#f7f8f2; border-radius:8px; border-left:4px solid var(--blue); }
 .weather-strip{ display:flex; align-items:center; gap:10px; background:linear-gradient(120deg,var(--pale),var(--sand)); border-radius:var(--r-sm); padding:10px 12px; margin-top:6px; }
@@ -359,7 +360,17 @@ body.search-open{overflow:hidden}.global-search-modal[hidden]{display:none}.glob
 .source-note{font-size:10.5px; color:var(--ink-soft); text-align:center; margin-top:10px; line-height:1.6;}
 
 .live-tip-box { background:#fff9e0; border-left:3px solid var(--yellow); padding:10px 12px; font-size:12px; color:#7a6a1f; margin-top:12px; border-radius:6px; font-weight:700; line-height:1.5;}
-.weather-day-toggle{ width:100%; display:flex; align-items:center; gap:12px; border:0; background:transparent; padding:0 0 10px; margin-bottom:10px; border-bottom:1px dashed #eee; font:inherit; text-align:left; cursor:pointer; }
+.weather-day-toggle{ width:100%; display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:8px 12px; border:0; background:transparent; padding:0 0 10px; margin-bottom:10px; border-bottom:1px dashed #eee; font:inherit; text-align:left; cursor:pointer; }
+.weather-city-line{grid-column:1/-1;display:flex;align-items:center;gap:8px;min-width:0}
+.weather-city-line>b{font-size:14px;font-weight:900;line-height:1.3;overflow-wrap:anywhere}
+.weather-current-line{grid-column:1;display:grid;grid-template-columns:auto auto minmax(0,1fr);align-items:center;gap:10px;min-width:0}
+.weather-current-line .mid{min-width:62px;flex:none}
+.weather-current-line .mid .place{font-size:14px;font-weight:900;white-space:nowrap}
+.weather-current-line .mid .out{font-size:12px;font-weight:900}
+.weather-current-line .w-bot{display:grid;grid-template-columns:repeat(3,minmax(max-content,1fr));gap:4px 12px;text-align:left;min-width:0}
+.weather-current-line .w-bot span{display:block;font-size:10px;white-space:nowrap}
+.weather-current-line .w-bot .rain{color:#c1502f}.weather-current-line .w-bot .uv{color:var(--teal)}
+.weather-day-toggle>.weather-mini-badge{grid-column:2;grid-row:2}.weather-day-toggle>.chevron{grid-column:3;grid-row:2}
 .weather-mini-badge{ flex:none; font-size:9.5px; font-weight:900; padding:3px 8px; border-radius:999px; white-space:nowrap; }
 .weather-mini-badge.star-go{ background:#eaf8f1; color:#1f9160; }
 .weather-mini-badge.star-maybe{ background:#fff8df; color:#a67e0e; }
@@ -371,7 +382,7 @@ body.search-open{overflow:hidden}.global-search-modal[hidden]{display:none}.glob
 /* 天氣頁「全部展開/收合」：獨立命名規則，避免被 .add-row button{width:38px}（原本給小圓形加號鍵用的規則）誤套用，
    導致按鈕被壓成 38px 寬、文字被擠到邊緣甚至看起來跳動。固定 min-width 讓「全部展開」／「全部收合」兩種文字長度切換時按鈕大小不會跳動。 */
 .weather-toggle-all{ flex:none!important; width:auto!important; min-width:118px; text-align:center; background:var(--blue)!important; color:#fff!important; border:none!important; border-radius:999px; padding:11px 16px!important; font-family:inherit; font-weight:900; font-size:12.5px!important; cursor:pointer; white-space:nowrap; box-shadow:var(--shadow-sm); }
-@media(max-width:420px){ .weather-day-toggle .w-bot{ display:none; } .weather-day-toggle{ flex-wrap:wrap; } }
+@media(max-width:520px){.weather-current-line{grid-template-columns:auto auto;gap:8px 10px}.weather-current-line .w-bot{grid-column:1/-1;grid-template-columns:repeat(3,auto);justify-content:start}.weather-day-toggle{gap:7px}.weather-day .ico{font-size:28px;width:34px}}
 
 /* Bottom Nav */
 .bottom-nav{ position:fixed; left:50%; bottom:16px; transform:translateX(-50%); width:min(94%,440px); background:rgba(255,255,255,.95); backdrop-filter:blur(10px); border-radius:999px; box-shadow:0 14px 30px -10px rgba(47,58,74,.4); display:flex; padding:6px; z-index:9999; border:1px solid rgba(255,255,255,.6); }
@@ -651,14 +662,17 @@ html.dark-theme .bottom-nav button{padding:6px 0}
 @media(max-width:1049px){
   body.travel-mode.travel-font-large .day-chip .d{font-size:17px}body.travel-mode.travel-font-large .day-chip .m{font-size:11px}
   body.travel-mode.travel-font-large .day-card-head .region{font-size:21px}body.travel-mode.travel-font-large .day-card-head h2{font-size:17px;line-height:1.55}
-  body.travel-mode.travel-font-large .guide-header-content h3{font-size:21px}body.travel-mode.travel-font-large .guide-header-content p.short-desc{font-size:14px;line-height:1.55}
-  body.travel-mode.travel-font-large .guide-details p.full-desc,body.travel-mode.travel-font-large .sub-spot-details p.full-desc{font-size:16px;line-height:1.8;text-align:left}
-  body.travel-mode.travel-font-large .sub-spot-header-content h4{font-size:19px}body.travel-mode.travel-font-large .sub-spot-header-content p.short-desc{font-size:14px;line-height:1.65}
+  body.travel-mode.travel-font-large .guide-header-content h3{font-size:21px}
+  body.travel-mode.travel-font-large .sub-spot-header-content h4{font-size:19px}
   body.travel-mode.travel-font-large .section-card h3{font-size:18px}body.travel-mode.travel-font-large .section-card .sub{font-size:14px;line-height:1.7}
   body.travel-mode.travel-font-large .checklist-group-head{font-size:15px}body.travel-mode.travel-font-large .pack-item .name,body.travel-mode.travel-font-large .rule-item{font-size:15px;line-height:1.75}
   body.travel-mode.travel-font-large .spot-subtab{font-size:12px}body.travel-mode.travel-font-large .bottom-nav button .lb{font-size:12px}
   body.travel-mode.travel-font-large .context-quick-bar button{font-size:11.5px}
-  body.travel-mode.travel-font-large .day-utility-grid .weather-strip .txt b{font-size:12px}body.travel-mode.travel-font-large .day-utility-grid .weather-strip .txt span{font-size:10.5px;line-height:1.55}
-  body.travel-mode.travel-font-large .day-utility-grid .stay-quick-title b{font-size:12px}body.travel-mode.travel-font-large .day-utility-grid .stay-quick-title small{font-size:9.5px}body.travel-mode.travel-font-large .day-utility-grid .stay-time-status{font-size:8.5px}
-  body.travel-mode.travel-font-large .btn,body.travel-mode.travel-font-large .action-row button,body.travel-mode.travel-font-large .action-row a{font-size:13px}
+  body.travel-mode.travel-font-large .day-utility-grid .weather-strip .txt b{font-size:15px}body.travel-mode.travel-font-large .day-utility-grid .weather-strip .txt span{font-size:14px;line-height:1.6}
+  body.travel-mode.travel-font-large .day-utility-grid .stay-quick-title b{font-size:15px}body.travel-mode.travel-font-large .day-utility-grid .stay-quick-title small{font-size:13px}body.travel-mode.travel-font-large .day-utility-grid .stay-time-status{font-size:11px}
+  body.travel-mode.travel-font-large .weather-city-line>b{font-size:18px}body.travel-mode.travel-font-large .weather-current-line .mid .place{font-size:18px}body.travel-mode.travel-font-large .weather-current-line .mid .out{font-size:17px}body.travel-mode.travel-font-large .weather-current-line .w-bot span{font-size:14px}
+  body.travel-mode.travel-font-large .astro-box{font-size:15px}body.travel-mode.travel-font-large .live-tip-box{font-size:16px;line-height:1.7}
+  body.travel-mode.travel-font-large .info-grid .info-label,body.travel-mode.travel-font-large .info-grid .info-value{font-size:15px}body.travel-mode.travel-font-large .hours-box,body.travel-mode.travel-font-large .ticket-box{font-size:15px}
+  body.travel-mode.travel-font-large .stay-time-editor label span{font-size:14px}body.travel-mode.travel-font-large .stay-time-editor input{font-size:17px}
+  body.travel-mode.travel-font-large .btn,body.travel-mode.travel-font-large .action-row button,body.travel-mode.travel-font-large .action-row a{font-size:15px}
 }

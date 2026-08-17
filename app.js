@@ -1942,7 +1942,7 @@ function renderOneLiveCity(k){
     ? `<span class="live-badge stale"><span class="dot"></span>快取${entry.fetchedAt ? '・' + new Date(entry.fetchedAt).toLocaleString('zh-TW',{hour12:false, month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'}) : ''}</span>`
     : `<span class="live-badge"><span class="dot"></span>即時</span>`;
   
-  const MW_TIMES = { 'Wanaka':'20:00~', 'Tekapo':'19:45~', 'MtCook':'20:00~', 'Oamaru':'--', 'Dunedin':'--', 'TeAnau':'20:30~', 'Queenstown':'20:15~' };
+  const MW_TIMES = { 'Auckland':'--', 'Wanaka':'20:00~', 'Tekapo':'19:45~', 'MtCook':'20:00~', 'Oamaru':'--', 'Dunedin':'--', 'TeAnau':'20:30~', 'Queenstown':'20:15~' };
   const starDecision=stargazingDecision(data);
   const starLevel=computeStargazingLevel(data);
   const isOpen=weatherOpenKeys.has(k);
@@ -1953,13 +1953,11 @@ function renderOneLiveCity(k){
   el.innerHTML = `
     <div style="display:flex; flex-direction:column; width:100%;">
       <button type="button" class="weather-day-toggle" onclick="toggleWeatherCard('${k}')" aria-expanded="${isOpen}">
-        <div class="date" style="width:auto; text-align:left;"><b style="font-size:12.5px;">${CITIES[k].label}</b>${badgeHtml}</div>
-        <div class="ico">${ico}</div>
-        <div class="mid"><div class="place" style="font-size:14px; font-weight:900; white-space:nowrap;">${desc}</div><div class="out" style="font-size:11px; font-weight:700;">${temp}°C</div></div>
-        <div class="w-bot" style="text-align:right;">
-          <span style="display:block; font-size:10px;">風速 ${wind} km/h</span>
-          <span style="display:block; font-size:10px; color:#c1502f;">降雨 ${precip} mm</span>
-          <span style="display:block; font-size:10px; color:var(--teal);">UV ${uv}</span>
+        <div class="weather-city-line"><b>${CITIES[k].label}</b>${badgeHtml}</div>
+        <div class="weather-current-line">
+          <div class="ico">${ico}</div>
+          <div class="mid"><div class="place">${desc}</div><div class="out">${temp}°C</div></div>
+          <div class="w-bot"><span>風速 ${wind} km/h</span><span class="rain">降雨 ${precip} mm</span><span class="uv">UV ${uv}</span></div>
         </div>
         ${miniStarHtml}
         <span class="chevron">⌄</span>
