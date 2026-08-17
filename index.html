@@ -19,7 +19,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
-<script>try{if(localStorage.getItem('nz_color_theme')==='dark')document.documentElement.classList.add('dark-theme')}catch(e){}</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body class="family-locked">
@@ -27,7 +26,6 @@
   <b>🖥️ 桌機工作區</b><span>編輯時用寬版，出發前切手機預覽檢查。</span>
   <div class="workbench-row"><button id="wideModeBtn" type="button" onclick="setDesktopLayout('wide')">寬版編輯</button><button id="phoneModeBtn" type="button" onclick="setDesktopLayout('phone')">手機預覽</button></div>
   <span class="workbench-label">使用模式</span><div class="workbench-row"><button class="mode-btn" data-mode="edit" type="button" onclick="setUseMode('edit')">✎ 編輯</button><button class="mode-btn" data-mode="travel" type="button" onclick="setUseMode('travel')">旅行</button></div>
-  <span class="workbench-label">外觀主題</span><div class="workbench-row"><button class="theme-btn" data-theme="light" type="button" onclick="setColorTheme('light')">☀ 淺色</button><button class="theme-btn" data-theme="dark" type="button" onclick="setColorTheme('dark')">◐ 深色</button></div>
   <span class="workbench-label">文字大小</span><div class="workbench-row workbench-font-row"><button class="font-size-btn" data-size="standard" type="button" onclick="setDesktopFontSize('standard')">標準</button><button class="font-size-btn" data-size="large" type="button" onclick="setDesktopFontSize('large')">放大</button><button class="font-size-btn" data-size="xlarge" type="button" onclick="setDesktopFontSize('xlarge')">特大</button></div>
   <button class="workbench-status-btn structural-edit-control" type="button" onclick="openEditStatus()">☑ 編輯狀態篩選</button>
   <div class="workbench-row structural-edit-control"><button type="button" onclick="exportTripBackup()">⬇ 備份</button><button type="button" onclick="document.getElementById('backupImportFile').click()">⬆ 還原</button></div>
@@ -96,7 +94,7 @@
 
   <!-- 上方只保留全站搜尋；主要頁面切換使用下方導覽列 -->
   <div class="context-quick-bar"><button class="context-search-btn" onclick="openGlobalSearch()"><svg class="ui-icon"><use href="#i-search"/></svg><b>搜尋</b></button><div id="contextQuickActions" class="context-quick-actions" aria-label="本頁快捷入口"></div></div>
-  <div class="mobile-control-row"><div class="mobile-mode-switch" aria-label="使用模式"><button class="mode-btn" data-mode="edit" type="button" onclick="setUseMode('edit')">✎ 編輯</button><button class="mode-btn" data-mode="travel" type="button" onclick="setUseMode('travel')">旅行模式</button><button class="structural-edit-control" type="button" onclick="openEditStatus()">☑ 狀態</button></div><div class="mobile-theme-switch" aria-label="外觀主題"><button class="theme-btn" data-theme="light" type="button" onclick="setColorTheme('light')">淺色</button><button class="theme-btn" data-theme="dark" type="button" onclick="setColorTheme('dark')">深色</button></div></div>
+  <div class="mobile-control-row"><div class="mobile-mode-switch" aria-label="使用模式"><button class="mode-btn" data-mode="edit" type="button" onclick="setUseMode('edit')">✎ 編輯</button><button class="mode-btn" data-mode="travel" type="button" onclick="setUseMode('travel')">旅行模式</button><button class="structural-edit-control" type="button" onclick="openEditStatus()">☑ 狀態</button></div><div class="travel-font-switch" aria-label="旅行模式文字大小"><button class="travel-font-btn" data-travel-font="standard" type="button" onclick="setTravelFontSize('standard')">標準字</button><button class="travel-font-btn" data-travel-font="large" type="button" onclick="setTravelFontSize('large')">大字</button></div></div>
 
   <!-- ================= ITINERARY VIEW ================= -->
   <div class="view active" id="view-itinerary">

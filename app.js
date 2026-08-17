@@ -493,16 +493,10 @@ const headerBgs = [
   {url:'https://queenstown.skyline.co.nz/cdn-cgi/image/quality=75,width=1920,height=1080,f=auto,fit=cover/https://media.skyline.co.nz/queenstown/media/uploads/2023/11/12135919/Skyline-Queenstown_Gondola_Remarkables_M.png', pos:'center 50%'},
   {url:'https://content.api.news/v3/images/bin/50c842e054f4428876bf516da4af98db', pos:'center 40%'}
 ];
-let activeHeaderBg=headerBgs[0];
-function applyHeaderTheme(){
-  const header=document.getElementById('main-header');if(!header)return;
-  const pick=document.documentElement.classList.contains('dark-theme')?headerBgs[1]:activeHeaderBg;
-  const shade=document.documentElement.classList.contains('dark-theme')?'rgba(8,25,31,.08) 0%, rgba(10,30,32,.82) 100%':'rgba(83,129,236,0.25) 0%, rgba(47,58,74,0.75) 100%';
-  header.style.backgroundImage=`linear-gradient(180deg, ${shade}), url('${pick.url}')`;
-  header.style.backgroundPosition=pick.pos;
-}
 document.addEventListener('DOMContentLoaded', () => {
-  activeHeaderBg=headerBgs[Math.floor(Math.random()*headerBgs.length)];applyHeaderTheme();
+  const pick=headerBgs[Math.floor(Math.random()*headerBgs.length)],header=document.getElementById('main-header');
+  header.style.backgroundImage=`linear-gradient(180deg, rgba(83,129,236,.25) 0%, rgba(47,58,74,.75) 100%), url('${pick.url}')`;
+  header.style.backgroundPosition=pick.pos;
 });
 
 function loadLocalMap(e){
@@ -1187,7 +1181,7 @@ function renderTodayMode(){
   if(todayUTC<startUTC){
     const daysLeft=Math.ceil((startUTC-todayUTC)/86400000);
     bar.hidden=false;
-    bar.innerHTML=`<div class="trip-countdown-card"><div class="countdown-date"><span>DEPARTURE</span><b>09·12</b><small>2026</small></div><div class="countdown-copy"><span class="today-kicker">NEW ZEALAND・SOUTH ISLAND</span><b>距離出發還有 <em>${daysLeft}</em> 天</b><small>雪山、湖泊與星空正在前方等我們</small></div><div class="countdown-plane" aria-hidden="true">✦</div></div>`;
+    bar.innerHTML=`<div class="trip-countdown-card"><div class="countdown-copy"><span class="today-kicker">NEW ZEALAND・SOUTH ISLAND</span><b>距離出發還有 <em>${daysLeft}</em> 天</b><small>雪山、湖泊與星空正在前方等我們</small></div><div class="countdown-plane" aria-hidden="true">✦</div></div>`;
   }else{
     bar.hidden=true;bar.innerHTML='';
   }
@@ -1697,20 +1691,6 @@ function iceCreamComparisonHTML(entries,dayIdx){
   return `<section class="ice-compare-card"><div class="ice-compare-title"><div><span>🍨 9/26 冰淇淋比較卡</span><b>現場依路線與口味挑一間就好</b></div><small>四間都保留，可自行上傳穩定照片、修正導航與營業時間。</small></div>${rows}<details class="ice-compare-details"${iceCompareOpenByDay[dayIdx]?' open':''} ontoggle="iceCompareOpenByDay[${dayIdx}]=this.open"><summary>展開四間完整資料、照片與導航設定</summary><div>${detailCards}</div></details></section>`;
 }
 
-function premiumDaySummaryHTML(d,mainList){
-  const routeNames=mainList.slice(0,3).map(o=>escapeHTMLText(o.spot.name)).join(' → ')||escapeHTMLText(d.title);
-  const stayHTML=stayQuickCardHTML(activeDay);
-  return `<section class="premium-day-summary">
-    <header><div><span>DAY ${d.dayNum} · ${escapeHTMLText(d.date)}</span><h2>${escapeHTMLText(d.region)}</h2><p>${escapeHTMLText(d.title)}</p></div><em>環線</em></header>
-    <div class="premium-summary-grid">
-      <article class="premium-route"><label>${uiIcon('map')} 今日路線</label><b>${routeNames}</b><small>${escapeHTMLText(d.drive||d.dayDesc||'依照當日行程悠閒移動')}</small></article>
-      <article class="premium-weather"><label>${uiIcon('weather')} 天氣與穿搭</label><b>${escapeHTMLText(d.enRegion)}</b><small>${escapeHTMLText(d.wear)}</small></article>
-    </div>
-    ${d.gas?`<div class="premium-gas">${uiIcon('fuel')} ${escapeHTMLText(d.gas)}</div>`:''}
-    ${stayHTML?`<div class="premium-stay-label">${uiIcon('home')} 今日住宿</div>${stayHTML}`:''}
-  </section>`;
-}
-
 function constellationStoriesHTML(date){
   if(date!=='9/15'&&date!=='9/16')return '';
   const second=date==='9/16';
@@ -1774,15 +1754,12 @@ function renderDayContent(){
       <div style="font-size:11px; color:var(--ink-soft); margin-top:8px; line-height:1.5;">可上傳您自己規劃或手繪的當日路線圖／導航截圖，會保存在此裝置的瀏覽器中，重新整理或關閉頁面都不會消失。</div>
     </div>`;
 
-  const darkLayout=document.documentElement.classList.contains('dark-theme');
-  const daySummaryHTML=darkLayout?premiumDaySummaryHTML(d,mainList):`<div class="day-card-head">
+  const daySummaryHTML=`<div class="day-card-head">
       <div class="region">【Day ${d.dayNum}｜${d.date}】<br>${d.region}</div>
       ${d.drive ? `<div class="drive-info">${d.drive}</div>` : ''}
       ${d.gas ? `<div class="gas-info">${d.gas}</div>` : ''}
       <h2>${d.title}</h2>
-      ${d.dayDesc ? `<div class="day-desc-box">${d.dayDesc}</div>` : ''}
-      <div class="weather-strip"><div class="ico">${d.weatherIco}</div><div class="txt"><b style="font-family:'Zen Kaku Gothic New', sans-serif; font-size:14px;">${d.enRegion}</b><br><span style="font-size:11.5px; opacity:0.85;">${d.wear}</span></div></div>
-      ${stayQuickCardHTML(activeDay)}
+      <div class="day-utility-grid"><div class="weather-strip"><div class="ico">${d.weatherIco}</div><div class="txt"><b>${d.enRegion}</b><span>${d.wear}</span></div></div>${stayQuickCardHTML(activeDay)}</div>
     </div>`;
 
   dayContent.innerHTML = `
@@ -2480,15 +2457,12 @@ function setUseMode(mode){
   localStorage.setItem('nz_use_mode',next);
   if(next==='travel'){openNavEditorKeys.clear();document.querySelectorAll('.nav-edit-box').forEach(el=>el.hidden=true);}
 }
-function setColorTheme(theme){
-  const next=theme==='dark'?'dark':'light';
-  document.documentElement.classList.toggle('dark-theme',next==='dark');
-  document.body.classList.toggle('dark-theme',next==='dark');
-  document.querySelectorAll('.theme-btn').forEach(btn=>btn.classList.toggle('active',btn.dataset.theme===next));
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content',next==='dark'?'#172a2a':'#5276d8');
-  localStorage.setItem('nz_color_theme',next);
-  applyHeaderTheme();
-  if(document.getElementById('dayContent')?.hasChildNodes())renderDayContent();
+function setTravelFontSize(size){
+  const next=size==='large'?'large':'standard';
+  document.body.classList.toggle('travel-font-large',next==='large');
+  document.body.classList.toggle('travel-font-standard',next==='standard');
+  document.querySelectorAll('.travel-font-btn').forEach(btn=>btn.classList.toggle('active',btn.dataset.travelFont===next));
+  localStorage.setItem('nz_travel_font_size',next);
 }
 function setDesktopFontSize(size){
   const next=['standard','large','xlarge'].includes(size)?size:'large';
@@ -2518,7 +2492,8 @@ function updateRouteToggleAllLabel(){const btn=document.querySelector('.route-to
 /* ============ INIT ============ */
 setDesktopLayout(localStorage.getItem('nz_desktop_layout')||'wide');
 setUseMode(localStorage.getItem('nz_use_mode')||(window.matchMedia('(min-width:1050px)').matches?'edit':'travel'));
-setColorTheme(localStorage.getItem('nz_color_theme')||'light');
+document.documentElement.classList.remove('dark-theme');document.body.classList.remove('dark-theme');localStorage.removeItem('nz_color_theme');
+setTravelFontSize(localStorage.getItem('nz_travel_font_size')||'standard');
 setDesktopFontSize(localStorage.getItem('nz_desktop_font_size')||'large');
 initRouteSections();
 renderContextQuickBar('itinerary');
