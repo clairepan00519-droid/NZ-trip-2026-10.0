@@ -19,6 +19,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap" rel="stylesheet">
+<script>try{if(localStorage.getItem('nz_color_theme')==='dark')document.documentElement.classList.add('dark-theme')}catch(e){}</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body class="family-locked">
@@ -26,6 +27,7 @@
   <b>🖥️ 桌機工作區</b><span>編輯時用寬版，出發前切手機預覽檢查。</span>
   <div class="workbench-row"><button id="wideModeBtn" type="button" onclick="setDesktopLayout('wide')">寬版編輯</button><button id="phoneModeBtn" type="button" onclick="setDesktopLayout('phone')">手機預覽</button></div>
   <span class="workbench-label">使用模式</span><div class="workbench-row"><button class="mode-btn" data-mode="edit" type="button" onclick="setUseMode('edit')">✎ 編輯</button><button class="mode-btn" data-mode="travel" type="button" onclick="setUseMode('travel')">旅行</button></div>
+  <span class="workbench-label">外觀主題</span><div class="workbench-row"><button class="theme-btn" data-theme="light" type="button" onclick="setColorTheme('light')">☀ 淺色</button><button class="theme-btn" data-theme="dark" type="button" onclick="setColorTheme('dark')">◐ 深色</button></div>
   <span class="workbench-label">文字大小</span><div class="workbench-row workbench-font-row"><button class="font-size-btn" data-size="standard" type="button" onclick="setDesktopFontSize('standard')">標準</button><button class="font-size-btn" data-size="large" type="button" onclick="setDesktopFontSize('large')">放大</button><button class="font-size-btn" data-size="xlarge" type="button" onclick="setDesktopFontSize('xlarge')">特大</button></div>
   <button class="workbench-status-btn structural-edit-control" type="button" onclick="openEditStatus()">☑ 編輯狀態篩選</button>
   <div class="workbench-row structural-edit-control"><button type="button" onclick="exportTripBackup()">⬇ 備份</button><button type="button" onclick="document.getElementById('backupImportFile').click()">⬆ 還原</button></div>
@@ -47,6 +49,23 @@
     <div id="familyGateError" class="family-gate-error" role="alert"></div>
   </div>
 </div>
+
+<svg class="ui-icon-sprite" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+  <symbol id="i-weather" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-shopping" viewBox="0 0 24 24"><path d="M6 8h12l-1 12H7L6 8Z"/><path d="M9 9V6a3 3 0 0 1 6 0v3"/></symbol>
+  <symbol id="i-map" viewBox="0 0 24 24"><path d="m3 6 5-2 8 2 5-2v14l-5 2-8-2-5 2V6Z"/><path d="M8 4v14M16 6v14"/></symbol>
+  <symbol id="i-car" viewBox="0 0 24 24"><path d="m5 11 2-5h10l2 5 2 2v5h-2v2h-2v-2H7v2H5v-2H3v-5l2-2Z"/><path d="M5 11h14M7 15h.01M17 15h.01"/></symbol>
+  <symbol id="i-guide" viewBox="0 0 24 24"><path d="M4 5.5A3.5 3.5 0 0 1 7.5 2H11v17H7.5A3.5 3.5 0 0 0 4 22V5.5Z"/><path d="M20 5.5A3.5 3.5 0 0 0 16.5 2H13v17h3.5A3.5 3.5 0 0 1 20 22V5.5Z"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m15 9-2 4-4 2 2-4 4-2Z"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+  <symbol id="i-food" viewBox="0 0 24 24"><path d="M7 2v8M4 2v5a3 3 0 0 0 6 0V2M7 10v12M16 2v20M16 2c4 2 4 8 0 10"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 11 9-8 9 8"/><path d="M5 10v11h14V10M9 21v-7h6v7"/></symbol>
+  <symbol id="i-flight" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4 20-7Z"/><path d="M11 13 22 2"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 5h7l2 2h9v12H3V5Z"/></symbol>
+  <symbol id="i-road" viewBox="0 0 24 24"><path d="M8 2 5 22M16 2l3 20M12 4v4M12 12v4M12 20v2"/></symbol>
+  <symbol id="i-fuel" viewBox="0 0 24 24"><path d="M4 22V3h11v19M3 22h13M7 7h5v5H7z"/><path d="m15 7 3 3v7a2 2 0 0 0 4 0V8l-2-2"/></symbol>
+</svg>
 
 <div id="globalSearchModal" class="global-search-modal" hidden onclick="if(event.target===this)closeGlobalSearch()">
   <section class="global-search-sheet" role="dialog" aria-modal="true" aria-labelledby="globalSearchTitle">
@@ -76,8 +95,8 @@
   </div>
 
   <!-- 上方只保留全站搜尋；主要頁面切換使用下方導覽列 -->
-  <div class="context-quick-bar"><button class="context-search-btn" onclick="openGlobalSearch()"><span>⌕</span><b>搜尋</b></button><div id="contextQuickActions" class="context-quick-actions" aria-label="本頁快捷入口"></div></div>
-  <div class="mobile-mode-switch" aria-label="使用模式"><button class="mode-btn" data-mode="edit" type="button" onclick="setUseMode('edit')">✎ 編輯</button><button class="mode-btn" data-mode="travel" type="button" onclick="setUseMode('travel')">旅行模式</button><button class="structural-edit-control" type="button" onclick="openEditStatus()">☑ 狀態</button></div>
+  <div class="context-quick-bar"><button class="context-search-btn" onclick="openGlobalSearch()"><svg class="ui-icon"><use href="#i-search"/></svg><b>搜尋</b></button><div id="contextQuickActions" class="context-quick-actions" aria-label="本頁快捷入口"></div></div>
+  <div class="mobile-control-row"><div class="mobile-mode-switch" aria-label="使用模式"><button class="mode-btn" data-mode="edit" type="button" onclick="setUseMode('edit')">✎ 編輯</button><button class="mode-btn" data-mode="travel" type="button" onclick="setUseMode('travel')">旅行模式</button><button class="structural-edit-control" type="button" onclick="openEditStatus()">☑ 狀態</button></div><div class="mobile-theme-switch" aria-label="外觀主題"><button class="theme-btn" data-theme="light" type="button" onclick="setColorTheme('light')">淺色</button><button class="theme-btn" data-theme="dark" type="button" onclick="setColorTheme('dark')">深色</button></div></div>
 
   <!-- ================= ITINERARY VIEW ================= -->
   <div class="view active" id="view-itinerary">
@@ -90,8 +109,8 @@
   <!-- ================= ROUTE MAP VIEW ================= -->
   <div class="view" id="view-route">
     <div class="route-float-nav">
-      <button class="route-nav-launcher" type="button" onclick="handleFloatLauncherClick(event,'route')" aria-expanded="false"><span>🧭</span><b>環線目錄</b></button>
-      <nav class="route-quick-nav" aria-label="環線快捷目錄"><div class="route-nav-title"><span>環線快速前往</span><button type="button" onclick="toggleRouteQuickNav(false)" aria-label="關閉">×</button></div><button class="nav-theme-flights" onclick="jumpRouteSection('route-flights')">✈️ 航班</button><button class="nav-theme-docs" onclick="jumpRouteSection('route-docs')">📁 票券住宿</button><button class="nav-theme-road" onclick="jumpRouteSection('route-road')">❄️ 道路</button><button class="nav-theme-gas" onclick="jumpRouteSection('route-gas')">⛽ 加油</button><button class="route-toggle-all" onclick="toggleAllRouteSections()">全部展開</button></nav>
+      <button class="route-nav-launcher" type="button" onclick="handleFloatLauncherClick(event,'route')" aria-expanded="false"><svg class="ui-icon"><use href="#i-compass"/></svg><b>環線目錄</b></button>
+      <nav class="route-quick-nav" aria-label="環線快捷目錄"><div class="route-nav-title"><span>環線快速前往</span><button type="button" onclick="toggleRouteQuickNav(false)" aria-label="關閉">×</button></div><button class="nav-theme-flights" onclick="jumpRouteSection('route-flights')"><svg class="ui-icon"><use href="#i-flight"/></svg>航班</button><button class="nav-theme-docs" onclick="jumpRouteSection('route-docs')"><svg class="ui-icon"><use href="#i-folder"/></svg>票券住宿</button><button class="nav-theme-road" onclick="jumpRouteSection('route-road')"><svg class="ui-icon"><use href="#i-road"/></svg>道路</button><button class="nav-theme-gas" onclick="jumpRouteSection('route-gas')"><svg class="ui-icon"><use href="#i-fuel"/></svg>加油</button><button class="route-toggle-all" onclick="toggleAllRouteSections()">全部展開</button></nav>
     </div>
     <div class="map-wrap" style="margin-top:0; margin-bottom:22px; padding-bottom:24px;">
       <h3 style="margin:0 0 10px; font-size:18px; font-weight:900; text-align:center; color:var(--ink);">🚗 紐西蘭南島自駕路線環線</h3>
@@ -258,10 +277,10 @@
 
   <!-- Bottom Nav -->
   <div class="bottom-nav">
-    <button class="nav-btn active" onclick="setTab('itinerary')"><span class="ic">🚗</span><span class="lb">行程</span></button>
-    <button class="nav-btn" onclick="setTab('route')"><span class="ic">🗺️</span><span class="lb">環線</span></button>
-    <button class="nav-btn" onclick="setTab('guide')"><span class="ic">🧳</span><span class="lb">指南</span></button>
-    <button class="nav-btn" onclick="setTab('weather')"><span class="ic">☀️</span><span class="lb">天氣</span></button>
+    <button class="nav-btn active" onclick="setTab('itinerary')"><span class="ic"><svg class="ui-icon"><use href="#i-car"/></svg></span><span class="lb">行程</span></button>
+    <button class="nav-btn" onclick="setTab('route')"><span class="ic"><svg class="ui-icon"><use href="#i-map"/></svg></span><span class="lb">環線</span></button>
+    <button class="nav-btn" onclick="setTab('guide')"><span class="ic"><svg class="ui-icon"><use href="#i-guide"/></svg></span><span class="lb">指南</span></button>
+    <button class="nav-btn" onclick="setTab('weather')"><span class="ic"><svg class="ui-icon"><use href="#i-weather"/></svg></span><span class="lb">天氣</span></button>
   </div>
 </div>
 

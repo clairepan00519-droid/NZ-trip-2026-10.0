@@ -208,7 +208,7 @@ function openMediaQueueDB(){return new Promise((resolve,reject)=>{const r=indexe
 async function queueMediaFile(file,kind,target){const db=await openMediaQueueDB(),item={id:crypto.randomUUID(),kind,target,file,createdAt:Date.now()};await new Promise((resolve,reject)=>{const tx=db.transaction('uploads','readwrite');tx.objectStore('uploads').put(item);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();localStorage.setItem(MEDIA_QUEUE_COUNT_KEY,String(mediaQueueCount()+1));updateSyncStatus(null,'queued');}
 async function mediaQueueItems(){const db=await openMediaQueueDB(),items=await new Promise((resolve,reject)=>{const r=db.transaction('uploads').objectStore('uploads').getAll();r.onsuccess=()=>resolve(r.result||[]);r.onerror=()=>reject(r.error);});db.close();return items;}
 async function deleteMediaQueueItem(id){const db=await openMediaQueueDB();await new Promise((resolve,reject)=>{const tx=db.transaction('uploads','readwrite');tx.objectStore('uploads').delete(id);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});db.close();localStorage.setItem(MEDIA_QUEUE_COUNT_KEY,String(Math.max(0,mediaQueueCount()-1)));}
-function applyQueuedMedia(item,url){if(item.kind==='spot'){(photoStore[item.target]||(photoStore[item.target]=[])).push(url);persistPhotos();renderDayContent();}else if(item.kind==='route'){(routeMapStore[item.target]||(routeMapStore[item.target]=[])).push(url);persistRouteMaps();renderDayContent();}else if(item.kind==='shop'){const x=shopData.find(v=>v.id===item.target);if(x){x.imgs=mergeUniqueUrls(shopImgs(x),[url]);x.img=null;persistShop();renderShopList();}}else if(item.kind==='rule'){const x=rulesData.find(v=>v.id===item.target);if(x){x.img=url;persistRules();renderRulesList();}}else if(item.kind==='doc'){const x=docsData.find(v=>v.id===item.target);if(x){x.img=url;persistDocs();renderDocsList();}}}
+function applyQueuedMedia(item,url){if(item.kind==='spot'){photoStore[item.target]=mergeUniqueUrls(photoStore[item.target],[url]);persistPhotos();renderDayContent();}else if(item.kind==='route'){routeMapStore[item.target]=mergeUniqueRouteMaps(routeMapStore[item.target],[url]);persistRouteMaps();renderDayContent();}else if(item.kind==='shop'){const x=shopData.find(v=>v.id===item.target);if(x){x.imgs=mergeUniqueUrls(shopImgs(x),[url]);x.img=null;persistShop();renderShopList();}}else if(item.kind==='rule'){const x=rulesData.find(v=>v.id===item.target);if(x){x.img=url;persistRules();renderRulesList();}}else if(item.kind==='doc'){const x=docsData.find(v=>v.id===item.target);if(x){x.img=url;persistDocs();renderDocsList();}}}
 async function flushMediaUploadQueue(){if(!navigator.onLine||!familyAuthSession)return;for(const item of await mediaQueueItems()){try{const url=await uploadMediaFile(item.file,`offline-${item.kind}`);applyQueuedMedia(item,url);await deleteMediaQueueItem(item.id);}catch(e){updateSyncStatus(e,'queued');return;}}updateSyncStatus(null,syncOutboxCount()?'queued':null);}
 async function uploadLegacyDataUrl(dataUrl, folder){ const blob=await (await fetch(dataUrl)).blob(); return uploadMediaBlob(blob,folder); }
 function isLegacyDataUrl(v){ return typeof v==='string' && /^data:image\//i.test(v); }
@@ -284,6 +284,18 @@ function stableItemId(prefix, parts){
 function mergeUniqueUrls(a,b){
   return [...new Set([...(Array.isArray(a)?a:[]),...(Array.isArray(b)?b:[])].filter(Boolean))];
 }
+function routeMapIdentity(url){
+  try{const u=new URL(String(url),location.href);return `${u.origin}${u.pathname}`.toLowerCase();}catch(e){return String(url||'').split(/[?#]/)[0].toLowerCase();}
+}
+function mergeUniqueRouteMaps(a,b){
+  const seen=new Set(),out=[];
+  [...(Array.isArray(a)?a:[]),...(Array.isArray(b)?b:[])].filter(Boolean).forEach(url=>{const id=routeMapIdentity(url);if(!seen.has(id)){seen.add(id);out.push(url);}});
+  return out;
+}
+function normalizeRouteMapStore(value){
+  if(!value||typeof value!=='object'||Array.isArray(value))return {};
+  return Object.fromEntries(Object.entries(value).map(([key,urls])=>[key,mergeUniqueRouteMaps(urls,[])]).filter(([,urls])=>urls.length));
+}
 function normalizeStructuredList(key,value){
   if(!Array.isArray(value)) return value;
   const map=new Map();
@@ -314,6 +326,7 @@ function normalizeStructuredList(key,value){
   return [...map.values()];
 }
 function normalizeSyncValue(key,value){
+  if(key==='nz_route_maps')return normalizeRouteMapStore(value);
   return STRUCTURED_LIST_KEYS.has(key)?normalizeStructuredList(key,value):value;
 }
 function friendlySyncError(e){
@@ -362,6 +375,8 @@ async function reconcileInitialCloudData(){
       const progress={done:0,total:0};
       if(localValue!=null) localValue=await migrateMediaTree(localValue,`legacy/local/${key}`,progress);
       if(remoteValue!=null) remoteValue=await migrateMediaTree(remoteValue,`legacy/cloud/${key}`,progress);
+      localValue=normalizeSyncValue(key,localValue);
+      remoteValue=normalizeSyncValue(key,remoteValue);
       let merged;
       if(localValue!=null && remoteValue!=null) merged=mergePreservingLocal(localValue,remoteValue);
       else merged=localValue!=null?localValue:remoteValue;
@@ -426,7 +441,7 @@ function applyRemoteRow(row, forceApply=false){
 }
 function applyStoreUpdate(key,jsonStr){
   let parsed;try{parsed=JSON.parse(jsonStr);}catch(e){return;}
-  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_nav_links':navLinkStore=parsed;break;case'nz_hours_override':hoursOverrideStore=parsed||{};break;case'nz_custom_spots':customSpotsStore=parsed;break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=parsed;break;case'nz_stay_times':stayTimeStore=parsed||{};break;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=normalizeStructuredList('nz_shop',parsed);renderShopList();return;case'nz_rules':rulesData=normalizeStructuredList('nz_rules',parsed);renderRulesList();return;case'nz_docs':docsData=normalizeStructuredList('nz_docs',parsed);renderDocsList();return;default:return;}
+  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_nav_links':navLinkStore=parsed;break;case'nz_hours_override':hoursOverrideStore=parsed||{};break;case'nz_custom_spots':customSpotsStore=parsed;break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=normalizeRouteMapStore(parsed);break;case'nz_stay_times':stayTimeStore=parsed||{};break;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=normalizeStructuredList('nz_shop',parsed);renderShopList();return;case'nz_rules':rulesData=normalizeStructuredList('nz_rules',parsed);renderRulesList();return;case'nz_docs':docsData=normalizeStructuredList('nz_docs',parsed);renderDocsList();return;default:return;}
   if(typeof renderDayContent==='function')renderDayContent();if(typeof updateSpotCount==='function')updateSpotCount();
 }
 function scheduleCloudPush(key,valueObj){
@@ -1117,7 +1132,7 @@ function moveBlock(spotKey, blockId, dir, hasBadges, hasInfo){
 }
 
 
-let routeMapStore = safeLocalJSON('nz_route_maps',{}) || {};
+let routeMapStore = normalizeRouteMapStore(safeLocalJSON('nz_route_maps',{}) || {});
 function persistRouteMaps(){ safeSetItem('nz_route_maps', routeMapStore); }
 async function handleRouteMapUpload(e, dayIdx){
   const files = Array.from(e.target.files || []); e.target.value='';
@@ -1127,7 +1142,7 @@ async function handleRouteMapUpload(e, dayIdx){
   updateSyncStatus(null,'saving');
   try{
     const urls=[]; for(const f of files) urls.push(await uploadMediaFile(f,`route-maps/day-${dayIdx}`));
-    routeMapStore[dayIdx].push(...urls); persistRouteMaps(); renderDayContent();
+    routeMapStore[dayIdx]=mergeUniqueRouteMaps(routeMapStore[dayIdx],urls); persistRouteMaps(); renderDayContent();
   }catch(err){ alert('⚠️ '+friendlySyncError(err)+'\n'+String(err.message||err)); updateSyncStatus(err); }
 }
 function removeRouteMap(dayIdx, i){
@@ -1157,28 +1172,23 @@ function tripDayIndexForToday(){
 }
 const initialTodayIndex=tripDayIndexForToday();
 let activeDay = initialTodayIndex>=0 ? initialTodayIndex : 0;
+let lastAutoTripDay=initialTodayIndex;
 
-let todayPreviewActive=false;
 function renderTodayMode(){
   const bar=document.getElementById('todayModeBar'); if(!bar)return;
-  const todayIdx=tripDayIndexForToday();
   const t=nzTodayParts();
   const todayUTC=Date.UTC(t.year,t.month-1,t.day);
   const startUTC=Date.UTC(2026,8,12);
-  const endUTC=Date.UTC(2026,8,28);
-  if(todayPreviewActive||todayIdx>=0){
-    const preview=todayIdx<0,d=days[preview?activeDay:todayIdx],idx=preview?activeDay:todayIdx;
-    bar.innerHTML=`<div class="today-mode-card live ${preview?'preview':''}"><div><span class="today-kicker">📍 TODAY・紐西蘭時間${preview?'・預覽':''}</span><b>${d.date}｜${d.region}</b><small>${d.title}</small></div><div class="today-actions"><button onclick="setActiveDay(${idx})">查看今天</button>${preview?'<button class="today-preview-close" onclick="toggleTodayPreview(false)">結束預覽</button>':''}</div></div>`;
-  }else if(todayUTC<startUTC){
+  if(todayUTC<startUTC){
     const daysLeft=Math.ceil((startUTC-todayUTC)/86400000);
-    bar.innerHTML=`<div class="today-mode-card"><div><span class="today-kicker">🗓️ 旅行倒數</span><b>距離 9/12 行程開始還有 ${daysLeft} 天</b><small>旅行期間會自動開啟當日行程</small></div><div class="today-actions"><button onclick="toggleTodayPreview(true)">預覽旅行中</button><button class="today-secondary" onclick="setActiveDay(0)">查看首日</button></div></div>`;
-  }else if(todayUTC<=endUTC){
-    bar.innerHTML=`<div class="today-mode-card live"><div><span class="today-kicker">📍 TODAY</span><b>今天是移動／轉機日</b><small>可從日期列選擇最接近的行程</small></div></div>`;
+    bar.hidden=false;
+    bar.innerHTML=`<div class="trip-countdown-card"><div class="countdown-date"><span>DEPARTURE</span><b>09·12</b><small>2026</small></div><div class="countdown-copy"><span class="today-kicker">NEW ZEALAND・SOUTH ISLAND</span><b>距離出發還有 <em>${daysLeft}</em> 天</b><small>雪山、湖泊與星空正在前方等我們</small></div><div class="countdown-plane" aria-hidden="true">✦</div></div>`;
   }else{
-    bar.innerHTML=`<div class="today-mode-card"><div><span class="today-kicker">🌿 TRIP MEMORY</span><b>旅程已完成</b><small>照片、評論與清單仍會保留在這裡</small></div><button onclick="setActiveDay(0)">回顧行程</button></div>`;
+    bar.hidden=true;bar.innerHTML='';
   }
 }
-function toggleTodayPreview(on){todayPreviewActive=Boolean(on);renderTodayMode();}
+function followNewZealandTripDate(){const i=tripDayIndexForToday();if(i>=0&&i!==lastAutoTripDay){lastAutoTripDay=i;setActiveDay(i);}renderTodayMode();}
+setInterval(followNewZealandTripDate,60000);
 
 function hotelsForDay(day){ return [...(day.spots||[]),...(day.moreSpots||[])].filter(s=>s.cat==='hotel'); }
 let stayTimeStore=safeLocalJSON('nz_stay_times',{})||{};
@@ -1365,18 +1375,19 @@ document.addEventListener('keydown',e=>{
 });
 
 let dayQuickNavOpen=false;
+function uiIcon(name){return `<svg class="ui-icon" aria-hidden="true"><use href="#i-${name}"></use></svg>`;}
 function renderDayQuickNav(day){
   const wrap=document.getElementById('dayQuickNav');if(!wrap)return;
   const hasRoad=(DAILY_ROAD_ALERTS[day.date]||[]).length>0,hasStay=hotelsForDay(day).length>0;
   wrap.innerHTML=`<div class="day-float-nav ${dayQuickNavOpen?'open':''}">
-    <button class="day-nav-launcher" onclick="handleFloatLauncherClick(event,'day')" aria-expanded="${dayQuickNavOpen}" aria-label="開啟當日快捷目錄"><span>🧭</span><b>當日目錄</b></button>
+    <button class="day-nav-launcher" onclick="handleFloatLauncherClick(event,'day')" aria-expanded="${dayQuickNavOpen}" aria-label="開啟當日快捷目錄">${uiIcon('compass')}<b>當日目錄</b></button>
     <nav class="day-quick-nav" aria-label="當日快捷目錄">
       <div class="day-nav-title"><span>今天要去哪裡？</span><button onclick="toggleDayQuickNav(false)" aria-label="關閉">×</button></div>
-      ${hasRoad?'<button class="nav-road" onclick="jumpDaySection(\'road\')">🚗 <span>自駕提醒</span></button>':''}
-      <button class="nav-main" onclick="jumpDaySection('main')">📌 <span>主要亮點</span></button>
-      <button class="nav-more" onclick="jumpDaySection('more')">🍴 <span>食衣住</span></button>
-      ${hasStay?'<button class="nav-stay" onclick="jumpDaySection(\'stay\')">🏡 <span>今日住宿</span></button>':''}
-      <button class="nav-map" onclick="jumpDaySection('routemap')">🗺️ <span>路線圖</span></button>
+      ${hasRoad?`<button class="nav-road" onclick="jumpDaySection('road')">${uiIcon('car')}<span>自駕提醒</span></button>`:''}
+      <button class="nav-main" onclick="jumpDaySection('main')">${uiIcon('pin')}<span>主要亮點</span></button>
+      <button class="nav-more" onclick="jumpDaySection('more')">${uiIcon('food')}<span>食衣住</span></button>
+      ${hasStay?`<button class="nav-stay" onclick="jumpDaySection('stay')">${uiIcon('home')}<span>今日住宿</span></button>`:''}
+      <button class="nav-map" onclick="jumpDaySection('routemap')">${uiIcon('map')}<span>路線圖</span></button>
     </nav>
   </div>`;
   enableFloatingDrag(wrap.querySelector('.day-float-nav'),'day');
@@ -1732,7 +1743,7 @@ function renderDayContent(){
       <div style="font-size:11px; color:var(--ink-soft); margin-top:8px; line-height:1.5;" id="addSpotStatus-${activeDay}">新增後會依景點名稱與關鍵字自動組出一段簡介（句型會隨機變化），並嘗試連網搜尋補充更具體的資訊——但這個檔案是可下載的靜態網頁，連網搜尋通常無法成功，實際上多半會使用自動組成的版本。之後仍可在景點卡片中補充您的個人筆記。</div>
     </div>`;
 
-  const routeMaps = routeMapStore[activeDay] || [];
+  const routeMaps = mergeUniqueRouteMaps(routeMapStore[activeDay],[]);
   const routeMapGalleryHTML = routeMaps.length ? `<div class="route-map-gallery">${routeMaps.map((u,i)=>`<div class="route-map-item"><img loading="lazy" decoding="async" src="${u}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)" alt="Day ${d.dayNum} 路線圖"><button class="route-map-remove" onclick="removeRouteMap(${activeDay}, ${i})">✕</button></div>`).join('')}</div>` : '<div class="empty">尚未上傳今天的行動路線圖。</div>';
   const routeMapHTML = `
     ${dailyRoadAlertsHTML(d.date)}
@@ -1755,7 +1766,7 @@ function renderDayContent(){
       ${stayQuickCardHTML(activeDay)}
     </div>
     <div id="day-card-${activeDay}">
-      <div class="spot-subtabs"><button class="spot-subtab${curSubTab==='main'?' active':''}" data-type="main" onclick="switchSubTab(${activeDay}, 'main')">📌 主要亮點 (${mainList.length})</button><button class="spot-subtab${curSubTab==='more'?' active':''}" data-type="more" onclick="switchSubTab(${activeDay}, 'more')">🍴 食衣住 (${lifeList.length})</button><button class="spot-subtab${curSubTab==='routemap'?' active':''}" data-type="routemap" onclick="switchSubTab(${activeDay}, 'routemap')">🗺️ 路線圖${routeMaps.length ? ` (${routeMaps.length})` : ''}</button></div>
+      <div class="spot-subtabs"><button class="spot-subtab${curSubTab==='main'?' active':''}" data-type="main" onclick="switchSubTab(${activeDay}, 'main')">${uiIcon('pin')}主要亮點 (${mainList.length})</button><button class="spot-subtab${curSubTab==='more'?' active':''}" data-type="more" onclick="switchSubTab(${activeDay}, 'more')">${uiIcon('food')}食衣住 (${lifeList.length})</button><button class="spot-subtab${curSubTab==='routemap'?' active':''}" data-type="routemap" onclick="switchSubTab(${activeDay}, 'routemap')">${uiIcon('map')}路線圖${routeMaps.length ? ` (${routeMaps.length})` : ''}</button></div>
       <div class="subtab-content${curSubTab==='main'?' active':''}" data-type="main">${mainSpotsHTML}${constellationStoriesHTML(d.date)}</div>
       <div class="subtab-content${curSubTab==='more'?' active':''}" data-type="more" style="background:#f4f6f0; border-radius:0 0 var(--r-lg) var(--r-lg); padding:16px 12px 16px; margin-bottom:16px;">${secondaryCardsHTML}${addSpotFormHTML}</div>
       <div class="subtab-content${curSubTab==='routemap'?' active':''}" data-type="routemap" style="background:#f4f6f0; border-radius:0 0 var(--r-lg) var(--r-lg); padding:16px 12px 16px; margin-bottom:16px;">${routeMapHTML}</div>
@@ -2402,12 +2413,12 @@ function setTab(tab) {
 }
 
 const CONTEXT_QUICK_ACTIONS={
-  itinerary:[['☀️','當日天氣',"openCurrentDayWeather()"],['🛍️','購物',"openContextShortcut('shop')"],['🗺️','路線圖',"jumpDaySection('routemap')"]],
-  route:[['✈️','航班',"jumpRouteSection('route-flights')"],['❄️','道路',"jumpRouteSection('route-road')"],['⛽','加油',"jumpRouteSection('route-gas')"]],
-  guide:[['🎒','行李',"openContextShortcut('pack')"],['🛍️','購物',"openContextShortcut('shop')"],['📋','提醒',"openContextShortcut('rules')"]],
-  weather:[['☀️','即時天氣',"openContextShortcut('live-weather')"],['🌌','觀星判斷',"openContextShortcut('stargazing')"],['🛰️','雲圖',"openContextShortcut('radar')"]]
+  itinerary:[['weather','當日天氣',"openCurrentDayWeather()"],['shopping','購物',"openContextShortcut('shop')"],['map','路線圖',"jumpDaySection('routemap')"]],
+  route:[['flight','航班',"jumpRouteSection('route-flights')"],['road','道路',"jumpRouteSection('route-road')"],['fuel','加油',"jumpRouteSection('route-gas')"]],
+  guide:[['guide','行李',"openContextShortcut('pack')"],['shopping','購物',"openContextShortcut('shop')"],['folder','提醒',"openContextShortcut('rules')"]],
+  weather:[['weather','即時天氣',"openContextShortcut('live-weather')"],['weather','觀星判斷',"openContextShortcut('stargazing')"],['map','雲圖',"openContextShortcut('radar')"]]
 };
-function renderContextQuickBar(tab='itinerary'){const wrap=document.getElementById('contextQuickActions');if(!wrap)return;wrap.innerHTML=(CONTEXT_QUICK_ACTIONS[tab]||[]).map(([ic,label,action],i)=>`<button class="context-action context-action-${i+1}" onclick="${action}"><span>${ic}</span><b>${label}</b></button>`).join('');}
+function renderContextQuickBar(tab='itinerary'){const wrap=document.getElementById('contextQuickActions');if(!wrap)return;wrap.innerHTML=(CONTEXT_QUICK_ACTIONS[tab]||[]).map(([ic,label,action],i)=>`<button class="context-action context-action-${i+1}" onclick="${action}">${uiIcon(ic)}<b>${label}</b></button>`).join('');}
 function openContextShortcut(target){
   if(target==='today'){const i=tripDayIndexForToday();setActiveDay(i>=0?i:activeDay);return;}
   const ids={pack:'packListWrap',shop:'shopListWrap',rules:'rulesListWrap','live-weather':'liveWeatherList',stargazing:'liveWeatherList',radar:'rainRadarMap'};
@@ -2447,6 +2458,14 @@ function setUseMode(mode){
   localStorage.setItem('nz_use_mode',next);
   if(next==='travel'){openNavEditorKeys.clear();document.querySelectorAll('.nav-edit-box').forEach(el=>el.hidden=true);}
 }
+function setColorTheme(theme){
+  const next=theme==='dark'?'dark':'light';
+  document.documentElement.classList.toggle('dark-theme',next==='dark');
+  document.body.classList.toggle('dark-theme',next==='dark');
+  document.querySelectorAll('.theme-btn').forEach(btn=>btn.classList.toggle('active',btn.dataset.theme===next));
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content',next==='dark'?'#172a2a':'#5276d8');
+  localStorage.setItem('nz_color_theme',next);
+}
 function setDesktopFontSize(size){
   const next=['standard','large','xlarge'].includes(size)?size:'large';
   document.body.classList.remove('desktop-font-standard','desktop-font-large','desktop-font-xlarge');
@@ -2459,7 +2478,9 @@ function initRouteSections(){
     if(section.querySelector(':scope > .route-section-toggle'))return;
     section.classList.add('route-section-enhanced','route-section-collapsed');
     const btn=document.createElement('button');btn.type='button';btn.className='route-section-toggle';btn.setAttribute('aria-expanded','false');
-    btn.innerHTML=`<span><b>${section.dataset.routeTitle||'行程資訊'}</b><small>${section.dataset.routeSummary||'點擊展開完整內容'}</small></span><em>展開 ＋</em>`;
+    const iconById={'route-flights':'flight','route-docs':'folder','route-road':'road','route-gas':'fuel'};
+    const title=(section.dataset.routeTitle||'行程資訊').replace(/^[^\p{L}\p{N}]+/u,'');
+    btn.innerHTML=`<span><b>${uiIcon(iconById[section.id]||'map')}${title}</b><small>${section.dataset.routeSummary||'點擊展開完整內容'}</small></span><em>展開 ＋</em>`;
     btn.onclick=()=>toggleRouteSection(section.id);section.prepend(btn);
   });
 }
@@ -2473,6 +2494,7 @@ function updateRouteToggleAllLabel(){const btn=document.querySelector('.route-to
 /* ============ INIT ============ */
 setDesktopLayout(localStorage.getItem('nz_desktop_layout')||'wide');
 setUseMode(localStorage.getItem('nz_use_mode')||(window.matchMedia('(min-width:1050px)').matches?'edit':'travel'));
+setColorTheme(localStorage.getItem('nz_color_theme')||'light');
 setDesktopFontSize(localStorage.getItem('nz_desktop_font_size')||'large');
 initRouteSections();
 renderContextQuickBar('itinerary');
