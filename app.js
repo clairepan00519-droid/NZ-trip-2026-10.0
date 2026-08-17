@@ -1203,6 +1203,13 @@ function setStayTime(hotelName,field,value){
   renderDayContent();
   document.querySelector('.stay-quick-card')?.setAttribute('open','');
 }
+function setStayAmenity(hotelName,field,value){
+  const key=stayTimeKey(hotelName);
+  stayTimeStore[key]={...(stayTimeStore[key]||{}),[field]:value};
+  safeSetItem('nz_stay_times',stayTimeStore);
+  renderDayContent();
+  document.querySelector('.stay-quick-card')?.setAttribute('open','');
+}
 function stayQuickCardHTML(dayIdx){
   const day=days[dayIdx]; const hotels=hotelsForDay(day);
   if(!hotels.length) return '';
@@ -1213,7 +1220,9 @@ function stayQuickCardHTML(dayIdx){
     const times=stayTimeStore[stayTimeKey(hotel.name)]||{};
     const complete=Boolean(times.checkin&&times.checkout);
     const timeSummary=complete?`${times.checkin} 入住・${times.checkout} 退房`:'點擊填寫入住／退房時間';
-    return `<details class="stay-quick-card"><summary class="stay-quick-head"><span>🏡 ${status}</span><span class="stay-quick-title"><b>${hotel.name}</b><small>${timeSummary}</small></span><em class="stay-time-status ${complete?'complete':'pending'}">${complete?'✓ 已完成':'! 尚未填寫'}</em><i aria-hidden="true">⌄</i></summary><div class="stay-quick-body"><div class="stay-time-editor"><label><span>入住時間</span><input type="time" value="${escAttr(times.checkin||'')}" aria-label="${escapeHTMLText(hotel.name)} 入住時間" onchange="setStayTime('${jsQuote(hotel.name)}','checkin',this.value)"></label><span class="stay-time-arrow">→</span><label><span>退房時間</span><input type="time" value="${escAttr(times.checkout||'')}" aria-label="${escapeHTMLText(hotel.name)} 退房時間" onchange="setStayTime('${jsQuote(hotel.name)}','checkout',this.value)"></label></div><div class="stay-quick-actions"><a href="${mapsLink(hotel.name,hotel._storageKey)}" target="_blank" rel="noopener">🗺️ 導航住宿</a></div></div></details>`;
+    const amenitySummary=[times.bathtub==='yes'?'🛁 有浴缸':times.bathtub==='no'?'無浴缸':'',times.washer==='yes'?'🧺 有洗衣機':times.washer==='no'?'無洗衣機':''].filter(Boolean).join('・');
+    const amenityOptions=(current)=>`<option value="unknown" ${!current||current==='unknown'?'selected':''}>未確認</option><option value="yes" ${current==='yes'?'selected':''}>有</option><option value="no" ${current==='no'?'selected':''}>無</option>`;
+    return `<details class="stay-quick-card"><summary class="stay-quick-head"><span>🏡 ${status}</span><span class="stay-quick-title"><b>${hotel.name}</b><small>${timeSummary}</small>${amenitySummary?`<small class="stay-amenity-summary">${amenitySummary}</small>`:''}</span><em class="stay-time-status ${complete?'complete':'pending'}">${complete?'✓ 已完成':'! 尚未填寫'}</em><i aria-hidden="true">⌄</i></summary><div class="stay-quick-body"><div class="stay-time-editor"><label><span>入住時間</span><input type="time" value="${escAttr(times.checkin||'')}" aria-label="${escapeHTMLText(hotel.name)} 入住時間" onchange="setStayTime('${jsQuote(hotel.name)}','checkin',this.value)"></label><span class="stay-time-arrow">→</span><label><span>退房時間</span><input type="time" value="${escAttr(times.checkout||'')}" aria-label="${escapeHTMLText(hotel.name)} 退房時間" onchange="setStayTime('${jsQuote(hotel.name)}','checkout',this.value)"></label></div><div class="stay-amenity-editor"><label><span>🛁 浴缸</span><select onchange="setStayAmenity('${jsQuote(hotel.name)}','bathtub',this.value)">${amenityOptions(times.bathtub)}</select></label><label><span>🧺 洗衣機</span><select onchange="setStayAmenity('${jsQuote(hotel.name)}','washer',this.value)">${amenityOptions(times.washer)}</select></label></div><div class="stay-quick-actions"><a href="${mapsLink(hotel.name,hotel._storageKey)}" target="_blank" rel="noopener">🗺️ 導航住宿</a></div></div></details>`;
   }).join('');
 }
 
@@ -1283,7 +1292,7 @@ function buildGlobalSearchIndex(){
   });
   (docsData||[]).forEach(d=>items.push({group:d.ic==='🏨'?'hotel':'transport',title:`${d.ic||'📁'} ${d.t}`,subtitle:'環線・票券住宿總匯',snippet:d.s||d.chip||'',routeSection:'route-docs',search:[d.t,d.s,d.chip].join(' ')}));
   items.push(
-    {group:'transport',title:'道路封閉／積雪快捷查詢',subtitle:'環線・道路',snippet:'NZTA、Crown Range、Milford Road、MetService',routeSection:'route-road',search:'道路 封閉 積雪 雪鏈 黑冰 crown range lindis pass milford road nzta'},
+    {group:'transport',title:'道路封閉／積雪快捷查詢',subtitle:'環線・道路',snippet:'NZTA 路況、道路攝影機、景點 Webcam、MetService',routeSection:'route-road',search:'道路 封閉 積雪 雪鏈 黑冰 lindis pass sh80 nzta webcam tekapo pukaki mt cook'},
     {group:'transport',title:'自駕快速規則',subtitle:'環線・道路',snippet:'Roundabout、One Lane Bridge、Bus Lane、Keep Left',routeSection:'route-road',search:'圓環 roundabout 單線橋 one lane bridge bus lane bus only t2 t3 keep left 靠左'},
     {group:'transport',title:'南島自駕加油策略',subtitle:'環線・加油',snippet:'Wanaka、Twizel、Oamaru、Dunedin、Te Anau',routeSection:'route-gas',search:'加油 油價 fuel petrol bp npd paknsave wanaka twizel oamaru dunedin te anau'}
   );
