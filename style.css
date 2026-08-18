@@ -162,24 +162,26 @@ body.search-open{overflow:hidden}.global-search-modal[hidden]{display:none}.glob
 .rule-item{max-width:100%;overflow:hidden;box-sizing:border-box}.rule-item>div{min-width:0;max-width:100%;overflow:hidden}.rule-photo-actions{max-width:100%;margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}.rule-photo-actions>button{max-width:100%;border:1px dashed #bfcbd2;border-radius:8px;background:#fff;color:var(--ink-soft);padding:7px 11px;font:inherit;font-size:11px;font-weight:800;cursor:pointer}.rule-photo-actions>span{font-size:10px;color:var(--ink-soft)}.rule-photo-row{display:flex;width:100%;max-width:100%;min-width:0;gap:8px;overflow-x:auto;overflow-y:hidden;box-sizing:border-box;padding:9px 7px 5px 2px;scrollbar-width:thin;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}.rule-photo{position:relative;flex:0 0 82px;height:68px;margin:0}.rule-photo img{width:100%;height:100%;object-fit:cover;border-radius:9px;border:1px solid var(--line);box-shadow:var(--shadow-sm);cursor:zoom-in}.rule-photo button{position:absolute;right:-5px;top:-5px;width:22px;height:22px;border:0;border-radius:50%;background:rgba(37,46,58,.78);color:#fff;font-size:10px;cursor:pointer}
 @media(max-width:480px){.road-rule-grid{grid-template-columns:1fr}.stay-quick-head{grid-template-columns:auto minmax(0,1fr) auto}.stay-quick-head>span:first-child{grid-column:1/3}.stay-quick-head i{grid-column:3;grid-row:1}.stay-time-status{grid-column:3;grid-row:2}.daily-road-alert p{font-size:10.5px}}
 .day-card-head h2{margin:10px 0 10px; font-size:14px; font-weight:700; color:var(--ink); line-height:1.4;}
-.day-utility-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:8px;margin-top:8px}
+.day-utility-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:stretch;gap:8px;margin-top:10px}
 .day-utility-grid>:only-child{grid-column:1/-1}
-.day-utility-grid .weather-strip{min-width:0;height:100%;margin:0;padding:9px;border-radius:12px;align-items:flex-start}
+.day-utility-grid .weather-strip{min-width:0;height:100%;box-sizing:border-box;margin:0;padding:11px;border:1px solid #dce5e8;border-radius:13px;align-items:flex-start;background:#fbfcfa}
 .day-utility-grid .weather-strip .ico{flex:none;font-size:18px;line-height:1.2}
 .day-utility-grid .weather-strip .txt{min-width:0;line-height:1.35}
-.day-utility-grid .weather-strip .txt b,.day-utility-grid .weather-strip .txt span{display:block;min-width:0}
-.day-utility-grid .weather-strip .txt b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Zen Kaku Gothic New',sans-serif;font-size:11px}
-.day-utility-grid .weather-strip .txt span{margin-top:3px;font-size:10.5px;font-weight:700;line-height:1.5;word-break:normal;overflow-wrap:break-word;line-break:strict}
-.day-utility-grid .stay-quick-card{min-width:0;margin:0;background:linear-gradient(135deg,#f2f8f4,#fff)}
+.day-utility-grid .weather-strip .txt b,.day-utility-grid .weather-strip .txt span,.day-utility-grid .weather-strip .txt small{display:block;min-width:0}
+.day-utility-grid .utility-kicker,.day-utility-grid .stay-kicker{display:block;margin:0 0 4px;color:#4d8a79;font-size:8px;font-weight:900;letter-spacing:.08em}
+.day-utility-grid .weather-strip .txt b{font-family:'Zen Kaku Gothic New',sans-serif;font-size:11px;line-height:1.45;white-space:normal;overflow-wrap:break-word}
+.day-utility-grid .weather-strip .txt span{margin-top:4px;color:var(--ink-soft);font-size:8px;font-weight:700;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.day-utility-grid .stay-quick-card{min-width:0;height:100%;margin:0;border-color:#dce5e8;background:#fbfcfa}
 .day-utility-grid .stay-quick-card[open]{grid-column:1/-1}
-.day-utility-grid .stay-quick-head{grid-template-columns:minmax(0,1fr) auto;gap:5px;padding:9px;min-width:0}
+.day-utility-grid .stay-quick-head{grid-template-columns:minmax(0,1fr) auto;gap:5px;min-height:100%;box-sizing:border-box;padding:11px;min-width:0;align-content:start}
 .day-utility-grid .stay-quick-head>span:first-child{display:none}
 .day-utility-grid .stay-quick-title{grid-column:1;grid-row:1;min-width:0}
-.day-utility-grid .stay-quick-title b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10.5px}
-.day-utility-grid .stay-quick-title small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:8px}
+.day-utility-grid .stay-quick-title b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;line-height:1.45}
+.day-utility-grid .stay-quick-title small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:8px;line-height:1.4}
 .day-utility-grid .stay-time-status{grid-column:1;grid-row:2;justify-self:start;margin-top:2px;padding:3px 6px;font-size:7.5px}
 .travel-mode .stay-time-status.complete{display:none}
 .day-utility-grid .stay-quick-head i{grid-column:2;grid-row:1/3;align-self:center}
+.day-utility-grid .stay-amenity-summary{margin-top:4px!important;color:#4d8a79!important}
 .day-desc-box{ font-size:12px; color:var(--ink-soft); margin-bottom:12px; line-height:1.6; padding:10px 12px; background:#f7f8f2; border-radius:8px; border-left:4px solid var(--blue); }
 .weather-strip{ display:flex; align-items:center; gap:10px; background:linear-gradient(120deg,var(--pale),var(--sand)); border-radius:var(--r-sm); padding:10px 12px; margin-top:6px; }
 .weather-strip .ico{font-size:22px;}
@@ -322,6 +324,7 @@ body.search-open{overflow:hidden}.global-search-modal[hidden]{display:none}.glob
 .add-row button{ background:var(--yellow); border:none; border-radius:999px; width:38px; font-weight:900; font-size:16px; cursor:pointer; color:#5c5300; }
 .rule-item{display:flex; gap:8px; font-size:12.5px; line-height:1.7; margin-bottom:8px; color:var(--ink);}
 .rule-item .dot{color:var(--coral); font-weight:900;}
+.rule-body-text{font-size:12.5px;color:var(--ink-soft);line-height:1.65;white-space:pre-wrap;overflow-wrap:anywhere}.rule-edit-btn{margin:7px 0 0 6px;border:1px solid var(--line);border-radius:999px;background:#fff;padding:6px 10px;color:var(--ink-soft);font:inherit;font-size:10px;font-weight:800;cursor:pointer}.rule-inline-editor{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;margin-top:9px;padding:9px;border-radius:10px;background:#fff;border:1px solid var(--line)}.rule-inline-editor input,.rule-inline-editor textarea,.rule-inline-editor select{min-width:0;border:1px solid var(--line);border-radius:9px;background:#fff;padding:8px 10px;color:var(--ink);font:inherit;font-size:11px;box-sizing:border-box}.rule-inline-editor input,.rule-inline-editor textarea{grid-column:1/-1}.rule-inline-editor textarea{resize:vertical;line-height:1.6}.rule-inline-editor button{border:0;border-radius:9px;background:var(--blue);color:#fff;padding:8px 12px;font:inherit;font-size:11px;font-weight:900;cursor:pointer}.rule-add-content{display:grid;grid-template-columns:minmax(0,1fr) 38px;gap:8px}.rule-add-content textarea{width:100%;min-width:0;resize:vertical;border:1.5px solid var(--line);border-radius:14px;padding:10px 12px;font:inherit;font-size:12.5px;line-height:1.55;box-sizing:border-box;outline:none}.rule-add-content textarea:focus{border-color:var(--blue)}.rule-add-content button{align-self:stretch;width:38px}
 
 /* Route Map & Docs Info */
 .doc-item{ display:flex; align-items:center; justify-content:space-between; background:#f7f8f2; border-radius:var(--r-sm); padding:11px 13px; margin-bottom:8px; }
@@ -736,6 +739,7 @@ html.dark-theme .bottom-nav button{padding:6px 0}
   body.travel-mode.travel-font-large .shop-extra{flex-basis:100%}
   body.travel-mode.travel-font-large .shop-extra input{font-size:15px;line-height:1.45;min-height:43px}
   body.travel-mode.travel-font-large .rule-item{font-size:16px!important;line-height:1.75!important;padding:13px!important;gap:10px}
+  body.travel-mode.travel-font-large .rule-body-text{font-size:16px;line-height:1.75}
   body.travel-mode.travel-font-large .rule-item b{font-size:16px}
   body.travel-mode.travel-font-large .rule-cat-select{font-size:13px;padding:7px 9px;max-width:220px}
   body.travel-mode.travel-font-large .rule-photo-actions>button{min-height:42px;font-size:14px;padding:9px 12px}

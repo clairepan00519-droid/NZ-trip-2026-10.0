@@ -285,7 +285,10 @@ function mergeUniqueUrls(a,b){
   return [...new Set([...(Array.isArray(a)?a:[]),...(Array.isArray(b)?b:[])].filter(Boolean))];
 }
 function routeMapIdentity(url){
-  try{const u=new URL(String(url),location.href);return `${u.origin}${u.pathname}`.toLowerCase();}catch(e){return String(url||'').split(/[?#]/)[0].toLowerCase();}
+  const raw=String(url||'');
+  const fp=raw.match(/#nzfp=([a-f0-9]+)/i)?.[1];
+  if(fp)return `content:${fp.toLowerCase()}`;
+  try{const u=new URL(raw,location.href);return `${u.origin}${u.pathname}`.toLowerCase();}catch(e){return raw.split(/[?#]/)[0].toLowerCase();}
 }
 function mergeUniqueRouteMaps(a,b){
   const seen=new Set(),out=[];
@@ -296,6 +299,30 @@ function normalizeRouteMapStore(value){
   if(!value||typeof value!=='object'||Array.isArray(value))return {};
   return Object.fromEntries(Object.entries(value).map(([key,urls])=>[key,mergeUniqueRouteMaps(urls,[])]).filter(([,urls])=>urls.length));
 }
+async function routeMapContentFingerprint(source){
+  const blob=source instanceof Blob?source:await (await fetch(String(source).split('#')[0],{cache:'force-cache'})).blob();
+  const hash=await crypto.subtle.digest('SHA-256',await blob.arrayBuffer());
+  return [...new Uint8Array(hash)].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+function routeMapWithFingerprint(url,fp){return `${String(url).split('#')[0]}#nzfp=${fp}`;}
+const routeMapDedupeRunning=new Set();
+async function dedupeRouteMapsByContent(dayIdx){
+  const key=String(dayIdx),list=routeMapStore[key]||routeMapStore[dayIdx];
+  if(!Array.isArray(list)||list.length<2||routeMapDedupeRunning.has(key))return;
+  routeMapDedupeRunning.add(key);
+  try{
+    const seen=new Set(),clean=[];let changed=false;
+    for(const url of list){
+      try{
+        const fp=await routeMapContentFingerprint(url);
+        if(seen.has(fp)){changed=true;continue;}
+        seen.add(fp);const tagged=routeMapWithFingerprint(url,fp);clean.push(tagged);if(tagged!==url)changed=true;
+      }catch(e){const id=routeMapIdentity(url);if(!seen.has(id)){seen.add(id);clean.push(url);}else changed=true;}
+    }
+    if(changed){routeMapStore[key]=clean;persistRouteMaps();if(Number(key)===activeDay)renderDayContent();}
+  }finally{routeMapDedupeRunning.delete(key);}
+}
+function scheduleRouteMapContentDedupe(dayIdx){setTimeout(()=>dedupeRouteMapsByContent(dayIdx),0);}
 function normalizeStructuredList(key,value){
   if(!Array.isArray(value)) return value;
   const map=new Map();
@@ -305,6 +332,8 @@ function normalizeStructuredList(key,value){
     if(key==='nz_shop'){
       const freshWords=/生鮮|蔬菜|水果|牛奶|鮮奶|蛋|雞蛋|肉|牛排|鮭魚|海鮮|起司|乳酪|優格|沙拉/i;
       item.cat=item.cat==='supermarket'?(freshWords.test(`${item.name||''} ${item.location||''}`)?'fresh':'food'):(item.cat||'food');
+      if((item.cat==='fresh'||item.cat==='food')&&raw.cat!=='supermarket'&&!item.freshFoodFixedV51){item.cat=item.cat==='fresh'?'food':'fresh';item.freshFoodFixedV51=true;}
+      if(raw.cat==='supermarket')item.freshFoodFixedV51=true;
       item.imgs=mergeUniqueUrls(item.imgs,item.img?[item.img]:[]);
       item.img=null;
       item.id=item.id||stableItemId('shop',[item.cat,item.name,item.location]);
@@ -1144,8 +1173,15 @@ async function handleRouteMapUpload(e, dayIdx){
   if(!routeMapStore[dayIdx]) routeMapStore[dayIdx] = [];
   updateSyncStatus(null,'saving');
   try{
-    const urls=[]; for(const f of files) urls.push(await uploadMediaFile(f,`route-maps/day-${dayIdx}`));
+    await dedupeRouteMapsByContent(dayIdx);
+    const known=new Set((routeMapStore[dayIdx]||[]).map(routeMapIdentity)),urls=[];let skipped=0;
+    for(const f of files){
+      const blob=await compressImageToBlob(f),fp=await routeMapContentFingerprint(blob),id=`content:${fp}`;
+      if(known.has(id)){skipped++;continue;}
+      const url=await uploadMediaBlob(blob,`route-maps/day-${dayIdx}`);urls.push(routeMapWithFingerprint(url,fp));known.add(id);
+    }
     routeMapStore[dayIdx]=mergeUniqueRouteMaps(routeMapStore[dayIdx],urls); persistRouteMaps(); renderDayContent();
+    if(skipped)alert(`已略過 ${skipped} 張重複的路線圖。`);
   }catch(err){ alert('⚠️ '+friendlySyncError(err)+'\n'+String(err.message||err)); updateSyncStatus(err); }
 }
 function removeRouteMap(dayIdx, i){
@@ -1222,7 +1258,7 @@ function stayQuickCardHTML(dayIdx){
     const timeSummary=complete?`${times.checkin} 入住・${times.checkout} 退房`:'點擊填寫入住／退房時間';
     const amenitySummary=[times.bathtub==='yes'?'🛁 有浴缸':times.bathtub==='no'?'無浴缸':'',times.washer==='yes'?'🧺 有洗衣機':times.washer==='no'?'無洗衣機':''].filter(Boolean).join('・');
     const amenityOptions=(current)=>`<option value="unknown" ${!current||current==='unknown'?'selected':''}>未確認</option><option value="yes" ${current==='yes'?'selected':''}>有</option><option value="no" ${current==='no'?'selected':''}>無</option>`;
-    return `<details class="stay-quick-card"><summary class="stay-quick-head"><span>🏡 ${status}</span><span class="stay-quick-title"><b>${hotel.name}</b><small>${timeSummary}</small>${amenitySummary?`<small class="stay-amenity-summary">${amenitySummary}</small>`:''}</span><em class="stay-time-status ${complete?'complete':'pending'}">${complete?'✓ 已完成':'! 尚未填寫'}</em><i aria-hidden="true">⌄</i></summary><div class="stay-quick-body"><div class="stay-time-editor"><label><span>入住時間</span><input type="time" value="${escAttr(times.checkin||'')}" aria-label="${escapeHTMLText(hotel.name)} 入住時間" onchange="setStayTime('${jsQuote(hotel.name)}','checkin',this.value)"></label><span class="stay-time-arrow">→</span><label><span>退房時間</span><input type="time" value="${escAttr(times.checkout||'')}" aria-label="${escapeHTMLText(hotel.name)} 退房時間" onchange="setStayTime('${jsQuote(hotel.name)}','checkout',this.value)"></label></div><div class="stay-amenity-editor"><label><span>🛁 浴缸</span><select onchange="setStayAmenity('${jsQuote(hotel.name)}','bathtub',this.value)">${amenityOptions(times.bathtub)}</select></label><label><span>🧺 洗衣機</span><select onchange="setStayAmenity('${jsQuote(hotel.name)}','washer',this.value)">${amenityOptions(times.washer)}</select></label></div><div class="stay-quick-actions"><a href="${mapsLink(hotel.name,hotel._storageKey)}" target="_blank" rel="noopener">🗺️ 導航住宿</a></div></div></details>`;
+    return `<details class="stay-quick-card"><summary class="stay-quick-head"><span>🏡 ${status}</span><span class="stay-quick-title"><span class="stay-kicker">今晚住宿</span><b>${hotel.name}</b><small>${timeSummary}</small>${amenitySummary?`<small class="stay-amenity-summary">${amenitySummary}</small>`:''}</span><em class="stay-time-status ${complete?'complete':'pending'}">${complete?'✓ 已完成':'! 尚未填寫'}</em><i aria-hidden="true">⌄</i></summary><div class="stay-quick-body"><div class="stay-time-editor"><label><span>入住時間</span><input type="time" value="${escAttr(times.checkin||'')}" aria-label="${escapeHTMLText(hotel.name)} 入住時間" onchange="setStayTime('${jsQuote(hotel.name)}','checkin',this.value)"></label><span class="stay-time-arrow">→</span><label><span>退房時間</span><input type="time" value="${escAttr(times.checkout||'')}" aria-label="${escapeHTMLText(hotel.name)} 退房時間" onchange="setStayTime('${jsQuote(hotel.name)}','checkout',this.value)"></label></div><div class="stay-amenity-editor"><label><span>🛁 浴缸</span><select onchange="setStayAmenity('${jsQuote(hotel.name)}','bathtub',this.value)">${amenityOptions(times.bathtub)}</select></label><label><span>🧺 洗衣機</span><select onchange="setStayAmenity('${jsQuote(hotel.name)}','washer',this.value)">${amenityOptions(times.washer)}</select></label></div><div class="stay-quick-actions"><a href="${mapsLink(hotel.name,hotel._storageKey)}" target="_blank" rel="noopener">🗺️ 導航住宿</a></div></div></details>`;
   }).join('');
 }
 
@@ -1775,6 +1811,7 @@ function renderDayContent(){
     </div>`;
 
   const routeMaps = mergeUniqueRouteMaps(routeMapStore[activeDay],[]);
+  if(routeMaps.length>1)scheduleRouteMapContentDedupe(activeDay);
   const routeMapGalleryHTML = routeMaps.length ? `<div class="route-map-gallery">${routeMaps.map((u,i)=>`<div class="route-map-item"><img loading="lazy" decoding="async" src="${u}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)" alt="Day ${d.dayNum} 路線圖"><button class="route-map-remove" onclick="removeRouteMap(${activeDay}, ${i})">✕</button></div>`).join('')}</div>` : '<div class="empty">尚未上傳今天的行動路線圖。</div>';
   const routeMapHTML = `
     ${dailyRoadAlertsHTML(d.date)}
@@ -1791,7 +1828,7 @@ function renderDayContent(){
       ${d.drive ? `<div class="drive-info">${d.drive}</div>` : ''}
       ${d.gas ? `<div class="gas-info">${d.gas}</div>` : ''}
       <h2>${d.title}</h2>
-      <div class="day-utility-grid"><div class="weather-strip"><div class="ico">${d.weatherIco}</div><div class="txt"><b>${d.enRegion}</b><span>${d.wear}</span></div></div>${stayQuickCardHTML(activeDay)}</div>
+      <div class="day-utility-grid"><div class="weather-strip"><div class="ico">${d.weatherIco}</div><div class="txt"><small class="utility-kicker">今日穿搭</small><b>${d.wear}</b><span>${d.enRegion}</span></div></div>${stayQuickCardHTML(activeDay)}</div>
     </div>`;
 
   dayContent.innerHTML = `
@@ -2105,7 +2142,7 @@ function migratePackCategoryNames(data){
 let packData = migratePackCategoryNames(safeLocalJSON('nz_pack',structuredClone(defaultPackData)) || structuredClone(defaultPackData));
 function persistPack(){ safeSetItem('nz_pack', packData); }
 
-const defaultShopData = [{name:'牛奶／優格', qty:1, checked:false, img:null, cat:'fresh', location:''},{name:'Manuka 麥蘆卡蜂蜜', qty:1, checked:false, img:null, cat:'food', location:''},{name:'美麗諾羊毛製品', qty:1, checked:false, img:null, cat:'souvenir', location:''},{name:'Whittaker\'s 巧克力', qty:1, checked:false, img:null, cat:'food', location:''}];
+const defaultShopData = [{name:'牛奶／優格', qty:1, checked:false, img:null, cat:'fresh', location:'',freshFoodFixedV51:true},{name:'Manuka 麥蘆卡蜂蜜', qty:1, checked:false, img:null, cat:'food', location:'',freshFoodFixedV51:true},{name:'美麗諾羊毛製品', qty:1, checked:false, img:null, cat:'souvenir', location:''},{name:'Whittaker\'s 巧克力', qty:1, checked:false, img:null, cat:'food', location:'',freshFoodFixedV51:true}];
 let shopData = normalizeStructuredList('nz_shop', safeLocalJSON('nz_shop',defaultShopData) || defaultShopData);
 function persistShop(){ safeSetItem('nz_shop', shopData); }
 const SHOP_CATS = {fresh:{label:'🥬 超市・生鮮', color:'#2f8a52'}, food:{label:'🥫 超市・食品', color:'#9b6a24'}, souvenir:{label:'🎁 紀念品', color:'#c1502f'}};
@@ -2223,7 +2260,7 @@ function removeShopImg(i, photoIdx){ const imgs = shopImgs(shopData[i]); const [
 function toggleShop(i){ shopData[i].checked = !shopData[i].checked; persistShop(); renderShopList(); }
 function changeShopQty(i,delta){ shopData[i].qty = Math.max(1, shopData[i].qty+delta); persistShop(); renderShopList(); }
 function delShop(i){ const [removed]=shopData.splice(i,1); persistShop(); renderShopList(); offerUndo(`已刪除「${removed?.name||'購物項目'}」`,()=>{shopData.splice(i,0,removed);persistShop();renderShopList();}); }
-function addShopItem(){ const input = document.getElementById('newShopItem'); const cat = document.getElementById('newShopCat')?.value || 'food'; if(input && input.value.trim()){ shopData.push({id:'shop-'+crypto.randomUUID(),name:input.value.trim(), qty:1, checked:false, imgs:[], cat, location:''}); persistShop(); listSectionOpen.shop[cat] = true; renderShopList(); } }
+function addShopItem(){ const input = document.getElementById('newShopItem'); const cat = document.getElementById('newShopCat')?.value || 'food'; if(input && input.value.trim()){ shopData.push({id:'shop-'+crypto.randomUUID(),name:input.value.trim(), qty:1, checked:false, imgs:[], cat, location:'',freshFoodFixedV51:true}); persistShop(); listSectionOpen.shop[cat] = true; renderShopList(); } }
 function setShopCat(i, val){ shopData[i].cat = val; persistShop(); renderShopList(); }
 function setShopLocation(i, val){ shopData[i].location = val; persistShop(); }
 
@@ -2236,12 +2273,15 @@ const defaultRulesData = [
 let rulesData = normalizeStructuredList('nz_rules', safeLocalJSON('nz_rules',defaultRulesData) || defaultRulesData);
 const RULE_CATS=[['entry','🛂 入境與證件'],['drive','🚗 自駕與交通'],['weather','🌦️ 天候與安全'],['booking','🎫 預約與住宿'],['other','📌 其他提醒']];
 const ruleSectionOpen={entry:false,drive:false,weather:false,booking:false,other:false};
+const ruleEditOpenIds=new Set();
 function inferRuleCat(r){if(r.cat&&RULE_CATS.some(c=>c[0]===r.cat))return r.cat;const s=`${r.title||''} ${r.text||''}`;if(/駕|車|路|圓環|橋|加油|停車/.test(s))return'drive';if(/雨|雪|風|冷|天候|安全/.test(s))return'weather';if(/住宿|入住|退房|票|預約/.test(s))return'booking';if(/入境|護照|駕照|申報|證件|簽證/.test(s))return'entry';return'other';}
 rulesData.forEach(r=>{r.cat=inferRuleCat(r);});
 function persistRules(){ safeSetItem('nz_rules', rulesData); }
 function ruleImgs(rule){return mergeUniqueUrls(rule?.imgs,rule?.img?[rule.img]:[]);}
 function toggleRuleSection(cat){ruleSectionOpen[cat]=!ruleSectionOpen[cat];renderRulesList();}
 function setRuleCat(i,val){rulesData[i].cat=val;persistRules();ruleSectionOpen[val]=true;renderRulesList();}
+function toggleRuleEditor(id){ruleEditOpenIds.has(id)?ruleEditOpenIds.delete(id):ruleEditOpenIds.add(id);renderRulesList();}
+function saveRuleEdit(i){const r=rulesData[i];if(!r)return;const title=document.getElementById(`ruleEditTitle-${r.id}`)?.value.trim()||'';const text=document.getElementById(`ruleEditText-${r.id}`)?.value.trim()||'';const cat=document.getElementById(`ruleEditCat-${r.id}`)?.value||r.cat||'other';if(!text){alert('請填寫提醒內容。');return;}r.title=title;r.text=text;r.cat=cat;ruleEditOpenIds.delete(r.id);ruleSectionOpen[cat]=true;persistRules();renderRulesList();}
 
 function renderRulesList() {
   const wrap = document.getElementById('rulesListWrap');
@@ -2259,8 +2299,10 @@ function renderRulesList() {
       <span class="dot" style="margin-top:2px;">●</span>
       <div style="flex:1;">
         ${title ? `<div style="font-weight:900; font-size:13.5px; color:var(--ink); margin-bottom:3px;">${escapeHTMLText(title)}</div>` : ''}
-        <div style="font-size:12.5px; color:var(--ink-soft); line-height:1.6;">${escapeHTMLText(body)}</div>
+        <div class="rule-body-text">${escapeHTMLText(body)}</div>
         <select class="rule-cat-select structural-edit-control" onchange="setRuleCat(${i},this.value)" aria-label="提醒分類">${RULE_CATS.map(([v,n])=>`<option value="${v}" ${r.cat===v?'selected':''}>${n}</option>`).join('')}</select>
+        <button type="button" class="rule-edit-btn structural-edit-control" onclick="toggleRuleEditor('${jsQuote(r.id)}')">${ruleEditOpenIds.has(r.id)?'取消編輯':'編輯內容'}</button>
+        ${ruleEditOpenIds.has(r.id)?`<div class="rule-inline-editor structural-edit-control"><input id="ruleEditTitle-${escAttr(r.id)}" type="text" value="${escAttr(title||'')}" placeholder="標題"><textarea id="ruleEditText-${escAttr(r.id)}" rows="5" placeholder="提醒內容；可使用 Enter 分行">${escapeHTMLText(body||'')}</textarea><select id="ruleEditCat-${escAttr(r.id)}">${RULE_CATS.map(([v,n])=>`<option value="${v}" ${r.cat===v?'selected':''}>${n}</option>`).join('')}</select><button type="button" onclick="saveRuleEdit(${i})">儲存修改</button></div>`:''}
         <div class="rule-photo-actions"><button onclick="document.getElementById('ruleFile-${i}').click()">📷 ${ruleImgs(r).length?'繼續新增圖片':'新增附圖'}</button><span>${ruleImgs(r).length?`${ruleImgs(r).length} 張圖片`:''}</span><input type="file" id="ruleFile-${i}" accept="image/*" multiple style="display:none" onchange="handleRulePhoto(event, ${i})"></div>
         ${ruleImgs(r).length?`<div class="rule-photo-row">${ruleImgs(r).map((url,pi)=>`<figure class="rule-photo"><img src="${escAttr(url)}" alt="${escapeHTMLText(title||'旅遊提醒')} 附圖 ${pi+1}" loading="lazy" onclick="openRuleGallery('${jsQuote(r.id)}',${pi})"><button type="button" onclick="removeRuleImg(${i},${pi})" aria-label="刪除第 ${pi+1} 張圖片">✕</button></figure>`).join('')}</div>`:''}
       </div>
@@ -2272,8 +2314,8 @@ function renderRulesList() {
     <div class="add-row" style="flex-direction:column; align-items:stretch; gap:8px;">
       <select id="newRuleCat" aria-label="新增提醒分類">${RULE_CATS.map(([v,n])=>`<option value="${v}">${n}</option>`).join('')}</select>
       <input type="text" id="newRuleTitle" placeholder="標題（例如：行李限重）...">
-      <div style="display:flex; gap:8px;">
-        <input type="text" id="newRuleItem" placeholder="內文說明...">
+      <div class="rule-add-content">
+        <textarea id="newRuleItem" rows="4" placeholder="內文說明；按 Enter 即可分行..."></textarea>
         <button onclick="addRuleItem()">＋</button>
       </div>
     </div>
