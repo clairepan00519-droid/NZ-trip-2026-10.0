@@ -158,7 +158,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const SYNC_META_KEY = 'nz_sync_meta_v3';
 const SYNC_OUTBOX_KEY = 'nz_sync_outbox_v1';
 const SYNC_CONFLICTS_KEY = 'nz_sync_conflicts_v1';
-const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_day_cover_focus','nz_nav_links','nz_hours_override','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_stay_times','nz_favorites','nz_pack','nz_shop','nz_rules','nz_docs'];
+const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_nav_links','nz_hours_override','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_stay_times','nz_favorites','nz_pack','nz_shop','nz_rules','nz_docs'];
 const MEDIA_SYNC_KEYS = new Set(['nz_photos','nz_covers','nz_route_maps']);
 const STRUCTURED_LIST_KEYS = new Set(['nz_shop','nz_rules','nz_docs']);
 function loadSyncOutbox(){try{const value=JSON.parse(localStorage.getItem(SYNC_OUTBOX_KEY));return value&&typeof value==='object'&&!Array.isArray(value)?value:{};}catch(e){return {};}}
@@ -482,7 +482,7 @@ function applyRemoteRow(row, forceApply=false){
 }
 function applyStoreUpdate(key,jsonStr){
   let parsed;try{parsed=JSON.parse(jsonStr);}catch(e){return;}
-  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_day_cover_focus':dayCoverFocusStore=parsed||{};break;case'nz_nav_links':navLinkStore=parsed;break;case'nz_hours_override':hoursOverrideStore=parsed||{};break;case'nz_custom_spots':customSpotsStore=parsed;break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=normalizeRouteMapStore(parsed);break;case'nz_stay_times':stayTimeStore=parsed||{};break;case'nz_favorites':favoriteStore=parsed||{};break;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=normalizeStructuredList('nz_shop',parsed);renderShopList();return;case'nz_rules':rulesData=normalizeStructuredList('nz_rules',parsed);renderRulesList();return;case'nz_docs':docsData=normalizeStructuredList('nz_docs',parsed);renderDocsList();return;default:return;}
+  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_nav_links':navLinkStore=parsed;break;case'nz_hours_override':hoursOverrideStore=parsed||{};break;case'nz_custom_spots':customSpotsStore=parsed;break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=normalizeRouteMapStore(parsed);break;case'nz_stay_times':stayTimeStore=parsed||{};break;case'nz_favorites':favoriteStore=parsed||{};break;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=normalizeStructuredList('nz_shop',parsed);renderShopList();return;case'nz_rules':rulesData=normalizeStructuredList('nz_rules',parsed);renderRulesList();return;case'nz_docs':docsData=normalizeStructuredList('nz_docs',parsed);renderDocsList();return;default:return;}
   if(typeof renderDayContent==='function')renderDayContent();if(typeof updateSpotCount==='function')updateSpotCount();
 }
 function scheduleCloudPush(key,valueObj){
@@ -909,11 +909,6 @@ function persistPhotos(){ return safeSetItem('nz_photos', photoStore); }
    而不是每次上傳新照片就自動覆蓋原本的封面 */
 let coverStore = safeLocalJSON('nz_covers',{}) || {};
 function persistCover(){ safeSetItem('nz_covers', coverStore); }
-
-/* 每日雜誌封面焦點：只改變裁切位置，不影響景點原圖與相簿。 */
-let dayCoverFocusStore = safeLocalJSON('nz_day_cover_focus',{}) || {};
-function dayCoverFocus(dayIdx){const value=Number(dayCoverFocusStore[dayIdx]);return [22,50,78].includes(value)?value:50;}
-function setDayCoverFocus(dayIdx,value){const next=Number(value);if(![22,50,78].includes(next))return;dayCoverFocusStore[dayIdx]=next;safeSetItem('nz_day_cover_focus',dayCoverFocusStore);renderDayContent();}
 
 /* 自訂導航：可直接貼 Google Maps 分享網址，或輸入「緯度, 經度」。 */
 let navLinkStore = safeLocalJSON('nz_nav_links',{}) || {};
@@ -1873,17 +1868,12 @@ function renderDayContent(){
       <div style="font-size:11px; color:var(--ink-soft); margin-top:8px; line-height:1.5;">可上傳您自己規劃或手繪的當日路線圖／導航截圖，會保存在此裝置的瀏覽器中，重新整理或關閉頁面都不會消失。</div>
     </div>`;
 
-  const dayCoverEntry=allMainList.find(o=>o.spot?.img||(photoStore[o.key]||[]).length)||allLifeList.find(o=>o.spot?.img||(photoStore[o.key]||[]).length);
-  const dayCoverUrl=dayCoverEntry?comparisonImageFor(dayCoverEntry.spot,dayCoverEntry.key):'images/map.webp';
-  const coverFocus=dayCoverFocus(activeDay);
-  const daySummaryHTML=`<div class="day-card-head editorial-day-head">
-      <section class="day-editorial-cover">
-        <img class="day-editorial-image" src="${escapeHTMLText(dayCoverUrl)}" alt="${escapeHTMLText(d.region)} 當日封面" loading="eager" decoding="async" onerror="handleImageError(this)" style="object-position:center ${coverFocus}%">
-        <div class="day-editorial-shade"></div>
-        <div class="day-editorial-copy"><div class="day-editorial-kicker"><span>DAY ${d.dayNum}</span><span>${d.date}</span></div><small>${escapeHTMLText(d.region)} · ${escapeHTMLText(d.enRegion)}</small><h2>${escapeHTMLText(d.title)}</h2><div class="day-editorial-meta">${d.drive?`<span>${uiIcon('car')}${escapeHTMLText(d.drive)}</span>`:''}${d.gas?`<span class="fuel">${uiIcon('fuel')}${escapeHTMLText(d.gas)}</span>`:''}</div></div>
-        <div class="day-cover-focus structural-edit-control" aria-label="調整每日封面裁切位置"><b>封面焦點</b><button class="${coverFocus===22?'active':''}" onclick="setDayCoverFocus(${activeDay},22)">上</button><button class="${coverFocus===50?'active':''}" onclick="setDayCoverFocus(${activeDay},50)">中</button><button class="${coverFocus===78?'active':''}" onclick="setDayCoverFocus(${activeDay},78)">下</button></div>
-      </section>
-      <div class="day-utility-grid editorial-utility-grid"><div class="weather-strip"><div class="ico">${d.weatherIco}</div><div class="txt"><small class="utility-kicker">今日穿搭</small><b>${escapeHTMLText(d.wear)}</b><span>${escapeHTMLText(d.enRegion)}</span></div></div>${stayQuickCardHTML(activeDay)}</div>
+  const daySummaryHTML=`<div class="day-card-head">
+      <div class="region">【Day ${d.dayNum}｜${d.date}】<br>${d.region}</div>
+      ${d.drive ? `<div class="drive-info">${d.drive}</div>` : ''}
+      ${d.gas ? `<div class="gas-info">${d.gas}</div>` : ''}
+      <h2>${d.title}</h2>
+      <div class="day-utility-grid"><div class="weather-strip"><div class="ico">${d.weatherIco}</div><div class="txt"><small class="utility-kicker">今日穿搭</small><b>${d.wear}</b><span>${d.enRegion}</span></div></div>${stayQuickCardHTML(activeDay)}</div>
     </div>`;
 
   dayContent.innerHTML = `
