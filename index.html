@@ -93,7 +93,7 @@
   </div>
 
   <!-- 上方只保留全站搜尋；主要頁面切換使用下方導覽列 -->
-  <div class="context-quick-bar"><button class="context-search-btn" onclick="openGlobalSearch()"><svg class="ui-icon"><use href="#i-search"/></svg><b>搜尋</b></button><div id="contextQuickActions" class="context-quick-actions" aria-label="本頁快捷入口"></div></div>
+  <div class="context-quick-bar"><button class="context-search-btn" onclick="openGlobalSearch()"><svg class="ui-icon"><use href="#i-search"/></svg><b>搜尋</b></button><button class="journey-hub-open" onclick="openJourneyHub()"><svg class="ui-icon"><use href="#i-compass"/></svg><b>旅程中心</b><em id="journeyHubBadge" hidden></em></button><div id="contextQuickActions" class="context-quick-actions" aria-label="本頁快捷入口"></div></div>
   <div class="mobile-control-row"><div class="mobile-mode-switch" aria-label="使用模式"><button class="mode-btn" data-mode="edit" type="button" onclick="setUseMode('edit')">✎ 編輯</button><button class="mode-btn" data-mode="travel" type="button" onclick="setUseMode('travel')">旅行模式</button><button class="structural-edit-control" type="button" onclick="openEditStatus()">☑ 狀態</button></div><div class="travel-font-switch" aria-label="旅行模式文字大小"><button class="travel-font-btn" data-travel-font="standard" type="button" onclick="setTravelFontSize('standard')">標準字</button><button class="travel-font-btn" data-travel-font="large" type="button" onclick="setTravelFontSize('large')">大字</button></div></div>
 
   <!-- ================= ITINERARY VIEW ================= -->
@@ -281,6 +281,14 @@
     <button class="nav-btn" onclick="setTab('guide')"><span class="ic"><svg class="ui-icon"><use href="#i-guide"/></svg></span><span class="lb">指南</span></button>
     <button class="nav-btn" onclick="setTab('weather')"><span class="ic"><svg class="ui-icon"><use href="#i-weather"/></svg></span><span class="lb">天氣</span></button>
   </div>
+</div>
+
+<div id="journeyHubModal" class="journey-hub-modal" hidden onclick="if(event.target===this)closeJourneyHub()">
+  <section class="journey-hub-sheet" role="dialog" aria-modal="true" aria-labelledby="journeyHubTitle">
+    <header class="journey-hub-head"><div><small>NZ TRIP · CONTROL CENTRE</small><h2 id="journeyHubTitle">旅程控制中心</h2></div><button onclick="closeJourneyHub()" aria-label="關閉">×</button></header>
+    <nav class="journey-hub-tabs"><button data-hub-tab="favorites" onclick="setJourneyHubTab('favorites')">★ 全旅程收藏</button><button data-hub-tab="offline" onclick="setJourneyHubTab('offline')">離線健康</button><button data-hub-tab="conflicts" onclick="setJourneyHubTab('conflicts')">同步保護 <em id="conflictTabCount">0</em></button></nav>
+    <div id="journeyHubContent" class="journey-hub-content"></div>
+  </section>
 </div>
 
 <!-- Modal for Images -->

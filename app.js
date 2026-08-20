@@ -157,13 +157,17 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const SYNC_META_KEY = 'nz_sync_meta_v3';
 const SYNC_OUTBOX_KEY = 'nz_sync_outbox_v1';
-const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_nav_links','nz_hours_override','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_stay_times','nz_pack','nz_shop','nz_rules','nz_docs'];
+const SYNC_CONFLICTS_KEY = 'nz_sync_conflicts_v1';
+const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_day_cover_focus','nz_nav_links','nz_hours_override','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_stay_times','nz_favorites','nz_pack','nz_shop','nz_rules','nz_docs'];
 const MEDIA_SYNC_KEYS = new Set(['nz_photos','nz_covers','nz_route_maps']);
 const STRUCTURED_LIST_KEYS = new Set(['nz_shop','nz_rules','nz_docs']);
 function loadSyncOutbox(){try{const value=JSON.parse(localStorage.getItem(SYNC_OUTBOX_KEY));return value&&typeof value==='object'&&!Array.isArray(value)?value:{};}catch(e){return {};}}
 function saveSyncOutbox(){try{localStorage.setItem(SYNC_OUTBOX_KEY,JSON.stringify(cloudSync.pending));}catch(e){console.warn('無法保存待同步佇列',e);}}
 function syncOutboxCount(){return Object.keys(cloudSync.pending||{}).length;}
 const cloudSync = {enabled:false, applyingRemote:false, pending:loadSyncOutbox(), timer:null, pollTimer:null, lastError:null, ready:false, flushing:false};
+let syncConflicts=safeConflictJSON();
+function safeConflictJSON(){try{const v=JSON.parse(localStorage.getItem(SYNC_CONFLICTS_KEY));return v&&typeof v==='object'&&!Array.isArray(v)?v:{};}catch(e){return {};}}
+function saveSyncConflicts(){try{localStorage.setItem(SYNC_CONFLICTS_KEY,JSON.stringify(syncConflicts));}catch(e){}if(typeof updateJourneyHubBadge==='function')updateJourneyHubBadge();}
 const MEDIA_BUCKET = 'trip-media';
 
 function makeMediaPath(folder, ext='jpg'){
@@ -468,20 +472,25 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')flushDeferredRemoteR
 function applyRemoteRow(row, forceApply=false){
   if(!row||typeof row.value==='undefined')return;
   if(!forceApply && isUserEditingForm()){ queueRemoteRow(row); return; }
-  const rt=row.updated_at||new Date().toISOString(), lt=getSyncMeta()[row.key]; if(lt&&Date.parse(lt)>Date.parse(rt))return;
+  if(!forceApply&&cloudSync.pending[row.key]){
+    const remoteTime=Date.parse(row.updated_at||0)||0,localPendingTime=Date.parse(cloudSync.pending[row.key].updatedAt||0)||0;
+    if(remoteTime>=localPendingTime&&JSON.stringify(cloudSync.pending[row.key].valueObj)!==row.value){let remoteValue=null;try{remoteValue=JSON.parse(row.value);}catch(e){}syncConflicts[row.key]={key:row.key,local:cloudSync.pending[row.key].valueObj,remote:remoteValue,remoteUpdatedAt:row.updated_at,detectedAt:new Date().toISOString()};saveSyncConflicts();updateSyncStatus();return;}
+  }
+  const rt=row.updated_at||new Date().toISOString(), lt=getSyncMeta()[row.key]; if(!forceApply&&lt&&Date.parse(lt)>Date.parse(rt))return;
   cloudSync.applyingRemote=true;
   try{let remote;try{remote=JSON.parse(row.value);}catch(e){remote=null;}remote=normalizeSyncValue(row.key,remote);let value=remote;if(MEDIA_SYNC_KEYS.has(row.key)){const local=localValueForKey(row.key);value=mergePreservingLocal(local,remote);}const valueStr=JSON.stringify(value);const localStr=JSON.stringify(normalizeSyncValue(row.key,localValueForKey(row.key)));setSyncMeta(row.key,rt);if(valueStr===localStr)return;replaceLocalJson(row.key,value);applyStoreUpdate(row.key,valueStr);}catch(e){console.error('套用家人資料失敗',e);}finally{cloudSync.applyingRemote=false;}
 }
 function applyStoreUpdate(key,jsonStr){
   let parsed;try{parsed=JSON.parse(jsonStr);}catch(e){return;}
-  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_nav_links':navLinkStore=parsed;break;case'nz_hours_override':hoursOverrideStore=parsed||{};break;case'nz_custom_spots':customSpotsStore=parsed;break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=normalizeRouteMapStore(parsed);break;case'nz_stay_times':stayTimeStore=parsed||{};break;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=normalizeStructuredList('nz_shop',parsed);renderShopList();return;case'nz_rules':rulesData=normalizeStructuredList('nz_rules',parsed);renderRulesList();return;case'nz_docs':docsData=normalizeStructuredList('nz_docs',parsed);renderDocsList();return;default:return;}
+  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_day_cover_focus':dayCoverFocusStore=parsed||{};break;case'nz_nav_links':navLinkStore=parsed;break;case'nz_hours_override':hoursOverrideStore=parsed||{};break;case'nz_custom_spots':customSpotsStore=parsed;break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=normalizeRouteMapStore(parsed);break;case'nz_stay_times':stayTimeStore=parsed||{};break;case'nz_favorites':favoriteStore=parsed||{};break;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=normalizeStructuredList('nz_shop',parsed);renderShopList();return;case'nz_rules':rulesData=normalizeStructuredList('nz_rules',parsed);renderRulesList();return;case'nz_docs':docsData=normalizeStructuredList('nz_docs',parsed);renderDocsList();return;default:return;}
   if(typeof renderDayContent==='function')renderDayContent();if(typeof updateSpotCount==='function')updateSpotCount();
 }
 function scheduleCloudPush(key,valueObj){
   if(cloudSync.applyingRemote)return;
   const t=new Date().toISOString();
+  const baseUpdatedAt=cloudSync.pending[key]?.baseUpdatedAt||getSyncMeta()[key]||null;
   setSyncMeta(key,t);
-  cloudSync.pending[key]={valueObj,updatedAt:t};
+  cloudSync.pending[key]={valueObj,updatedAt:t,baseUpdatedAt};
   saveSyncOutbox();
   clearTimeout(cloudSync.timer);
   if(navigator.onLine&&cloudSync.enabled) cloudSync.timer=setTimeout(flushCloudPush,700);
@@ -492,8 +501,14 @@ async function flushCloudPush(){
   cloudSync.flushing=true;
   const entries=Object.entries(cloudSync.pending);
   try{
+    const remoteMap=new Map((await restGetRows()).map(r=>[r.key,r]));
     for(const[key,item]of entries){
       try{
+        const remote=remoteMap.get(key),remoteTime=Date.parse(remote?.updated_at||0)||0,baseTime=Date.parse(item.baseUpdatedAt||0)||0;
+        if(remote&&baseTime&&remoteTime>baseTime&&remote.value!==JSON.stringify(item.valueObj)){
+          let remoteValue=null;try{remoteValue=JSON.parse(remote.value);}catch(e){}
+          syncConflicts[key]={key,local:item.valueObj,remote:remoteValue,remoteUpdatedAt:remote.updated_at,detectedAt:new Date().toISOString()};saveSyncConflicts();updateSyncStatus();continue;
+        }
         await restUpsert(key,item.valueObj,item.updatedAt);
         if(cloudSync.pending[key]?.updatedAt===item.updatedAt) delete cloudSync.pending[key];
         saveSyncOutbox();
@@ -507,12 +522,15 @@ async function flushCloudPush(){
       }
     }
     if(!syncOutboxCount()) setTimeout(pollCloudChanges,500);
-  }finally{cloudSync.flushing=false;}
+  }catch(e){cloudSync.lastError=e;console.error('同步前版本檢查失敗，變更仍保留在佇列：',e);updateSyncStatus(e,'queued');}
+  finally{cloudSync.flushing=false;}
 }
 function updateSyncStatus(err,state){
   const el=document.getElementById('cloudSyncStatus');if(!el)return;el.style.display='inline-flex';el.classList.toggle('sync-error',!!err);el.classList.toggle('sync-saving',state==='saving'||state==='connecting');
   const queued=syncOutboxCount()+mediaQueueCount();
-  if(err){el.textContent=`⚠️ ${queued?queued+' 項等待同步':'同步失敗'}・${friendlySyncError(err)}`;el.title=String(err&&err.message||err);}
+  const conflicts=Object.keys(syncConflicts||{}).length;
+  if(conflicts){el.textContent=`⚠️ ${conflicts} 項同步內容待確認`;el.classList.add('sync-error');}
+  else if(err){el.textContent=`⚠️ ${queued?queued+' 項等待同步':'同步失敗'}・${friendlySyncError(err)}`;el.title=String(err&&err.message||err);}
   else if(state==='connecting')el.textContent='☁️ 正在連接家人同步';
   else if(state==='saving')el.textContent=`☁️ 正在同步${queued?' '+queued+' 項變更':''}`;
   else if(state==='queued'||queued)el.textContent=`☁️ ${queued} 項變更等待同步`;
@@ -891,6 +909,11 @@ function persistPhotos(){ return safeSetItem('nz_photos', photoStore); }
    而不是每次上傳新照片就自動覆蓋原本的封面 */
 let coverStore = safeLocalJSON('nz_covers',{}) || {};
 function persistCover(){ safeSetItem('nz_covers', coverStore); }
+
+/* 每日雜誌封面焦點：只改變裁切位置，不影響景點原圖與相簿。 */
+let dayCoverFocusStore = safeLocalJSON('nz_day_cover_focus',{}) || {};
+function dayCoverFocus(dayIdx){const value=Number(dayCoverFocusStore[dayIdx]);return [22,50,78].includes(value)?value:50;}
+function setDayCoverFocus(dayIdx,value){const next=Number(value);if(![22,50,78].includes(next))return;dayCoverFocusStore[dayIdx]=next;safeSetItem('nz_day_cover_focus',dayCoverFocusStore);renderDayContent();}
 
 /* 自訂導航：可直接貼 Google Maps 分享網址，或輸入「緯度, 經度」。 */
 let navLinkStore = safeLocalJSON('nz_nav_links',{}) || {};
@@ -1475,6 +1498,30 @@ function renderDayChips(){
 }
 
 let activeSubTabStore = {}; /* dayIdx -> 'main' | 'more' | 'routemap'，記住使用者目前停留在哪個子分頁 */
+let favoriteStore=safeLocalJSON('nz_favorites',{})||{};
+let spotDisplayMode=localStorage.getItem('nz_spot_display_mode')==='favorites'?'favorites':'all';
+function isFavoriteSpot(key){return favoriteStore[String(key)]===true;}
+function toggleFavoriteSpot(event,key){event?.stopPropagation();const k=String(key);if(isFavoriteSpot(k))delete favoriteStore[k];else favoriteStore[k]=true;safeSetItem('nz_favorites',favoriteStore);renderDayContent();}
+function setSpotDisplayMode(mode){spotDisplayMode=mode==='favorites'?'favorites':'all';localStorage.setItem('nz_spot_display_mode',spotDisplayMode);renderDayContent();}
+function favoriteButtonHTML(key,compact=false){const active=isFavoriteSpot(key);return `<button type="button" class="spot-favorite-btn${active?' active':''}${compact?' compact':''}" onclick="toggleFavoriteSpot(event,'${jsQuote(key)}')" aria-pressed="${active}" aria-label="${active?'取消收藏':'加入收藏'}">${compact?(active?'★':'☆'):(active?'★ 已收藏':'☆ 收藏')}</button>`;}
+
+/* ============ 旅程控制中心：收藏／離線健康／同步保護 ============ */
+let journeyHubTab='favorites';
+const SYNC_KEY_LABELS={nz_notes:'評論與資訊',nz_photos:'景點照片',nz_covers:'景點封面',nz_nav_links:'導航修正',nz_hours_override:'營業時間',nz_custom_spots:'自訂景點',nz_order:'景點排序',nz_block_order:'卡片排序',nz_route_maps:'路線圖',nz_stay_times:'住宿資料',nz_favorites:'收藏',nz_pack:'打包清單',nz_shop:'購物清單',nz_rules:'旅遊規範',nz_docs:'票券住宿'};
+function updateJourneyHubBadge(){const n=Object.keys(syncConflicts||{}).length,b=document.getElementById('journeyHubBadge'),c=document.getElementById('conflictTabCount');if(b){b.hidden=!n;b.textContent=n;}if(c)c.textContent=n;}
+function openJourneyHub(tab='favorites'){journeyHubTab=tab;document.getElementById('journeyHubModal').hidden=false;document.body.classList.add('journey-hub-active');renderJourneyHub();}
+function closeJourneyHub(){document.getElementById('journeyHubModal').hidden=true;document.body.classList.remove('journey-hub-active');}
+function setJourneyHubTab(tab){journeyHubTab=tab;renderJourneyHub();}
+function renderJourneyHub(){document.querySelectorAll('[data-hub-tab]').forEach(b=>b.classList.toggle('active',b.dataset.hubTab===journeyHubTab));updateJourneyHubBadge();if(journeyHubTab==='favorites')renderAllFavorites();else if(journeyHubTab==='offline')renderOfflineHealth();else renderSyncConflicts();}
+function renderAllFavorites(){const wrap=document.getElementById('journeyHubContent'),items=allSpotSearchEntries().filter(o=>isFavoriteSpot(o.key));if(!items.length){wrap.innerHTML='<div class="hub-empty"><b>還沒有收藏景點</b><span>在任一景點卡點「☆ 收藏」，就會依日期集中出現在這裡。</span></div>';return;}const groups=days.map((d,i)=>({d,i,items:items.filter(x=>x.dayIdx===i)})).filter(g=>g.items.length);wrap.innerHTML=`<div class="hub-overview"><span>全旅程收藏</span><b>${items.length}</b><small>個景點</small></div>`+groups.map(g=>`<section class="hub-favorite-day"><header><span>${g.d.date}</span><div><b>${escapeHTMLText(g.d.region)}</b><small>${g.items.length} 個收藏</small></div></header>${g.items.map(o=>`<button onclick="openHubFavorite(${o.dayIdx},'${jsQuote(o.key)}','${o.subTab}')"><span class="hub-favorite-star">★</span><div><b>${escapeHTMLText(o.spot.name)}</b><small>${escapeHTMLText(CAT[o.spot.cat]?.label||'景點')}・${escapeHTMLText(o.spot.desc||'')}</small></div><i>›</i></button>`).join('')}</section>`).join('');}
+function openHubFavorite(dayIdx,key,subTab){closeJourneyHub();setTab('itinerary');activeDay=Number(dayIdx);activeSubTabStore[activeDay]=subTab||'main';renderDayChips();renderDayContent();setTimeout(()=>{const card=document.getElementById('spot-card-'+key);if(card){card.classList.add('open');card.scrollIntoView({behavior:'smooth',block:'center'});}},180);}
+function dataPhotoCount(){let n=0;Object.values(photoStore||{}).forEach(v=>n+=(v||[]).length);Object.values(routeMapStore||{}).forEach(v=>n+=(v||[]).length);(shopData||[]).forEach(v=>n+=shopImgs(v).length);(rulesData||[]).forEach(v=>n+=ruleImgs(v).length);(docsData||[]).forEach(v=>n+=v.img?1:0);return n;}
+function healthRow(ok,title,detail){return `<div class="health-row ${ok?'ok':'warn'}"><span>${ok?'✓':'!'}</span><div><b>${title}</b><small>${detail}</small></div></div>`;}
+async function renderOfflineHealth(){const wrap=document.getElementById('journeyHubContent');wrap.innerHTML='<div class="hub-loading">正在檢查這台裝置…</div>';let cacheCount=0,swReady=false,usage='尚無法估算';try{if('caches'in window){for(const name of await caches.keys())cacheCount+=(await caches.open(name).then(c=>c.keys())).length;}swReady=Boolean(navigator.serviceWorker?.controller||await navigator.serviceWorker?.ready);const est=await navigator.storage?.estimate?.();if(est?.usage!=null)usage=`已使用 ${(est.usage/1024/1024).toFixed(1)} MB`;}catch(e){}const weather=loadWeatherCache(),times=Object.values(weather).map(v=>v?.fetchedAt).filter(Boolean),latest=times.length?new Date(Math.max(...times)).toLocaleString('zh-TW',{hour12:false}):'尚未下載';const queued=syncOutboxCount()+mediaQueueCount(),photos=dataPhotoCount(),coreKeys=SYNC_KEYS.filter(k=>localStorage.getItem(k)!=null).length;wrap.innerHTML=`<div class="hub-health-hero"><small>THIS DEVICE</small><b>${navigator.onLine?'目前在線':'目前離線'}</b><span>${usage}</span></div><div class="health-list">${healthRow(swReady&&cacheCount>0,'網站程式已離線保存',cacheCount?`共 ${cacheCount} 個快取資源`:'尚未建立完整快取')}${healthRow(coreKeys>0,'行程資料已保存在裝置',`${coreKeys}/${SYNC_KEYS.length} 類共用資料已有本機副本`)}${healthRow(photos>0,'旅程圖片',photos?`目前可辨識 ${photos} 張；曾開啟過的圖片較有機會離線顯示`:'尚未保存自訂圖片')}${healthRow(times.length>0,'天氣資料',`最後更新：${latest}`)}${healthRow(queued===0,'待上傳佇列',queued?`${queued} 項等待恢復網路後同步`:'沒有等待同步的內容')}</div><div class="hub-health-note">出發前請在 Wi‑Fi 下開啟一次各日期、票券與重要圖片。Google Maps、即時天氣及外部 Webcam 仍需要網路。</div>`;}
+function renderSyncConflicts(){const wrap=document.getElementById('journeyHubContent'),items=Object.values(syncConflicts||{});if(!items.length){wrap.innerHTML='<div class="hub-empty good"><b>同步內容安全</b><span>目前沒有需要人工確認的版本衝突。</span></div>';return;}wrap.innerHTML='<div class="conflict-intro">兩台裝置在相近時間修改了同一類資料。網站已暫停覆蓋，請選擇要保留的版本。</div>'+items.map(c=>`<section class="conflict-card"><div><small>需要確認</small><b>${escapeHTMLText(SYNC_KEY_LABELS[c.key]||c.key)}</b><span>${new Date(c.detectedAt).toLocaleString('zh-TW',{hour12:false})}</span></div><p>本機變更與家人雲端版本不同。</p><div><button onclick="resolveSyncConflict('${jsQuote(c.key)}','local')">保留這台裝置</button><button class="cloud" onclick="resolveSyncConflict('${jsQuote(c.key)}','remote')">採用家人版本</button></div></section>`).join('');}
+function resolveSyncConflict(key,choice){const c=syncConflicts[key];if(!c)return;if(choice==='remote'){delete cloudSync.pending[key];saveSyncOutbox();delete syncConflicts[key];saveSyncConflicts();applyRemoteRow({key,value:JSON.stringify(c.remote),updated_at:c.remoteUpdatedAt},true);}else{delete syncConflicts[key];saveSyncConflicts();safeSetItem(key,c.local);}updateSyncStatus();renderJourneyHub();}
+document.addEventListener('DOMContentLoaded',updateJourneyHubBadge);
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!document.getElementById('journeyHubModal')?.hidden)closeJourneyHub();});
 
 function setActiveDay(i) {
   activeDay = i;
@@ -1625,10 +1672,10 @@ function spotCardHTML(spot, key, isMainSpot, customMeta, orderInfo){
   const navFixButton=`<button class="btn btn-nav-edit structural-edit-control" onclick="toggleNavEditor(event,'${idx}')">✏️ 修正導航</button>`;
 
   if (!isMainSpot) {
-    return `<div class="sub-spot-card sub-spot-${spot.cat || 'other'}" id="spot-card-${idx}"><div class="sub-spot-header" onclick="toggleSpotDetails('${idx}')"><div class="sub-spot-header-content"><h4>${safeSpotName}</h4><p class="short-desc">${safeSpotDesc}</p>${miniStripHTML}</div><div class="chevron">▼</div></div><div class="sub-spot-details-wrap"><div class="sub-spot-details" onclick="event.stopPropagation()">${customBar}${editSpotAreaHTML}${navEditorHTML}<p class="full-desc">${safeSpotFullDesc}</p>${spot.recDishes ? `<div class="dish-tag">🍲 必點推薦：${escapeHTMLText(spot.recDishes)}</div>` : ''}${reorderableBlocksHTML}<div class="action-row" style="margin-top:10px;"><a class="btn btn-map" href="${mapsLink(spot.name,idx)}" target="_blank" rel="noopener">🗺️ 導航</a>${navFixButton}${spot.link ? `<a class="btn btn-photo" href="${spot.link}" target="_blank" rel="noopener">🔗 ${escapeHTMLText(spot.linkLabel)}</a>` : ''}<button class="btn btn-photo" onclick="document.getElementById('file-${idx}').click()">📷 上傳照片</button></div><input type="file" accept="image/*" id="file-${idx}" style="display:none" multiple onchange="handlePhoto(event, '${idx}')">${pStrip}</div></div></div>`;
+    return `<div class="sub-spot-card sub-spot-${spot.cat || 'other'}" id="spot-card-${idx}">${favoriteButtonHTML(idx)}<div class="sub-spot-header" onclick="toggleSpotDetails('${idx}')"><div class="sub-spot-header-content"><h4>${safeSpotName}</h4><p class="short-desc">${safeSpotDesc}</p>${miniStripHTML}</div><div class="chevron">▼</div></div><div class="sub-spot-details-wrap"><div class="sub-spot-details" onclick="event.stopPropagation()">${customBar}${editSpotAreaHTML}${navEditorHTML}<p class="full-desc">${safeSpotFullDesc}</p>${spot.recDishes ? `<div class="dish-tag">🍲 必點推薦：${escapeHTMLText(spot.recDishes)}</div>` : ''}${reorderableBlocksHTML}<div class="action-row" style="margin-top:10px;"><a class="btn btn-map" href="${mapsLink(spot.name,idx)}" target="_blank" rel="noopener">🗺️ 導航</a>${navFixButton}${spot.link ? `<a class="btn btn-photo" href="${spot.link}" target="_blank" rel="noopener">🔗 ${escapeHTMLText(spot.linkLabel)}</a>` : ''}<button class="btn btn-photo" onclick="document.getElementById('file-${idx}').click()">📷 上傳照片</button></div><input type="file" accept="image/*" id="file-${idx}" style="display:none" multiple onchange="handlePhoto(event, '${idx}')">${pStrip}</div></div></div>`;
   }
 
-  return `<div class="guide-card" id="spot-card-${idx}"><div class="guide-header" onclick="toggleSpotDetails('${idx}')"><img loading="lazy" decoding="async" class="guide-bg-img" src="${bg}" alt="" onerror="handleImageError(this)">${photoStore[idx] && photoStore[idx].length > 0 ? `<span class="own-badge" onclick="event.stopPropagation(); document.getElementById('file-${idx}').click()">✅ 已有你的穩定照片</span>` : `<button class="own-badge" style="border:none; cursor:pointer;" onclick="event.stopPropagation(); document.getElementById('file-${idx}').click()">📷 上傳穩定封面</button>`}<div class="guide-header-content"><span class="cat-label ${c.cls}">${c.emoji} ${c.label}</span><h3>${safeSpotName}</h3><p class="short-desc">${safeSpotDesc}</p></div><div class="chevron">▼</div></div><div class="guide-details-wrap"><div class="guide-details" onclick="event.stopPropagation()">${customBar}${editSpotAreaHTML}${navEditorHTML}<p class="full-desc">${safeSpotFullDesc}</p>${reorderableBlocksHTML}${spot.tip?`<div class="tip-box"><b>📸 拍照與自駕小解密：</b>${escapeHTMLText(spot.tip)}</div>`:''}${spot.docMap?`<div class="tip-box" style="background: linear-gradient(120deg,#e8f8ee,#fff); border-color:#8fd6c3; color:#22513f;"><b>🗺️ DOC 官方步道地圖與狀態：</b><a href="${spot.docMap}" target="_blank" rel="noopener" style="color:var(--blue); font-weight:700; text-decoration:underline;">點此開啟</a></div>`:''}${spot.park?`<div class="park-box"><b>🅿️ 停車＆自駕補給：</b>${escapeHTMLText(spot.park)}</div>`:''}<div class="action-row" style="margin-top:10px;"><a class="btn btn-map" href="${mapsLink(spot.name,idx)}" target="_blank" rel="noopener">🗺️ 導航導出</a>${navFixButton}${spot.link ? `<a class="btn btn-photo" href="${spot.link}" target="_blank" rel="noopener">🔗 ${escapeHTMLText(spot.linkLabel)}</a>` : ''}<button class="btn btn-photo" onclick="document.getElementById('file-${idx}').click()">📷 上傳照片</button></div><input type="file" accept="image/*" id="file-${idx}" style="display:none" multiple onchange="handlePhoto(event, '${idx}')">${pStrip}</div></div></div>`;
+  return `<div class="guide-card" id="spot-card-${idx}">${favoriteButtonHTML(idx)}<div class="guide-header" onclick="toggleSpotDetails('${idx}')"><img loading="lazy" decoding="async" class="guide-bg-img" src="${bg}" alt="" onerror="handleImageError(this)">${photoStore[idx] && photoStore[idx].length > 0 ? `<span class="own-badge" onclick="event.stopPropagation(); document.getElementById('file-${idx}').click()">✅ 已有你的穩定照片</span>` : `<button class="own-badge" style="border:none; cursor:pointer;" onclick="event.stopPropagation(); document.getElementById('file-${idx}').click()">📷 上傳穩定封面</button>`}<div class="guide-header-content"><span class="cat-label ${c.cls}">${c.emoji} ${c.label}</span><h3>${safeSpotName}</h3><p class="short-desc">${safeSpotDesc}</p></div><div class="chevron">▼</div></div><div class="guide-details-wrap"><div class="guide-details" onclick="event.stopPropagation()">${customBar}${editSpotAreaHTML}${navEditorHTML}<p class="full-desc">${safeSpotFullDesc}</p>${reorderableBlocksHTML}${spot.tip?`<div class="tip-box"><b>📸 拍照與自駕小解密：</b>${escapeHTMLText(spot.tip)}</div>`:''}${spot.docMap?`<div class="tip-box" style="background: linear-gradient(120deg,#e8f8ee,#fff); border-color:#8fd6c3; color:#22513f;"><b>🗺️ DOC 官方步道地圖與狀態：</b><a href="${spot.docMap}" target="_blank" rel="noopener" style="color:var(--blue); font-weight:700; text-decoration:underline;">點此開啟</a></div>`:''}${spot.park?`<div class="park-box"><b>🅿️ 停車＆自駕補給：</b>${escapeHTMLText(spot.park)}</div>`:''}<div class="action-row" style="margin-top:10px;"><a class="btn btn-map" href="${mapsLink(spot.name,idx)}" target="_blank" rel="noopener">🗺️ 導航導出</a>${navFixButton}${spot.link ? `<a class="btn btn-photo" href="${spot.link}" target="_blank" rel="noopener">🔗 ${escapeHTMLText(spot.linkLabel)}</a>` : ''}<button class="btn btn-photo" onclick="document.getElementById('file-${idx}').click()">📷 上傳照片</button></div><input type="file" accept="image/*" id="file-${idx}" style="display:none" multiple onchange="handlePhoto(event, '${idx}')">${pStrip}</div></div></div>`;
 }
 
 /* 讀取檔案並自動壓縮：長邊限制在 1600px、轉存為 JPEG(品質0.82)，
@@ -1754,7 +1801,7 @@ function comparisonImageFor(spot,key){
 }
 function iceCreamComparisonHTML(entries,dayIdx){
   if(!entries.length)return '';
-  const rows=entries.map(({spot,key})=>`<div class="ice-compare-row"><img loading="lazy" decoding="async" src="${comparisonImageFor(spot,key)}" alt="${escapeHTMLText(spot.name)}" onerror="handleImageError(this)"><div class="ice-compare-info"><b>${escapeHTMLText(spot.name)}</b><span>${escapeHTMLText(spot.recDishes||spot.desc)}</span><small>🕒 ${escapeHTMLText(spot.hours||'請確認當日營業時間')}</small></div><a href="${mapsLink(spot.name,key)}" target="_blank" rel="noopener">導航</a></div>`).join('');
+  const rows=entries.map(({spot,key})=>`<div class="ice-compare-row"><img loading="lazy" decoding="async" src="${comparisonImageFor(spot,key)}" alt="${escapeHTMLText(spot.name)}" onerror="handleImageError(this)"><div class="ice-compare-info"><b>${escapeHTMLText(spot.name)}</b><span>${escapeHTMLText(spot.recDishes||spot.desc)}</span><small>🕒 ${escapeHTMLText(spot.hours||'請確認當日營業時間')}</small></div>${favoriteButtonHTML(key,true)}<a href="${mapsLink(spot.name,key)}" target="_blank" rel="noopener">導航</a></div>`).join('');
   const detailCards=entries.map(o=>spotCardHTML(o.spot,o.key,false,o.customMeta,{dayIdx,listType:'life'})).join('');
   return `<section class="ice-compare-card"><div class="ice-compare-title"><div><span>🍨 9/26 冰淇淋比較卡</span><b>現場依路線與口味挑一間就好</b></div><small>四間都保留，可自行上傳穩定照片、修正導航與營業時間。</small></div>${rows}<details class="ice-compare-details"${iceCompareOpenByDay[dayIdx]?' open':''} ontoggle="iceCompareOpenByDay[${dayIdx}]=this.open"><summary>展開四間完整資料、照片與導航設定</summary><div>${detailCards}</div></details></section>`;
 }
@@ -1784,16 +1831,19 @@ function renderDayContent(){
   renderDayQuickNav(d);
   const curSubTab = activeSubTabStore[activeDay] || 'main';
 
-  const mainList = applyOrder(activeDay, 'main', getNaturalList(activeDay, 'main'));
-  const lifeList = applyOrder(activeDay, 'life', getNaturalList(activeDay, 'life'));
+  const allMainList = applyOrder(activeDay, 'main', getNaturalList(activeDay, 'main'));
+  const allLifeList = applyOrder(activeDay, 'life', getNaturalList(activeDay, 'life'));
+  const mainList=spotDisplayMode==='favorites'?allMainList.filter(o=>isFavoriteSpot(o.key)):allMainList;
+  const lifeList=spotDisplayMode==='favorites'?allLifeList.filter(o=>isFavoriteSpot(o.key)):allLifeList;
+  const dayFavoriteCount=[...allMainList,...allLifeList].filter(o=>isFavoriteSpot(o.key)).length;
 
   let mainSpotsHTML = mainList.map(o=>spotCardHTML(o.spot, o.key, true, o.customMeta, {dayIdx:activeDay, listType:'main'})).join('');
-  if(!mainSpotsHTML) mainSpotsHTML = '<div class="empty">此區域今天暫無排定主要亮點。</div>';
+  if(!mainSpotsHTML) mainSpotsHTML = `<div class="empty">${spotDisplayMode==='favorites'?'今天尚未收藏主要亮點。':'此區域今天暫無排定主要亮點。'}</div>`;
 
   const iceCreamEntries=d.date==='9/26' ? lifeList.filter(o=>ICE_CREAM_COMPARE_NAMES.has(o.spot.name)) : [];
   const regularLifeList=iceCreamEntries.length ? lifeList.filter(o=>!ICE_CREAM_COMPARE_NAMES.has(o.spot.name)) : lifeList;
   let secondaryCardsHTML = iceCreamComparisonHTML(iceCreamEntries,activeDay) + regularLifeList.map(o=>spotCardHTML(o.spot, o.key, false, o.customMeta, {dayIdx:activeDay, listType:'life'})).join('');
-  if(!secondaryCardsHTML) secondaryCardsHTML = '<div class="empty">此區域今天暫無排定食衣住項目，歡迎在下方新增您的私房景點。</div>';
+  if(!secondaryCardsHTML) secondaryCardsHTML = `<div class="empty">${spotDisplayMode==='favorites'?'今天尚未收藏食衣住項目。':'此區域今天暫無排定食衣住項目，歡迎在下方新增您的私房景點。'}</div>`;
 
   const addSpotFormHTML = `
     <div class="section-card structural-edit-control" style="margin-top:4px;">
@@ -1823,17 +1873,23 @@ function renderDayContent(){
       <div style="font-size:11px; color:var(--ink-soft); margin-top:8px; line-height:1.5;">可上傳您自己規劃或手繪的當日路線圖／導航截圖，會保存在此裝置的瀏覽器中，重新整理或關閉頁面都不會消失。</div>
     </div>`;
 
-  const daySummaryHTML=`<div class="day-card-head">
-      <div class="region">【Day ${d.dayNum}｜${d.date}】<br>${d.region}</div>
-      ${d.drive ? `<div class="drive-info">${d.drive}</div>` : ''}
-      ${d.gas ? `<div class="gas-info">${d.gas}</div>` : ''}
-      <h2>${d.title}</h2>
-      <div class="day-utility-grid"><div class="weather-strip"><div class="ico">${d.weatherIco}</div><div class="txt"><small class="utility-kicker">今日穿搭</small><b>${d.wear}</b><span>${d.enRegion}</span></div></div>${stayQuickCardHTML(activeDay)}</div>
+  const dayCoverEntry=allMainList.find(o=>o.spot?.img||(photoStore[o.key]||[]).length)||allLifeList.find(o=>o.spot?.img||(photoStore[o.key]||[]).length);
+  const dayCoverUrl=dayCoverEntry?comparisonImageFor(dayCoverEntry.spot,dayCoverEntry.key):'images/map.webp';
+  const coverFocus=dayCoverFocus(activeDay);
+  const daySummaryHTML=`<div class="day-card-head editorial-day-head">
+      <section class="day-editorial-cover">
+        <img class="day-editorial-image" src="${escapeHTMLText(dayCoverUrl)}" alt="${escapeHTMLText(d.region)} 當日封面" loading="eager" decoding="async" onerror="handleImageError(this)" style="object-position:center ${coverFocus}%">
+        <div class="day-editorial-shade"></div>
+        <div class="day-editorial-copy"><div class="day-editorial-kicker"><span>DAY ${d.dayNum}</span><span>${d.date}</span></div><small>${escapeHTMLText(d.region)} · ${escapeHTMLText(d.enRegion)}</small><h2>${escapeHTMLText(d.title)}</h2><div class="day-editorial-meta">${d.drive?`<span>${uiIcon('car')}${escapeHTMLText(d.drive)}</span>`:''}${d.gas?`<span class="fuel">${uiIcon('fuel')}${escapeHTMLText(d.gas)}</span>`:''}</div></div>
+        <div class="day-cover-focus structural-edit-control" aria-label="調整每日封面裁切位置"><b>封面焦點</b><button class="${coverFocus===22?'active':''}" onclick="setDayCoverFocus(${activeDay},22)">上</button><button class="${coverFocus===50?'active':''}" onclick="setDayCoverFocus(${activeDay},50)">中</button><button class="${coverFocus===78?'active':''}" onclick="setDayCoverFocus(${activeDay},78)">下</button></div>
+      </section>
+      <div class="day-utility-grid editorial-utility-grid"><div class="weather-strip"><div class="ico">${d.weatherIco}</div><div class="txt"><small class="utility-kicker">今日穿搭</small><b>${escapeHTMLText(d.wear)}</b><span>${escapeHTMLText(d.enRegion)}</span></div></div>${stayQuickCardHTML(activeDay)}</div>
     </div>`;
 
   dayContent.innerHTML = `
     ${daySummaryHTML}
     <div id="day-card-${activeDay}">
+      <div class="spot-display-filter"><span>景點顯示</span><button class="${spotDisplayMode==='all'?'active':''}" onclick="setSpotDisplayMode('all')">全部</button><button class="${spotDisplayMode==='favorites'?'active':''}" onclick="setSpotDisplayMode('favorites')">★ 只看收藏 <em>${dayFavoriteCount}</em></button></div>
       <div class="spot-subtabs"><button class="spot-subtab${curSubTab==='main'?' active':''}" data-type="main" onclick="switchSubTab(${activeDay}, 'main')">${uiIcon('pin')}主要亮點 (${mainList.length})</button><button class="spot-subtab${curSubTab==='more'?' active':''}" data-type="more" onclick="switchSubTab(${activeDay}, 'more')">${uiIcon('food')}食衣住 (${lifeList.length})</button><button class="spot-subtab${curSubTab==='routemap'?' active':''}" data-type="routemap" onclick="switchSubTab(${activeDay}, 'routemap')">${uiIcon('map')}路線圖${routeMaps.length ? ` (${routeMaps.length})` : ''}</button></div>
       <div class="subtab-content${curSubTab==='main'?' active':''}" data-type="main">${mainSpotsHTML}${constellationStoriesHTML(d.date)}</div>
       <div class="subtab-content${curSubTab==='more'?' active':''}" data-type="more" style="background:#f4f6f0; border-radius:0 0 var(--r-lg) var(--r-lg); padding:16px 12px 16px; margin-bottom:16px;">${secondaryCardsHTML}${addSpotFormHTML}</div>
