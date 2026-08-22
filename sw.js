@@ -17,7 +17,7 @@
    連結使用，此檔案就會正常運作並提供離線瀏覽能力。
    =========================================================== */
 
-const CACHE_VERSION = 'nz-trip-v55-v53-restored-stay-summary';
+const CACHE_VERSION = 'nz-trip-v56-stay-editor-visible';
 const SHELL_CACHE = `nz-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `nz-runtime-${CACHE_VERSION}`;
 

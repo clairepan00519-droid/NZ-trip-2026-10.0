@@ -766,3 +766,8 @@ body.journey-hub-active{overflow:hidden}
 .day-utility-grid .stay-amenity-summary span{display:inline-block;white-space:nowrap}
 .day-utility-grid .stay-quick-title small:not(.stay-amenity-summary){display:block;max-width:100%;white-space:normal;overflow:visible;text-overflow:clip}
 body.travel-mode.travel-font-large .day-utility-grid .weather-strip .txt b .wear-line{font-size:inherit;line-height:1.55}
+
+/* 展開住宿卡時取消摘要的 100% 高度，避免編輯欄被推到巨大空白下方。 */
+.day-utility-grid .stay-quick-card[open]{height:auto;align-self:start}
+.day-utility-grid .stay-quick-card[open] .stay-quick-head{min-height:0}
+.day-utility-grid .stay-quick-card[open] .stay-quick-body{display:block;visibility:visible;padding-top:9px}
