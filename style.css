@@ -761,7 +761,7 @@ body.journey-hub-active{overflow:hidden}
 @media(max-width:480px){.context-quick-bar{grid-template-columns:55px 76px 1fr;margin-left:10px;margin-right:10px}}
 
 /* v55 · 回歸 v53，補回住宿摘要並依語意控制穿搭斷行 */
-.day-utility-grid .weather-strip .txt b .wear-line{display:block;white-space:normal;overflow-wrap:normal;word-break:keep-all}
+.day-utility-grid .weather-strip .txt b .wear-line{display:block;margin:0!important;color:inherit!important;font:inherit!important;font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:normal;word-break:keep-all}
 .day-utility-grid .stay-amenity-summary{display:flex!important;flex-wrap:wrap;gap:2px 7px;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;line-height:1.45!important}
 .day-utility-grid .stay-amenity-summary span{display:inline-block;white-space:nowrap}
 .day-utility-grid .stay-quick-title small:not(.stay-amenity-summary){display:block;max-width:100%;white-space:normal;overflow:visible;text-overflow:clip}
@@ -771,3 +771,25 @@ body.travel-mode.travel-font-large .day-utility-grid .weather-strip .txt b .wear
 .day-utility-grid .stay-quick-card[open]{height:auto;align-self:start}
 .day-utility-grid .stay-quick-card[open] .stay-quick-head{min-height:0}
 .day-utility-grid .stay-quick-card[open] .stay-quick-body{display:block;visibility:visible;padding-top:9px}
+
+/* v58 · 粗字穿搭與行前提醒 */
+.day-utility-grid .weather-strip .txt b{font-weight:900!important}
+.journey-hub-tabs{grid-template-columns:repeat(4,1fr)}
+.reminder-overview{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:11px;padding:14px 15px;border-radius:17px;background:linear-gradient(135deg,#173f45,#32706e);color:#fff}.reminder-overview>div{display:flex;min-width:0;flex-direction:column}.reminder-overview small{font-size:8px;letter-spacing:.14em;color:#b8d8d2}.reminder-overview b{font-size:18px}.reminder-overview span{margin-top:2px;font-size:9.5px;color:#d9e9e5}.reminder-overview button{flex:none;border:1px solid rgba(255,255,255,.25);border-radius:999px;background:rgba(255,255,255,.12);color:#fff;padding:8px 10px;font:inherit;font-size:9px;font-weight:900;cursor:pointer}.reminder-overview button:disabled{opacity:.72}
+.reminder-list{display:grid;gap:8px}.reminder-card{display:grid;grid-template-columns:28px minmax(0,1fr) 27px;align-items:start;gap:8px;padding:11px;border:1px solid #dfe6e1;border-radius:14px;background:#fff}.reminder-card.overdue{border-color:#e9b7aa;background:#fff9f7}.reminder-card.done{opacity:.62}.reminder-check input{position:absolute;opacity:0}.reminder-check span{display:grid;width:24px;height:24px;place-items:center;border:1.5px solid #afc7bf;border-radius:8px;background:#fff}.reminder-check input:checked+span{border-color:#3e8b6c;background:#3e8b6c}.reminder-check input:checked+span::after{content:'✓';color:#fff;font-size:14px;font-weight:900}.reminder-copy{min-width:0}.reminder-title-input{width:100%;border:0;background:transparent;padding:0;color:var(--ink);font:inherit;font-size:12.5px;font-weight:900;outline:0}.reminder-card.done .reminder-title-input{text-decoration:line-through}.reminder-copy>div{display:grid;grid-template-columns:80px minmax(0,1fr);gap:6px;margin-top:6px}.reminder-copy select,.reminder-copy input[type=datetime-local]{min-width:0;border:1px solid #dce4df;border-radius:8px;background:#f6f8f5;padding:6px;color:var(--ink-soft);font:inherit;font-size:9px}.reminder-copy small{display:block;margin-top:5px;color:#71807c;font-size:8.5px}.reminder-card.overdue .reminder-copy small{color:#c05e48;font-weight:900}.reminder-delete{width:27px;height:27px;border:0;border-radius:50%;background:#f0f2ef;color:#7b8783;font-size:16px;cursor:pointer}
+.reminder-empty{padding:24px 12px;border:1px dashed #cdd9d3;border-radius:14px;background:#fff;text-align:center;color:var(--ink-soft);font-size:10.5px}.reminder-composer{display:grid;gap:8px;margin-top:11px;padding:13px;border:1px solid #dce4df;border-radius:15px;background:#f7f8f4}.reminder-composer>b{font-size:12px}.reminder-composer>input,.reminder-composer>div>select,.reminder-composer>div>input{min-width:0;border:1px solid #d7e0da;border-radius:10px;background:#fff;padding:9px 10px;color:var(--ink);font:inherit;font-size:10.5px}.reminder-composer>div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:7px}.reminder-composer>button{border:0;border-radius:999px;background:#285f61;color:#fff;padding:10px;font:inherit;font-size:10.5px;font-weight:900;cursor:pointer}.reminder-templates{display:flex!important;grid-template-columns:none!important;align-items:center;gap:5px!important;flex-wrap:wrap}.reminder-templates span{font-size:8.5px;color:var(--ink-soft)}.reminder-templates button{border:1px solid #cbdad3;border-radius:999px;background:#fff;color:#35665d;padding:5px 8px;font:inherit;font-size:8.5px;font-weight:800;cursor:pointer}.reminder-note{margin:9px 2px 0;color:var(--ink-soft);font-size:8.5px;line-height:1.55}
+@media(max-width:400px){.journey-hub-tabs button{padding-left:2px;padding-right:2px}.reminder-overview{align-items:flex-start;flex-direction:column}.reminder-overview button{align-self:flex-start}.reminder-copy>div{grid-template-columns:1fr}.reminder-composer>div{grid-template-columns:1fr}}
+
+/* v59 · 手機實際使用健檢 */
+.hours-info-item{grid-column:1/-1;min-width:0;padding-right:62px}
+.hours-info-item .v{display:flex;min-width:0;flex-direction:column;align-items:flex-start;gap:3px;white-space:normal!important;line-height:1.5}
+.hours-info-item .hours-line{display:block;max-width:100%;white-space:nowrap;word-break:keep-all;overflow-wrap:normal}
+@media(max-width:420px){
+  .hours-info-item{padding:11px 12px;padding-right:58px}
+  .hours-info-item .v{font-size:14px!important;line-height:1.5!important}
+  body.travel-mode.travel-font-large .hours-info-item .v{font-size:16px!important}
+  .context-action b{max-width:100%;overflow:visible;text-overflow:clip}
+  body{padding-bottom:calc(132px + env(safe-area-inset-bottom,0px))}
+  .bottom-nav{bottom:calc(10px + env(safe-area-inset-bottom,0px));width:calc(100% - 24px)}
+  .day-nav-launcher{opacity:.86}.day-float-nav.open .day-nav-launcher{opacity:1}
+}

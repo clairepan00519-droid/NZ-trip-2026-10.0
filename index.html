@@ -286,7 +286,7 @@
 <div id="journeyHubModal" class="journey-hub-modal" hidden onclick="if(event.target===this)closeJourneyHub()">
   <section class="journey-hub-sheet" role="dialog" aria-modal="true" aria-labelledby="journeyHubTitle">
     <header class="journey-hub-head"><div><small>NZ TRIP · CONTROL CENTRE</small><h2 id="journeyHubTitle">旅程控制中心</h2></div><button onclick="closeJourneyHub()" aria-label="關閉">×</button></header>
-    <nav class="journey-hub-tabs"><button data-hub-tab="favorites" onclick="setJourneyHubTab('favorites')">★ 全旅程收藏</button><button data-hub-tab="offline" onclick="setJourneyHubTab('offline')">離線健康</button><button data-hub-tab="conflicts" onclick="setJourneyHubTab('conflicts')">同步保護 <em id="conflictTabCount">0</em></button></nav>
+    <nav class="journey-hub-tabs"><button data-hub-tab="favorites" onclick="setJourneyHubTab('favorites')">★ 收藏</button><button data-hub-tab="reminders" onclick="setJourneyHubTab('reminders')">提醒 <em id="reminderTabCount">0</em></button><button data-hub-tab="offline" onclick="setJourneyHubTab('offline')">離線</button><button data-hub-tab="conflicts" onclick="setJourneyHubTab('conflicts')">同步 <em id="conflictTabCount">0</em></button></nav>
     <div id="journeyHubContent" class="journey-hub-content"></div>
   </section>
 </div>
