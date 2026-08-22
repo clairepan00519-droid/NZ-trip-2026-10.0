@@ -759,3 +759,10 @@ html.dark-theme .bottom-nav button{padding:6px 0}
 body.journey-hub-active{overflow:hidden}
 .context-quick-bar{grid-template-columns:minmax(66px,.75fr) minmax(88px,1fr) 3fr}
 @media(max-width:480px){.context-quick-bar{grid-template-columns:55px 76px 1fr;margin-left:10px;margin-right:10px}}
+
+/* v55 · 回歸 v53，補回住宿摘要並依語意控制穿搭斷行 */
+.day-utility-grid .weather-strip .txt b .wear-line{display:block;white-space:normal;overflow-wrap:normal;word-break:keep-all}
+.day-utility-grid .stay-amenity-summary{display:flex!important;flex-wrap:wrap;gap:2px 7px;white-space:normal!important;overflow:visible!important;text-overflow:clip!important;line-height:1.45!important}
+.day-utility-grid .stay-amenity-summary span{display:inline-block;white-space:nowrap}
+.day-utility-grid .stay-quick-title small:not(.stay-amenity-summary){display:block;max-width:100%;white-space:normal;overflow:visible;text-overflow:clip}
+body.travel-mode.travel-font-large .day-utility-grid .weather-strip .txt b .wear-line{font-size:inherit;line-height:1.55}

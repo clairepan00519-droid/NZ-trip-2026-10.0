@@ -1274,7 +1274,7 @@ function stayQuickCardHTML(dayIdx){
     const times=stayTimeStore[stayTimeKey(hotel.name)]||{};
     const complete=Boolean(times.checkin&&times.checkout);
     const timeSummary=complete?`${times.checkin} 入住・${times.checkout} 退房`:'點擊填寫入住／退房時間';
-    const amenitySummary=[times.bathtub==='yes'?'🛁 有浴缸':times.bathtub==='no'?'無浴缸':'',times.washer==='yes'?'🧺 有洗衣機':times.washer==='no'?'無洗衣機':''].filter(Boolean).join('・');
+    const amenitySummary=[times.bathtub==='yes'?'🛁 浴缸：有':times.bathtub==='no'?'🛁 浴缸：無':'🛁 浴缸：未確認',times.washer==='yes'?'🧺 洗衣機：有':times.washer==='no'?'🧺 洗衣機：無':'🧺 洗衣機：未確認'].map(text=>`<span>${text}</span>`).join('');
     const amenityOptions=(current)=>`<option value="unknown" ${!current||current==='unknown'?'selected':''}>未確認</option><option value="yes" ${current==='yes'?'selected':''}>有</option><option value="no" ${current==='no'?'selected':''}>無</option>`;
     return `<details class="stay-quick-card"><summary class="stay-quick-head"><span>🏡 ${status}</span><span class="stay-quick-title"><span class="stay-kicker">今晚住宿</span><b>${hotel.name}</b><small>${timeSummary}</small>${amenitySummary?`<small class="stay-amenity-summary">${amenitySummary}</small>`:''}</span><em class="stay-time-status ${complete?'complete':'pending'}">${complete?'✓ 已完成':'! 尚未填寫'}</em><i aria-hidden="true">⌄</i></summary><div class="stay-quick-body"><div class="stay-time-editor"><label><span>入住時間</span><input type="time" value="${escAttr(times.checkin||'')}" aria-label="${escapeHTMLText(hotel.name)} 入住時間" onchange="setStayTime('${jsQuote(hotel.name)}','checkin',this.value)"></label><span class="stay-time-arrow">→</span><label><span>退房時間</span><input type="time" value="${escAttr(times.checkout||'')}" aria-label="${escapeHTMLText(hotel.name)} 退房時間" onchange="setStayTime('${jsQuote(hotel.name)}','checkout',this.value)"></label></div><div class="stay-amenity-editor"><label><span>🛁 浴缸</span><select onchange="setStayAmenity('${jsQuote(hotel.name)}','bathtub',this.value)">${amenityOptions(times.bathtub)}</select></label><label><span>🧺 洗衣機</span><select onchange="setStayAmenity('${jsQuote(hotel.name)}','washer',this.value)">${amenityOptions(times.washer)}</select></label></div><div class="stay-quick-actions"><a href="${mapsLink(hotel.name,hotel._storageKey)}" target="_blank" rel="noopener">🗺️ 導航住宿</a></div></div></details>`;
   }).join('');
@@ -1814,6 +1814,12 @@ function constellationStoriesHTML(date){
   </div><div class="star-story-links"><a href="https://teara.govt.nz/en/southern-cross" target="_blank" rel="noopener">Te Ara：南十字座</a><a href="https://teara.govt.nz/en/night-sky" target="_blank" rel="noopener">Te Ara：紐西蘭夜空</a></div></section>`;
 }
 
+function wearSummaryHTML(value){
+  const text=String(value||'').trim();
+  const match=text.match(/^(.+?[，,、；;])\s*(.+)$/);
+  if(!match)return escapeHTMLText(text);
+  return `<span class="wear-line">${escapeHTMLText(match[1])}</span><span class="wear-line">${escapeHTMLText(match[2])}</span>`;
+}
 function renderDayContent(){
   const currentIceDetails=document.querySelector('.ice-compare-details');
   if(currentIceDetails)iceCompareOpenByDay[activeDay]=currentIceDetails.open;
@@ -1873,7 +1879,7 @@ function renderDayContent(){
       ${d.drive ? `<div class="drive-info">${d.drive}</div>` : ''}
       ${d.gas ? `<div class="gas-info">${d.gas}</div>` : ''}
       <h2>${d.title}</h2>
-      <div class="day-utility-grid"><div class="weather-strip"><div class="ico">${d.weatherIco}</div><div class="txt"><small class="utility-kicker">今日穿搭</small><b>${d.wear}</b><span>${d.enRegion}</span></div></div>${stayQuickCardHTML(activeDay)}</div>
+      <div class="day-utility-grid"><div class="weather-strip"><div class="ico">${d.weatherIco}</div><div class="txt"><small class="utility-kicker">今日穿搭</small><b>${wearSummaryHTML(d.wear)}</b><span>${d.enRegion}</span></div></div>${stayQuickCardHTML(activeDay)}</div>
     </div>`;
 
   dayContent.innerHTML = `
