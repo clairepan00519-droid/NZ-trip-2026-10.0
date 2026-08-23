@@ -161,6 +161,9 @@ const SYNC_CONFLICTS_KEY = 'nz_sync_conflicts_v1';
 const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_nav_links','nz_hours_override','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_stay_times','nz_favorites','nz_reminders','nz_pack','nz_shop','nz_rules','nz_docs'];
 const MEDIA_SYNC_KEYS = new Set(['nz_photos','nz_covers','nz_route_maps']);
 const STRUCTURED_LIST_KEYS = new Set(['nz_shop','nz_rules','nz_docs']);
+/* 排序陣列不能像照片或清單一樣合併，否則舊順序會被接回來造成卡片跳動。
+   這兩類資料一律採最後修改者優先。 */
+const LAST_WRITE_WINS_KEYS = new Set(['nz_order','nz_block_order']);
 function loadSyncOutbox(){try{const value=JSON.parse(localStorage.getItem(SYNC_OUTBOX_KEY));return value&&typeof value==='object'&&!Array.isArray(value)?value:{};}catch(e){return {};}}
 function saveSyncOutbox(){try{localStorage.setItem(SYNC_OUTBOX_KEY,JSON.stringify(cloudSync.pending));}catch(e){console.warn('無法保存待同步佇列',e);}}
 function syncOutboxCount(){return Object.keys(cloudSync.pending||{}).length;}
@@ -442,6 +445,20 @@ async function reconcileInitialCloudData(){
       continue;
     }
 
+    if(LAST_WRITE_WINS_KEYS.has(key)){
+      /* 排序只採用時間較新的完整版本，絕不串接兩份陣列。 */
+      if(localValue!=null && (!remote || localTime>=remoteTime)){
+        const t=meta[key]||new Date().toISOString();
+        cloudSync.applyingRemote=true;
+        try{replaceLocalJson(key,localValue);setSyncMeta(key,t);applyStoreUpdate(key,JSON.stringify(localValue));}
+        finally{cloudSync.applyingRemote=false;}
+        if(!remote || JSON.stringify(remoteValue)!==JSON.stringify(localValue))await restUpsert(key,localValue,t);
+      }else if(remote){
+        applyRemoteRow(remote,true);
+      }
+      continue;
+    }
+
     if(remote&&localValue!=null&&JSON.stringify(remoteValue)!==JSON.stringify(localValue)){
       /* 首次載入採保留式合併，禁止僅憑時間戳直接整包覆蓋本機資料。 */
       const merged=mergePreservingLocal(normalizeSyncValue(key,localValue),normalizeSyncValue(key,remoteValue));
@@ -498,7 +515,11 @@ function applyRemoteRow(row, forceApply=false){
   if(!forceApply && isUserEditingForm()){ queueRemoteRow(row); return; }
   if(!forceApply&&cloudSync.pending[row.key]){
     const remoteTime=Date.parse(row.updated_at||0)||0,localPendingTime=Date.parse(cloudSync.pending[row.key].updatedAt||0)||0;
-    if(remoteTime>=localPendingTime&&JSON.stringify(cloudSync.pending[row.key].valueObj)!==row.value){let remoteValue=null;try{remoteValue=JSON.parse(row.value);}catch(e){}syncConflicts[row.key]={key:row.key,local:cloudSync.pending[row.key].valueObj,remote:remoteValue,remoteUpdatedAt:row.updated_at,detectedAt:new Date().toISOString()};saveSyncConflicts();updateSyncStatus();return;}
+    /* 排序衝突直接比較最後修改時間；較新的本機排序等待上傳時，不准舊雲端排序插入。 */
+    if(LAST_WRITE_WINS_KEYS.has(row.key)){
+      if(localPendingTime>=remoteTime)return;
+      delete cloudSync.pending[row.key];saveSyncOutbox();
+    }else if(remoteTime>=localPendingTime&&JSON.stringify(cloudSync.pending[row.key].valueObj)!==row.value){let remoteValue=null;try{remoteValue=JSON.parse(row.value);}catch(e){}syncConflicts[row.key]={key:row.key,local:cloudSync.pending[row.key].valueObj,remote:remoteValue,remoteUpdatedAt:row.updated_at,detectedAt:new Date().toISOString()};saveSyncConflicts();updateSyncStatus();return;}
   }
   const rt=row.updated_at||new Date().toISOString(), lt=getSyncMeta()[row.key]; if(!forceApply&&lt&&Date.parse(lt)>Date.parse(rt))return;
   cloudSync.applyingRemote=true;
@@ -529,6 +550,11 @@ async function flushCloudPush(){
     for(const[key,item]of entries){
       try{
         const remote=remoteMap.get(key),remoteTime=Date.parse(remote?.updated_at||0)||0,baseTime=Date.parse(item.baseUpdatedAt||0)||0;
+        if(remote&&LAST_WRITE_WINS_KEYS.has(key)&&remoteTime>Date.parse(item.updatedAt||0)){
+          /* 另一台裝置的排序更新：採用較新的版本並清掉本機較舊待傳項目。 */
+          if(cloudSync.pending[key]?.updatedAt===item.updatedAt)delete cloudSync.pending[key];
+          saveSyncOutbox();applyRemoteRow(remote,true);continue;
+        }
         if(remote&&baseTime&&remoteTime>baseTime&&remote.value!==JSON.stringify(item.valueObj)){
           let remoteValue=null;try{remoteValue=JSON.parse(remote.value);}catch(e){}
           syncConflicts[key]={key,local:item.valueObj,remote:remoteValue,remoteUpdatedAt:remote.updated_at,detectedAt:new Date().toISOString()};saveSyncConflicts();updateSyncStatus();continue;
