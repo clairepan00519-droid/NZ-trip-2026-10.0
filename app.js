@@ -855,6 +855,7 @@ function moveBuiltInSpotToDate(name,date){
 moveBuiltInSpotToDate("Pak'nSave Dunedin",'9/22');
 moveBuiltInSpotToDate('Whitestone Cheese Diner & Deli','9/19');
 moveBuiltInSpotToDate('The Swan','9/21');
+moveBuiltInSpotToDate('First Church of Otago','9/21');
 
 /* ============ 筆記/照片/自訂景點系統 (LocalStorage 永久保存) ============ */
 
@@ -2454,6 +2455,10 @@ function shopImgs(it){
   if(Array.isArray(it.imgs)) return it.imgs;
   return it.img ? [it.img] : [];
 }
+function openShopGallery(itemIndex,photoIndex=0){
+  const urls=shopImgs(shopData[itemIndex]);
+  if(urls.length)openAttachGallery(urls,Math.max(0,Math.min(photoIndex,urls.length-1)));
+}
 function renderShopList(){
   const wrap = document.getElementById('shopListWrap');
   if(!wrap) return;
@@ -2464,8 +2469,12 @@ function renderShopList(){
     const done = entries.filter(x=>x.it.checked).length;
     const itemsHTML = entries.length ? entries.map(({it,i})=>{
       const imgs = shopImgs(it);
-      const photosHTML = imgs.length ? `<div class="shop-photo-row">${imgs.map((src,pi)=>`<div class="shop-photo"><img loading="lazy" decoding="async" src="${src}" onerror="handleImageError(this)" onclick="openAttachModal(this.src)"><button onclick="removeShopImg(${i},${pi})">✕</button></div>`).join('')}</div>` : '';
-      return `<div class="pack-item shop-item ${it.checked?'checked':''}"><input type="checkbox" ${it.checked?'checked':''} onchange="toggleShop(${i})"><div class="name shop-item-title">${escapeHTMLText(it.name)}</div><div class="qty"><button onclick="document.getElementById('shopFile-${i}').click()" class="camera-btn">📷</button><button onclick="changeShopQty(${i},-1)">－</button><span>${Number(it.qty)||1}</span><button onclick="changeShopQty(${i},1)">＋</button></div><button class="del" onclick="delShop(${i})">✕</button><input type="file" id="shopFile-${i}" accept="image/*" multiple style="display:none" onchange="handleShopPhoto(event, ${i})"><div class="shop-extra"><input type="text" value="${escAttr(it.location||'')}" placeholder="建議購買位置或其他資訊..." onchange="setShopLocation(${i}, this.value)"></div>${photosHTML}</div>`;
+      const photosHTML = imgs.length ? `<div class="shop-photo-row">${imgs.map((src,pi)=>`<div class="shop-photo"><img loading="lazy" decoding="async" src="${src}" onerror="handleImageError(this)" onclick="openShopGallery(${i},${pi})"><button onclick="removeShopImg(${i},${pi})">✕</button></div>`).join('')}</div>` : '';
+      const galleryHTML=imgs.length
+        ? `<button type="button" class="shop-gallery-cover" onclick="openShopGallery(${i},0)" aria-label="查看 ${escapeHTMLText(it.name)} 商品照片"><img loading="lazy" decoding="async" src="${imgs[0]}" onerror="handleImageError(this)">${imgs.length>1?`<span>${imgs.length} 張</span>`:''}</button>`
+        : `<button type="button" class="shop-gallery-cover shop-gallery-empty" onclick="document.getElementById('shopFile-${i}').click()"><b>＋</b><span>拍攝商品</span></button>`;
+      const galleryDelete=imgs.length?`<button type="button" class="shop-gallery-remove" onclick="removeShopImg(${i},0)" aria-label="刪除 ${escapeHTMLText(it.name)} 目前商品照片">×</button>`:'';
+      return `<div class="pack-item shop-item ${it.checked?'checked':''}">${galleryHTML}${galleryDelete}<input type="checkbox" ${it.checked?'checked':''} onchange="toggleShop(${i})" aria-label="${it.checked?'取消完成':'標記完成'} ${escapeHTMLText(it.name)}"><div class="name shop-item-title">${escapeHTMLText(it.name)}</div><div class="qty"><button onclick="document.getElementById('shopFile-${i}').click()" class="camera-btn" aria-label="上傳商品照片">📷</button><button onclick="changeShopQty(${i},-1)">－</button><span>${Number(it.qty)||1}</span><button onclick="changeShopQty(${i},1)">＋</button></div><button class="del" onclick="delShop(${i})">✕</button><input type="file" id="shopFile-${i}" accept="image/*" multiple style="display:none" onchange="handleShopPhoto(event, ${i})"><div class="shop-extra"><input type="text" value="${escAttr(it.location||'')}" placeholder="建議購買位置或其他資訊..." onchange="setShopLocation(${i}, this.value)"></div><div class="shop-gallery-location">${escapeHTMLText(it.location||'尚未填寫購買位置')}</div>${photosHTML}</div>`;
     }).join('') : '<div class="empty compact">此清單目前沒有項目。</div>';
     return `<section class="checklist-group shop-group shop-${catKey}"><button class="checklist-group-head" onclick="toggleListSection('shop','${catKey}')" aria-expanded="${isOpen}"><span>${meta.label}</span><small>${done}/${entries.length}</small><b>${isOpen?'⌃':'⌄'}</b></button><div class="checklist-group-body ${isOpen?'open':''}">${itemsHTML}</div></section>`;
   }).join('');
@@ -2754,7 +2763,11 @@ function setUseMode(mode){
   document.body.classList.toggle('edit-mode',next==='edit');
   document.querySelectorAll('.mode-btn').forEach(btn=>btn.classList.toggle('active',btn.dataset.mode===next));
   localStorage.setItem('nz_use_mode',next);
-  if(next==='travel'){openNavEditorKeys.clear();document.querySelectorAll('.nav-edit-box').forEach(el=>el.hidden=true);}
+  if(next==='travel'){
+    openNavEditorKeys.clear();document.querySelectorAll('.nav-edit-box').forEach(el=>el.hidden=true);
+    Object.keys(SHOP_CATS).forEach(key=>listSectionOpen.shop[key]=true);
+  }
+  if(typeof renderShopList==='function')renderShopList();
 }
 function setTravelFontSize(size){
   const next=size==='large'?'large':'standard';

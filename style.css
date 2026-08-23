@@ -450,7 +450,32 @@ details[open]>:not(summary){animation:sectionReveal .22s cubic-bezier(.2,.7,.2,1
 .shop-photo{position:relative; display:inline-block;}
 .shop-photo img{width:58px; height:58px; object-fit:cover; border-radius:9px; cursor:zoom-in; box-shadow:var(--shadow-sm);}
 .shop-photo button{position:absolute; top:-5px; right:-5px; background:rgba(0,0,0,.58); color:#fff; border:none; border-radius:50%; width:18px; height:18px; font-size:9px; cursor:pointer;}
+.shop-gallery-cover,.shop-gallery-location,.shop-gallery-remove{display:none}
 .empty.compact{padding:10px; font-size:11px;}
+
+/* v70：旅行模式購物清單改為找商品用 Gallery。圖片完整顯示，不裁掉包裝文字。 */
+body.travel-mode .shop-group .checklist-group-body.open{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:11px;padding:11px}
+body.travel-mode .shop-item{display:grid;grid-template-columns:28px minmax(0,1fr);grid-template-rows:auto auto auto auto;gap:8px 7px;align-items:center;min-width:0;padding:0 0 11px;border:1px solid #e2e7df;border-radius:14px;background:#fff;overflow:hidden;box-shadow:0 4px 13px rgba(46,64,67,.07)}
+body.travel-mode .shop-gallery-cover{grid-column:1/-1;grid-row:1;display:block;position:relative;width:100%;aspect-ratio:1/1;padding:0;border:0;border-bottom:1px solid #e8ece5;background:#f7f8f3;cursor:zoom-in;overflow:hidden}
+body.travel-mode .shop-gallery-cover img{display:block;width:100%;height:100%;padding:6px;object-fit:contain;background:#fff}
+body.travel-mode .shop-gallery-cover>span{position:absolute;right:7px;bottom:7px;padding:4px 7px;border-radius:999px;background:rgba(32,43,49,.76);color:#fff;font-size:9px;font-weight:900;backdrop-filter:blur(5px)}
+body.travel-mode .shop-gallery-remove{grid-column:1/-1;grid-row:1;display:flex;justify-self:end;align-self:start;align-items:center;justify-content:center;z-index:2;width:27px;height:27px;margin:7px;border:0;border-radius:50%;background:rgba(28,37,42,.72);color:#fff;font-size:16px;line-height:1;box-shadow:0 2px 8px rgba(0,0,0,.18);backdrop-filter:blur(5px);cursor:pointer}
+body.travel-mode .shop-gallery-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#6e7c78;cursor:pointer;background:linear-gradient(145deg,#f5f7f0,#edf3ef)}
+body.travel-mode .shop-gallery-empty b{font-size:27px;line-height:1;color:#4f907d}
+body.travel-mode .shop-gallery-empty span{position:static;background:transparent;color:inherit;padding:0;font-size:11px}
+body.travel-mode .shop-item>input[type=checkbox]{grid-column:1;grid-row:2;width:22px;height:22px;margin-left:7px;accent-color:#4d9b77}
+body.travel-mode .shop-item>.shop-item-title{grid-column:2;grid-row:2;padding:7px 8px 3px 0;font-size:13px;font-weight:900;line-height:1.35;overflow-wrap:anywhere}
+body.travel-mode .shop-item>.qty{grid-column:1/-1;grid-row:3;display:flex;justify-content:center;gap:7px;padding:0 8px}
+body.travel-mode .shop-item>.qty button{width:31px;height:31px}
+body.travel-mode .shop-gallery-location{grid-column:1/-1;grid-row:4;display:block;padding:0 10px;color:var(--ink-soft);font-size:9.5px;line-height:1.45;text-align:center;overflow-wrap:anywhere}
+body.travel-mode .shop-item>.shop-extra,body.travel-mode .shop-item>.shop-photo-row{display:none}
+body.travel-mode .shop-item.checked .shop-gallery-cover img{opacity:.48;filter:grayscale(.38)}
+body.travel-mode .shop-item.checked .shop-item-title{text-decoration:line-through;color:#87918e}
+@media(max-width:420px){body.travel-mode .shop-group .checklist-group-body.open{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;padding:9px}}
+@media(max-width:340px){body.travel-mode .shop-group .checklist-group-body.open{grid-template-columns:1fr}}
+body.travel-mode.travel-font-large .shop-item>.shop-item-title{font-size:16px;line-height:1.45}
+body.travel-mode.travel-font-large .shop-gallery-location{font-size:12px;line-height:1.5}
+body.travel-mode.travel-font-large .shop-gallery-empty span{font-size:14px}
 
 /* ---------- Large daily route maps ---------- */
 .route-map-gallery{display:flex; flex-direction:column; gap:12px; margin-bottom:14px;}
