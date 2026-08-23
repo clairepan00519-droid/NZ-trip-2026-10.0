@@ -450,6 +450,7 @@ function isUserEditingForm(){
   const a=document.activeElement;
   if(!a) return false;
   if(a.matches && a.matches('input:not([type=checkbox]):not([type=radio]):not([type=file]), textarea, select, [contenteditable="true"]')) return true;
+  if(document.querySelector('[id^="edit-note-"][style*="display: block"], [id^="hours-edit-"]:not([hidden]), [id^="nav-edit-"]:not([hidden])')) return true;
   return false;
 }
 function queueRemoteRow(row){
@@ -482,7 +483,7 @@ function applyRemoteRow(row, forceApply=false){
 }
 function applyStoreUpdate(key,jsonStr){
   let parsed;try{parsed=JSON.parse(jsonStr);}catch(e){return;}
-  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_nav_links':navLinkStore=parsed;break;case'nz_hours_override':hoursOverrideStore=parsed||{};break;case'nz_custom_spots':customSpotsStore=parsed;break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=normalizeRouteMapStore(parsed);break;case'nz_stay_times':stayTimeStore=parsed||{};break;case'nz_favorites':favoriteStore=parsed||{};break;case'nz_reminders':reminderStore=Array.isArray(parsed)?parsed:[];updateJourneyHubBadge();if(journeyHubTab==='reminders')renderReminders();return;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=normalizeStructuredList('nz_shop',parsed);renderShopList();return;case'nz_rules':rulesData=normalizeStructuredList('nz_rules',parsed);renderRulesList();return;case'nz_docs':docsData=normalizeStructuredList('nz_docs',parsed);renderDocsList();return;default:return;}
+  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_nav_links':navLinkStore=parsed;break;case'nz_hours_override':hoursOverrideStore=parsed||{};break;case'nz_custom_spots':customSpotsStore=parsed||{};migrateRequestedCustomSpots();break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=normalizeRouteMapStore(parsed);break;case'nz_stay_times':stayTimeStore=parsed||{};break;case'nz_favorites':favoriteStore=parsed||{};break;case'nz_reminders':reminderStore=Array.isArray(parsed)?parsed:[];updateJourneyHubBadge();if(journeyHubTab==='reminders')renderReminders();return;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=normalizeStructuredList('nz_shop',parsed);renderShopList();return;case'nz_rules':rulesData=normalizeStructuredList('nz_rules',parsed);renderRulesList();return;case'nz_docs':docsData=normalizeStructuredList('nz_docs',parsed);renderDocsList();return;default:return;}
   if(typeof renderDayContent==='function')renderDayContent();if(typeof updateSpotCount==='function')updateSpotCount();
 }
 function scheduleCloudPush(key,valueObj){
@@ -575,7 +576,7 @@ function S(name, cat, desc, opts={}){
 
 const days = [
 {dayNum:'Flight', date:'9/12', weekday:'六', region:'抵達・長白雲之鄉', enRegion:'Auckland Arrival', drive:'✈️ 國際航班：TPE → BNE → AKL', title:'傍晚抵達奧克蘭，休息一晚銜接南島', dayDesc:'前一晚（9/11）23:55 從桃園 T2 搭乘華航 CI53，經布里斯本轉機 2 小時 20 分，今天 18:00 抵達奧克蘭 T1；前往 Novotel 休息，隔天上午銜接皇后鎮國內線。', wear:'機艙冷氣強，建議帶件薄毯', weatherIco:'✈️', spots:[S('CI53 TPE→BNE→AKL','transport','9/11 23:55 桃園 T2 起飛；10:35 抵達布里斯本、12:55 再出發；9/12 18:00 抵達奧克蘭 T1。',{dur:'8h40＋轉機2h20＋3h05', fullDesc:'9/11 23:55 由桃園國際機場第二航廈起飛，CI53 Airbus A350-900 飛行 8 小時 40 分，隔日 10:35 抵達布里斯本。轉機 2 小時 20 分後於 12:55 再出發，飛行 3 小時 5 分，18:00 抵達奧克蘭國際機場第一航廈，接著前往 Novotel 入住。', img:'https://preview.redd.it/sunrise-from-the-window-of-my-transatlantic-flight-v0-j1b9ou28ou921.jpg?width=1080&crop=smart&auto=webp&s=3465eac9b4e9e804c4e6f7421a37b20420156988'})], moreSpots: []},
-{dayNum:'1', date:'9/13', weekday:'日', region:'啟程・越嶺境', enRegion:'Queenstown → Wanaka', drive:'🚗 約 68 km / 1小時 10分', gas:'⛽ 取車後於 ZQN 或 Wanaka 加滿', title:'降落長白雲之鄉，初探 Lake Wanaka', dayDesc:'從 AKL 飛抵 Queenstown，越過 Cardrona Valley，以湖畔美景與經典漢堡拉開序幕', wear:'長袖＋防風外套，山區早晚偏涼', weatherIco:'⛅', spots:[
+{dayNum:'1', date:'9/13', weekday:'日', region:'啟程・越嶺境', enRegion:'Queenstown → Wanaka', drive:'🚗 68 km｜Google 約 1小時10分｜實際建議抓 1.5–2小時', gas:'⛽ 取車後於 ZQN 或 Wanaka 加滿', title:'降落長白雲之鄉，初探 Lake Wanaka', dayDesc:'從 AKL 飛抵 Queenstown，越過 Cardrona Valley，以湖畔美景與經典漢堡拉開序幕', wear:'長袖＋防風外套，山區早晚偏涼', weatherIco:'⛅', spots:[
   S('NZ617 AKL→ZQN','transport','10:25由奧克蘭起飛，12:20抵達皇后鎮。',{dur:'約1小時55分', fullDesc:'10:25 由奧克蘭起飛，12:20 抵達皇后鎮機場，為 Air New Zealand 國內航班。全程航程約兩小時，高空俯瞰南阿爾卑斯山脈景致絕佳。', img:'https://content.r9cdn.net/rimg/dimg/4b/9f/755cbdd6-al-NZ-16713e9dd45.jpg?width=1366&height=768&crop=true'}), 
   S('Cardrona Valley Road','attraction','連接皇后鎮與瓦納卡的高山山谷公路。',{tags:['必拍'], fullDesc:'連接皇后鎮與瓦納卡的高山山谷公路（Crown Range Road），為紐西蘭海拔最高的常規公路。沿途高山草原開闊，秋末初春時遠方山頭微帶積雪，是明信片等級的景觀公路。開車時需注意陡坡與連續彎路。', tip:'可在高處官方觀景點停車，拍攝髮夾彎山路與河谷地形。順光時段（中午前後）色彩層次最迷人。', park:'沿線設有數個專屬避車彎觀景台，山路陡峭請確認拉好手煞車。', img:'https://www.newzealand.com/assets/Tourism-NZ/Queenstown/img-1536923687-3874-29271-3168459346_753fccfc0d_o__aWxvdmVrZWxseQo_FocalPointCropWzM1MiwxMDI0LDM1LDUwLDc1LCJqcGciLDY1LDIuNV0.jpg'}), 
   S('Lake Wanaka','attraction','紐西蘭第四大湖，清晨或傍晚湖面倒映雪山。',{tags:['必拍'], hours:'全天開放', fullDesc:'瓦納卡湖為紐西蘭第四大湖，景色比喧囂的皇后鎮更加開闊寧靜。清晨或傍晚時分，湖面宛如鏡面，可清晰倒映出遠方阿斯派林山國家公園的連綿雪山，非常適合沿著湖畔長廊悠閒漫步與攝影。', tip:'除了知名的「瓦納卡孤樹」，沿著湖畔木棧道往西走更能拍到無死角的雪山湖景。', img:'https://content.api.news/v3/images/bin/50c842e054f4428876bf516da4af98db'}), 
@@ -598,7 +599,7 @@ const days = [
     S('Muttonbird','food','創意歐陸與當代料理，擺盤如藝術品。',{tags:['必吃'], hours:'17:00–22:00', note:'強烈建議提前訂位', fullDesc:'主打創意歐陸與紐西蘭當代料理，餐點精緻且擺盤如藝術品，經常客滿需訂位。', img:'https://neatplaces.co.nz/cdn-cgi/image/format=auto,fit=cover,height=425,width=650//media/uploads/places/place/muttonbird/Muttonbird_-_WANAKA_38.jpg', recDishes:'季節分享盤'}), 
     S('Francesca\'s Italian Kitchen','food','在地義式料理南霸天，柴燒窯烤披薩深受好評。',{tags:['必吃'], hours:'12:00–21:30', note:'強烈建議提前訂位', fullDesc:'當地的義式料理南霸天，其柴燒窯烤披薩與手工馬鈴薯麵疙瘩（Gnocchi）深受好評。', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSS731UYBbmKVTXwzc3EKXsExogqT3mMTBXYGYei5MP_-lBk1ayHj9CoQM&s=10', recDishes:'木柴窯烤披薩、手工麵疙瘩'}), 
     S('Wanaka Apartment','hotel','連住第二晚。',{link:'https://www.airbnb.com.tw/rooms/835936560022815796', linkLabel:'查看 Airbnb 房源', fullDesc:'連住第二晚。房東 Shaun 為 Superhost，如需將床型改為兩張大床請提前聯繫房東安排清潔調整。', img:'https://a0.muscache.com/im/pictures/miso/Hosting-835936560022815796/original/dd4fb9bb-715a-426e-ab37-cea8697a0aae.jpeg?im_w=720'})]},
-{dayNum:'3', date:'9/15', weekday:'二', region:'越境・染星穹', enRegion:'Wanaka → Lake Tekapo', drive:'🚗 約 200 km / 2.5小時', gas:'⛽ 途經 Twizel 於 NPD 加滿', title:'穿梭 Lindis Pass，Tekapo 星光', dayDesc:'伴隨薰衣草香與鮮美鮭魚，越過壯麗隘口，迎接無垠星空', wear:'保暖外套＋圍巾，風大氣溫低', weatherIco:'⛅', spots:[
+{dayNum:'3', date:'9/15', weekday:'二', region:'越境・染星穹', enRegion:'Wanaka → Lake Tekapo', drive:'🚗 200 km｜Google 約 2.5小時｜實際建議抓 3–3.5小時', gas:'⛽ 途經 Twizel 於 NPD 加滿', title:'穿梭 Lindis Pass，Tekapo 星光', dayDesc:'伴隨薰衣草香與鮮美鮭魚，越過壯麗隘口，迎接無垠星空', wear:'保暖外套＋圍巾，風大氣溫低', weatherIco:'⛅', spots:[
   S('Wānaka Lavender Farm','attraction','在地薰衣草農場。設有花園、茶室，能近距離餵食草泥馬。',{tags:['必拍'], hours:'10:00–17:00', note:'春季門票約 $7 NZD', fullDesc:'佔地寬廣的在地薰衣草農場。雖然 9 月初春尚未進入紫色花海盛開期，但農場內設有精緻的鄉村花園、茶室，並販售純正的薰衣草精油商品、蜂蜜冰淇淋，還能近距離餵食草泥馬和小羊。', img:'https://static.wixstatic.com/media/5f2212_06583104873f4f998bf34cdc09229658~mv2.jpg/v1/fill/w_568,h_380,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/5f2212_06583104873f4f998bf34cdc09229658~mv2.jpg'}), 
   S('Lindis Pass','attraction','連接奧塔哥與麥肯齊盆地的高山通道，擁有惡地金黃丘陵地形。',{tags:['必拍'], fullDesc:'連接奧塔哥與麥肯齊盆地的著名高山山口通道（海拔達 971 公尺）。這裡擁有極為獨特的惡地丘陵地形，山上覆蓋著金黃色的草本植物（Tussock），在陽光照射下會呈現如絲綢般的光影線條，冬天與初春時則可能覆蓋白雪，壯麗非凡。', tip:'山頂風大且氣溫驟降，下車記得穿大衣。官方觀景台設有一段短步道可爬上小山丘。', park:'山口最高點設有專屬免費停車場。', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQn22Xamf2PRFoVYt6rOfa_B9cUB3LwDglLx3WZgyimAGkn98eiFGdR2xWw&s=10'}), 
   S('Lake Tekapo','attraction','麥肯齊盆地的明珠。夢幻「土耳其藍」湖水與牧羊人教堂。',{tags:['必拍'], fullDesc:'麥肯齊盆地的明珠。蒂卡波湖最著名的是其夢幻般的「土耳其藍」湖水，這是因為冰河融水夾帶了大量的微細岩粉懸浮在水中。背景襯托著高聳的阿爾卑斯山脈，湖畔還有指標性的牧羊人教堂。', img:'https://www.outsidesports.co.nz/cdn/shop/articles/church-of-good-shepherd-new-zealand-m8y3_2239x.webp?v=1765414174'}), 
@@ -618,7 +619,7 @@ const days = [
   moreSpots: [
     S('The Greedy Cow Cafe','food','人氣溫馨早餐店。主打大份量英式傳統早餐與帕尼尼。',{tags:['必吃'], hours:'07:30–14:00', fullDesc:'蒂卡波小鎮上極受歡迎的溫馨早餐店。主打大份量的英式傳統早餐、香煎培根與現做帕尼尼。店內氣氛輕快，咖啡水準極高，是開啟一天步道行程的最佳起點。', img:'https://static.wixstatic.com/media/db1de0_39f47fad88b6491380d9b51bb9c94724~mv2.jpg/v1/fill/w_1920,h_1200,al_c,q_90/Greedy-Cow-Featured-Image-2.jpg', recDishes:'Big Breakfast、現做帕尼尼'}), 
     S('Starview 88 - Tekapo','hotel','連住第二晚。',{link:'https://www.agoda.com/zh-tw/starview-88/hotel/lake-tekapo-nz.html', linkLabel:'查看 Agoda 房源', fullDesc:'連住第二晚。2晚為最低住宿晚數要求，退房前記得 check-out 時間（通常上午10點前）。', img:'https://upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Church_of_the_Good_Shepherd_Tekapo.jpg/640px-Church_of_the_Good_Shepherd_Tekapo.jpg'})]},
-{dayNum:'5', date:'9/17', weekday:'四', region:'湛藍・雪之巔', enRegion:'Tekapo → Mt Cook', drive:'🚗 約 105 km / 1.5小時', title:'Lake Pukaki 蒂芬妮藍與庫克山', dayDesc:'品嚐高山鮭魚，沿著極致湛藍的湖畔公路，直抵雪山腳下', wear:'厚外套＋手套，山區可能低於0°C', weatherIco:'❄️', spots:[
+{dayNum:'5', date:'9/17', weekday:'四', region:'湛藍・雪之巔', enRegion:'Tekapo → Mt Cook', drive:'🚗 105 km｜Google 約 1小時10分｜實際建議抓 1.5小時；沿途拍照抓 2小時', title:'Lake Pukaki 蒂芬妮藍與庫克山', dayDesc:'品嚐高山鮭魚，沿著極致湛藍的湖畔公路，直抵雪山腳下', wear:'厚外套＋手套，山區可能低於0°C', weatherIco:'❄️', spots:[
   S('Lake Pukaki','attraction','最美冰河湖。牛奶藍湖水，天氣晴朗時可見庫克山主峰。',{tags:['必拍'], fullDesc:'被譽為全紐西蘭最美麗的冰河湖。普卡基湖的面積巨大，其標誌性的「牛奶藍」湖水顏色比蒂卡波湖更為濃郁迷人。天氣晴朗時，紐西蘭最高峰——海拔 3,724 公尺的庫克山主峰會端正地矗立在湖泊的正中央。', img:'https://redwhiteadventures.com/wp-content/uploads/2025/07/Pukaki-Kettle-Hole-Track-Mount-Cook-New-Zealand-15.webp'}), 
   S('Peter\'s Lookout','attraction','公路中途景觀台。拍攝南島經典「寂寞公路延伸至雪山」取景點。',{tags:['必拍'], fullDesc:'沿著普卡基湖西側通往庫克山村（Mount Cook Road）公路上的中途景觀台。這裡是拍攝南島經典「寂寞景觀公路延伸至遠方巍峨雪山」畫面最著名的取景點，能完美捕捉台地地形、牛奶藍湖水與庫克山主峰的比例。', park:'設有專屬的狹長形免費停車場', img:'https://www.weseektravel.com/wp-content/uploads/2020/04/PETERS-LOOKOUT-ROAD-TO-MOUNT-COOK-6570-e1623502991290.jpg'}), 
   S('Glentanner Lookout','attraction','國家公園邊界停靠點。宏偉的塔斯曼河谷沖積扇一覽無遺。',{tags:['必拍'], fullDesc:'接近庫克山國家公園邊界的大型路邊停靠景觀點。隨著車速推進，庫克山巨大的山體與冰河斷崖會逐漸在擋風玻璃前逼近放大，這裡視野開闊，能拍攝到廣闊的塔斯曼河谷沙洲沖積扇地形。', img:'https://cdn.prod.rexby.com/image/00230bda2de6470981e35f8aced19efd?format=webp&width=1080&height=1350&quality=80'}), 
@@ -635,7 +636,7 @@ const days = [
   moreSpots: [
     S('Old Mountaineers Cafe','food','庫克山村內的老牌酒吧餐廳，主打漢堡披薩等家常菜，健行後補給的熱門選擇。',{img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRrQZoFEumaJYxDD93Ijut6idORe31z0Z5XMSnmUWLEPSrPK5huPVnZmTA&s=10', tags:['必吃'], hours:'10:00–19:00左右(依季節調整)', fullDesc:'位於庫克山村內、自2003年開業的老牌酒吧餐廳，牆上掛滿早期登山探險的歷史照片，氣氛輕鬆懷舊。菜單以漢堡、披薩、湯品等家常菜為主，份量實在，健行過後在戶外座位區配著庫克山景色用餐相當愜意，也可以只是點杯咖啡或啤酒稍作休息。'}), 
     S('Mt Cook Motels','hotel','連住第二晚。',{link:'https://www.hermitage.co.nz/stay/mt-cook-motels/', linkLabel:'查看房源官網', fullDesc:'連住第二晚。附近 Chamois Bar & Grill 供應酒吧簡餐，下午4點後營業，可作為晚餐備案。', img:'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d7/Lake_Pukaki_and_Mount_Cook.jpg/640px-Lake_Pukaki_and_Mount_Cook.jpg'})]},
-{dayNum:'7', date:'9/19', weekday:'六', region:'跨域・遇藍影', enRegion:'Mt Cook → Oamaru', drive:'🚗 約 205 km / 2.5小時', gas:'⛽ Oamaru 市區 Z Energy 補滿', title:'辭別 Tasman Glacier，企鵝奇遇', dayDesc:'從冰川退回東海岸，走入 Oamaru 的歷史街區與可愛藍企鵝相遇', wear:'外套可隨氣溫調整，沿海歐瑪魯較溫和', weatherIco:'⛅', spots:[
+{dayNum:'7', date:'9/19', weekday:'六', region:'跨域・遇藍影', enRegion:'Mt Cook → Oamaru', drive:'🚗 205 km｜Google 約 2.5小時｜實際建議抓 3–3.5小時', gas:'⛽ Oamaru 市區 Z Energy 補滿', title:'辭別 Tasman Glacier，企鵝奇遇', dayDesc:'從冰川退回東海岸，走入 Oamaru 的歷史街區與可愛藍企鵝相遇', wear:'外套可隨氣溫調整，沿海歐瑪魯較溫和', weatherIco:'⛅', spots:[
   S('Tasman Glacier View','activity','短程健行景觀步道。觀景台可居高臨下俯瞰冰河末端。',{tags:['必拍'], dur:'約40–50分鐘', fullDesc:'位於庫克山另一側的短程健行景觀步道。需要攀爬一段由岩石鋪設的台階台地，攻頂後的觀景台可居高臨下俯瞰全紐西蘭最長的冰河——塔斯曼冰河末端巨大的灰色冰河湖。', docMap:'https://www.doc.govt.nz/parks-and-recreation/places-to-go/canterbury/places/aoraki-mount-cook-national-park/tracks/tasman-glacier-view/', img:'https://www.aa.co.nz/content/dam/nzaa/02-services/travel/editorial-locations/Canterbury/kuno-schweizer-3tVbuvA2emE-unsplash-1.jpg'}), 
   S('Tyne Street','attraction','歐瑪魯老城區核心。完整保存19世紀維多利亞式白色古典建築。',{tags:['必拍'], fullDesc:'歐瑪魯老城區的核心街道。這裡完整保存了 19 世紀末期因淘金熱與港口貿易而興建的維多利亞式白色奧瑪魯石（石灰岩）古典建築。如今進駐了許多復古二手書店、手工藝品店，充滿濃郁的英倫懷舊電影感。', img:'https://nikiinnewzealand.com/wp-content/uploads/2022/05/oamarusquare.jpg'}), 
   S('Blue Penguin Colony','attraction','野生藍企鵝觀賞區。傍晚時分，企鵝會成群結隊游回岸邊。',{tags:['必拍'], hours:'依日落變動', note:'觀賞席約 $45 NZD，全區嚴禁攝影', fullDesc:'歐瑪魯最具代表性的野生藍企鵝保育觀賞區。傍晚時分，這群身高僅約 30 公分的可愛企鵝會成群結隊從小夜海中游回岸邊。園區設有階梯式看台，並提供專業英文生態解說服務。', img:'https://www.urbanwildlifetrust.org/wp-content/uploads/2021/07/Oamaru0023.jpg'}), 
@@ -644,7 +645,7 @@ const days = [
     S('Star and Garter','food','百年歷史復古餐酒館，主打紐西蘭頂級肋眼牛排與精釀啤酒。',{tags:['必吃'], hours:'11:30–21:00', fullDesc:'歐瑪魯百年歷史復古餐酒館，店內掛滿骨董裝飾，主打大份量紐西蘭頂級肋眼牛排與現調精釀啤酒。', img:'https://www.waitaki.govt.nz/files/assets/public/v/1/images/events/2023/soup-sipper/star-garter-sss-aug-23_8.jpg?w=1080', recDishes:'頂級肋眼牛排'}), 
     S('The Better Batter NZ','food','深受碼頭工人喜愛的炸魚薯條老店，外皮金黃酥脆。',{tags:['必吃'], hours:'12:00–19:30 (一休)', fullDesc:'深受在地碼頭工人喜愛的炸魚薯條老店，外皮金黃酥脆，魚肉鮮嫩多汁。', img:'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/32/98/85/6e/caption.jpg?w=1100&h=1100&s=1', recDishes:'Blue Cod 炸魚'}), 
     S('Lune Lux','hotel','今晚住宿，歐瑪魯特色風格住宿。',{link:'https://www.booking.com/hotel/nz/lune-lux.html', linkLabel:'查看 Booking.com', fullDesc:'今晚住宿，歐瑪魯極具特色的風格住宿。', img:'https://upload.wikimedia.org/wikipedia/commons/thumb/9/91/Oamaru_Historic_Area.jpg/640px-Oamaru_Historic_Area.jpg'})]},
-{dayNum:'8', date:'9/20', weekday:'日', region:'巡洋・逢生靈', enRegion:'Oamaru → Dunedin', drive:'🚗 約 115 km / 1.5小時', title:'探秘 Tunnel Beach，古典晨韻', dayDesc:'穿梭於農夫市集與海貌奇景之間，感受 Dunedin 的建築底蘊', wear:'防風外套，沿岸海風較大', weatherIco:'🌤️', spots:[
+{dayNum:'8', date:'9/20', weekday:'日', region:'巡洋・逢生靈', enRegion:'Oamaru → Dunedin', drive:'🚗 115 km｜Google 約 1.5小時｜實際建議抓 1小時45分–2小時', title:'探秘 Tunnel Beach，古典晨韻', dayDesc:'穿梭於農夫市集與海貌奇景之間，感受 Dunedin 的建築底蘊', wear:'防風外套，沿岸海風較大', weatherIco:'🌤️', spots:[
   S('Katiki Point Lighthouse','attraction','莫拉基半島南端燈塔。稀有黃眼企鵝與海獅棲息地。',{tags:['必拍'], hours:'07:30–17:30 (保護企鵝)', fullDesc:'位於莫拉基半島南端的高聳燈塔海岬。這裡是一處極其珍貴的野生動物保護區，是稀有的黃眼企鵝以及巨大的紐西蘭毛皮海獅的天然棲息地。', tip:'請嚴格與野生動物保持安全距離。', img:'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/1b/02/fd/71/photo4jpg.jpg?w=1200&h=-1&s=1'}), 
   S('Huriawa Pa walk','activity','Karitane半島的毛利古堡遺址環形步道，沿途可見噴水洞與遼闊海岸線景觀。',{img:'https://dynamic-media-cdn.tripadvisor.com/media/photo-o/2d/2f/18/cb/caption.jpg?w=1200&h=1200&s=1', tags:['私房'],dur:'約45分鐘(環形)', fullDesc:'位於 Dunedin 北方 Karitane 半島上的歷史步道，環繞整個半島一圈，是18世紀毛利酋長 Te Wera 率族人抵禦長達半年圍城的古堡遺址（pā）。沿途設有解說牌介紹當地歷史，途經噴水洞（incoming tide 會從岩縫中噴出水柱），視野可遠眺南北兩側的海灣與峭壁景觀，全程約45分鐘，適合全家同行。'}), 
   S('Tunnel Beach','activity','海蝕地形奇景。步道沿懸崖下行，終點為神秘岩石隧道。',{tags:['必拍'],dur:'來回約1.5小時', fullDesc:'南島最為震撼的海蝕地形奇景之一。此步道沿著陡峭的金黃色砂岩懸崖一路下行，步道終點為一處手工鑿通的神秘岩石隧道，穿過隧道即可抵達隱密的分裂沙灘。', tip:'回程是一段連續且頗有坡度的陡峭上坡路。強烈建議查詢當日潮汐表，選擇退潮時段（Low Tide）前往，此時神祕沙灘才會完全暴露。', docMap:'https://www.doc.govt.nz/parks-and-recreation/places-to-go/otago/places/dunedin-area/tracks/tunnel-beach-track/', img:'https://cdn.sanity.io/images/n1o990un/production/d69da66f268d1a2c7c15c50075e73dc70c7e1c66-1200x900.jpg'}), 
@@ -654,7 +655,7 @@ const days = [
     S('Oamaru Farmers\' Market','shopping','歷史港區旁的在地農夫市集。',{tags:['必買'], hours:'週六 09:30–13:00', fullDesc:'每週六早上限定開放的在地農夫市集，聚集了奧塔哥地區的小農、起司工匠與手作職人。', img:'https://waitakinz.com/assets/Tourism-Operators/Oamaru-Farmers-Market/OFM-11__ScaleWidthWzkwMF0.jpg'}), 
     S('Rising Sun Dumplings','food','但尼丁市中心受歡迎的現代中式麵食館。主打手工現包煎餃。',{tags:['必吃'], hours:'11:30–21:00', fullDesc:'但尼丁市中心大受學生與當地年輕人歡迎的現代中式麵食館。主打手工現包、皮 Q 餡多汁的爆漿煎餃與酸辣麵。', img:'https://img.cdn4dd.com/cdn-cgi/image/fit=cover,width=600,height=400,format=auto,quality=80/https://doordash-static.s3.amazonaws.com/media/store/header/75a63dde-f625-4797-8a67-899f165b07fa.jpg', recDishes:'豬肉韭菜煎餃'}), 
     S('Bluestone On George','hotel','今晚住宿，位於但尼丁市中心，步行可達多數景點。',{link:'https://www.bluestonedunedin.co.nz/', linkLabel:'查看官網', fullDesc:'今晚住宿，位於但尼丁市中心喬治街附近，步行可達多數景點。', img:'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/Dunedin_George_Street.jpg/640px-Dunedin_George_Street.jpg'})]},
-{dayNum:'9', date:'9/21', weekday:'一', region:'逐風・半島行', enRegion:'Otago Peninsula', drive:'🚗 半島來回約 60 km / 1.5小時', gas:'⛽ Dunedin Pak\'nSave 採買加滿', title:'Otago Peninsula 生態，與信天翁共舞', dayDesc:'乘船出海追尋生態奇蹟，在 Sandfly Bay 記錄生命躍動', wear:'防風防水外套，半島風大且天候多變', weatherIco:'⛅', spots:[
+{dayNum:'9', date:'9/21', weekday:'一', region:'逐風・半島行', enRegion:'Otago Peninsula', drive:'🚗 半島來回約 60 km / 1.5小時', title:'Otago Peninsula 生態，與信天翁共舞', dayDesc:'乘船出海追尋生態奇蹟，在 Sandfly Bay 記錄生命躍動', wear:'防風防水外套，半島風大且天候多變', weatherIco:'⛅', spots:[
   S('Monarch Wildlife Cruises','activity','頂級海洋生態遊船。近距離仰望翼展3公尺的皇家信天翁翱翔。',{tags:['必拍'], hours:'依預約班次', note:'依行程約 $60-$120 NZD', fullDesc:'全紐西蘭最頂級的海洋生態遊船體驗之一。從小港口出發，航行至奧塔哥半島陡峭岬角海域。在船上可以近距離仰望這群翼展超過 3 公尺的皇家信天翁在狂風中翱翔的英姿。', img:'https://www.nztravelorganiser.com/wp-content/uploads/2019/09/dunedin-activities.jpg'}), 
   S('Sandfly Bay','activity','隱密野性海灘。需徒步穿越陡峭沙丘，經常有海獅在沙灘睡覺。',{tags:['必拍'],dur:'來回約1.5小時', fullDesc:'隱密且充滿野性美的僻靜海灘。要抵達海岸，必須先徒步穿越一段巨大且陡峭的白色沙丘地形。這裡因經常有巨大的紐西蘭海獅在沙灘上睡覺、社交而聞名。', tip:'法規嚴格規定必須與海獅保持至少 20 公尺安全距離。', docMap:'https://www.doc.govt.nz/parks-and-recreation/places-to-go/otago/places/dunedin-area/tracks/sandfly-bay-track/', img:'https://dunedinattractions.nz/images/sandfly-bay/hero.jpg'}), 
   S('Sir Leonard Wright Lookout','attraction','John Wilson Ocean Drive盡頭的觀景台，可遠眺南Dunedin海岸線與太平洋。',{img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTxK2_YhkD5YNG36EVIgia3G5nxvG0mO881SIdlbuwHWxrTbZITZ7u5nLrU&s=10', tags:['私房'], fullDesc:'位於 John Wilson Ocean Drive 盡頭、Lawyers Head 高處的觀景台，緊鄰高爾夫球場。可俯瞰 St Clair、St Kilda 等南 Dunedin 海灘與連綿沙丘，太平洋海浪拍打岩岸的畫面十分壯闊，也是熱門的日出日落景點。注意：John Wilson Drive 平日僅於11:00–15:00開放車輛通行，其餘時段須步行或騎車前往。'}), 
@@ -665,7 +666,7 @@ const days = [
     S('Plato','food','殿堂級海鮮餐廳，菜單依當日現撈漁獲彈性調整。',{tags:['必吃'], hours:'18:00起 (一休)', note:'強烈建議提前預訂', fullDesc:'但尼丁首屈一指的殿堂級海鮮餐廳，坐落於海港碼頭旁的一棟復古建築內。菜單依當日漁船捕撈的現撈漁獲彈性調整。', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRgVI9iwdwtgfC9idPmlBr8Piem59_Bb8Px4vjx8YMFicM2l5nyM3BPCnib&s=10', recDishes:'每日現撈漁獲 (Catch of the day)'}), 
     S('Pak\'nSave Dunedin','shopping','於此進行大補給，並領取加油折價券。',{tags:['必買'], hours:'07:00–22:00', fullDesc:'紐西蘭公認物價最便宜的黃色連鎖巨型倉儲式超市。由於接下來將深入峽灣等偏遠地區，建議在但尼丁進行最大規模的食材大補給。', img:'https://upload.wikimedia.org/wikipedia/commons/a/a5/Pak%27n_Save_Wanganui.JPG'}), 
     S('Bluestone On George','hotel','連住第二晚。',{link:'https://www.bluestonedunedin.co.nz/', linkLabel:'查看官網', fullDesc:'連住第二晚。', img:'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3c/Dunedin_George_Street.jpg/640px-Dunedin_George_Street.jpg'})]},
-{dayNum:'10', date:'9/22', weekday:'二', region:'尋味・向水岸', enRegion:'Dunedin → Te Anau', drive:'🚗 約 290 km / 3.5小時', title:'品味南島晨韻，啟程 Te Anau 靜謐時光', dayDesc:'用 Dunedin 人氣早午餐喚醒味蕾，驅車前往峽灣門戶', wear:'保暖外套，湖區日夜溫差明顯', weatherIco:'🌥️', spots:[
+{dayNum:'10', date:'9/22', weekday:'二', region:'尋味・向水岸', enRegion:'Dunedin → Te Anau', drive:'🚗 290 km｜Google 約 3.5小時｜實際建議抓 4–4.5小時', gas:'⛽ 出發 Te Anau 前於 Dunedin Pak\'nSave 採買並加滿', title:'品味南島晨韻，啟程 Te Anau 靜謐時光', dayDesc:'用 Dunedin 人氣早午餐喚醒味蕾，驅車前往峽灣門戶', wear:'保暖外套，湖區日夜溫差明顯', weatherIco:'🌥️', spots:[
   S('Lake Te Anau','attraction','南島第一大湖，前往米佛峽灣的門戶。西側對岸是原始溫帶雨林。',{tags:['必拍'], fullDesc:'紐西蘭第二大湖、南島第一大湖。蒂阿瑙湖是通往宏偉的米佛峽灣與峽灣國家公園的咽喉門戶。相較於觀光氣息濃厚的瓦卡蒂普湖，這裡多了一份與世隔絕的莊嚴與靜謐。', img:'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Lake_Te_Anau_New_Zealand.jpg/640px-Lake_Te_Anau_New_Zealand.jpg'}), 
   S('Marakura Wharf','attraction','蒂阿瑙小鎮湖畔木製老碼頭。捕捉湖景最經典的攝影取景點。',{tags:['必拍'], fullDesc:'位於蒂阿瑙小鎮湖畔步行道旁的一座古樸木製老碼頭。這裡木棧道朝湖心延伸，是捕捉蒂阿瑙湖景最經典的攝影取景點。', img:'https://cdn.prod.rexby.com/image/b16fbf9e5f954b428213c515635ba3bf?format=webp&width=1080&height=1350&quality=80'}), 
   ], 
@@ -677,7 +678,7 @@ const days = [
   S('Te Anau Bird Sanctuary','attraction','蒂阿瑙湖畔的免費賞鳥保護區，可近距離觀察紐西蘭珍稀的無翼秧雞(Takahē)。',{img:'https://www.sit.ac.nz/Portals/0/EasyDNNnews/1897/TAKAHE-at-Te-Anau-Bird-Sanctuary.JPG', dur:'約40分鐘', fullDesc:'位於蒂阿瑙湖畔的 Punanga Manu o Te Anau 賞鳥保護區，從 Fiordland 國家公園遊客中心步行約15-20分鐘可達。免費入園（歡迎樂捐），是近距離觀賞紐西蘭珍稀鳥類的絕佳地點，明星動物是曾一度被認為已滅絕、後來奇蹟重現的無翼秧雞（Takahē），此外還能看到卡卡鸚鵡、林鴿與圖伊鳥等原生鳥種，園內設有休憩桌椅與洗手間，適合安排在森林健行前後順遊。'}), 
   ], 
   moreSpots: [S('Black\'s Hut','hotel','連住第二晚，回到湖畔小屋泡熱水浴缸放鬆。',{link:'https://www.airbnb.com/rooms/52614454', linkLabel:'查看 Airbnb 房源', fullDesc:'連住第二晚，凱普勒步道健行後回到湖畔小屋泡熱水浴缸放鬆。入住透過智慧門鎖自助辦理。', img:'https://a0.muscache.com/im/pictures/miso/Hosting-52614454/original/18a29ea2-3bf9-4b93-9cdc-e44fcdd7405b.jpeg?im_w=720'})]},
-{dayNum:'12', date:'9/24', weekday:'四', region:'御風・俯瞰城', enRegion:'Te Anau → Queenstown', drive:'🚗 約 170 km / 2小時', title:'登頂 Queenstown 天際線與光影', dayDesc:'由 Deer Park Heights 絕美視角，搭配義式冰淇淋，收攬百萬美景', wear:'輕便外套即可，皇后鎮市區較和緩', weatherIco:'☀️', spots:[
+{dayNum:'12', date:'9/24', weekday:'四', region:'御風・俯瞰城', enRegion:'Te Anau → Queenstown', drive:'🚗 170 km｜Google 約 2小時｜實際建議抓 2.5–3小時', title:'登頂 Queenstown 天際線與光影', dayDesc:'由 Deer Park Heights 絕美視角，搭配義式冰淇淋，收攬百萬美景', wear:'輕便外套即可，皇后鎮市區較和緩', weatherIco:'☀️', spots:[
   S('Lake Wakatipu Viewpoint','attraction','卓越山脈的鋸齒狀山脊線與寶藍色湖水形成極具張力的對比。',{tags:['必拍'], fullDesc:'位於通往格蘭諾奇公路起點不遠處的路邊高處觀景點。從這個觀景點看過去，卓越山脈的鋸齒狀山脊線與寶藍色湖水形成極具戲劇張力的對比。', img:'https://www.campervannewzealand.co.nz/assets/img/blog/564/shutterstock_789431650-compressed.jpg'}), 
   S('Deer Park Heights','attraction','私人牧場觀景區，可近距離接觸鹿群，俯瞰皇后鎮全景。',{tags:['必拍'], hours:'日間開放', note:'每車約 $55 NZD，需線上預約', fullDesc:'私人牧場觀景區，可近距離接觸鹿群，並俯瞰瓦卡蒂普湖與皇后鎮全景，也是多部電影取景地。', img:'https://scontent-xxc1-1.xx.fbcdn.net/v/t39.30808-6/498271435_3838751466454752_5305341638292454672_n.jpg?stp=dst-jpg_tt6&cstp=mx2048x1536&ctp=s2048x1536&_nc_cat=101&ccb=1-7&_nc_sid=aa7b47&_nc_ohc=eXYXDvafWzYQ7kNvwEzRwO-&_nc_oc=AdpnuVlkHgbBYgtfbm_COr-ueg_G7f_2qxQh9wGs4oLzE33zxqKBhkN4Z1yxLZxM4zYlNiE6rc_OtaCTrTd2EFsp&_nc_zt=23&_nc_ht=scontent-xxc1-1.xx&_nc_gid=7VvAF3uo5gYs9J44jng6kQ&_nc_ss=7b2a8&oh=00_AQB9eoDtE9CRNn5Sxk0GS2D_DnuRBVx8TjyKj1dsHj8T6Q&oe=6A592036'}), 
   S('Queenstown Skyline','attraction','搭乘空中纜車直達鮑勃峰山頂。鳥瞰皇后鎮經典殿堂級視角。',{tags:['必拍'], hours:'09:30–20:00', note:'成人纜車約 $53 NZD', fullDesc:'搭乘南半球最陡峭的空中纜車直達鮑勃峰山頂。山頂觀景台是鳥瞰皇后鎮最經典的殿堂級視角：整片呈 Z 字型的瓦卡蒂普湖、卓越山脈一覽無遺。', img:'https://queenstown.skyline.co.nz/cdn-cgi/image/quality=75,width=1920,height=1080,f=auto,fit=cover/https://media.skyline.co.nz/queenstown/media/uploads/2023/11/12135919/Skyline-Queenstown_Gondola_Remarkables_M.png'}), 
@@ -784,6 +785,44 @@ const days = [
     hotel26.fullDesc = '連住第三晚，也是本次旅程最後一晚住宿。退房時間為隔日上午10點前，前往機場約10分鐘車程。';
   }
 })();
+
+/* 2026-08-23：The Better Batter NZ 改排至 9/16。
+   景點物件已在上方先取得原本的 _storageKey，因此移動日期後，既有照片、
+   評論、導航修正、營業時間與收藏仍會跟著同一張卡片。 */
+(function moveBetterBatterToSep16(){
+  const target=days.find(day=>day.date==='9/16');
+  let moved=null;
+  for(const day of days){
+    const index=(day.moreSpots||[]).findIndex(spot=>spot.name==='The Better Batter NZ');
+    if(index>=0){[moved]=day.moreSpots.splice(index,1);break;}
+  }
+  if(!target||!moved)return;
+  const hotelIndex=(target.moreSpots||[]).findIndex(spot=>spot.cat==='hotel');
+  if(hotelIndex>=0)target.moreSpots.splice(hotelIndex,0,moved);
+  else target.moreSpots.push(moved);
+})();
+
+/* 固定行程調整：移動物件本身，不重新建立卡片，保留既有儲存識別。 */
+function moveBuiltInSpotToDate(name,date){
+  const target=days.find(day=>day.date===date);
+  if(!target)return;
+  let moved=null;
+  for(const day of days){
+    for(const listName of ['spots','moreSpots']){
+      const list=day[listName]||[];
+      const index=list.findIndex(spot=>spot.name===name);
+      if(index>=0){[moved]=list.splice(index,1);break;}
+    }
+    if(moved)break;
+  }
+  if(!moved)return;
+  const hotelIndex=(target.moreSpots||[]).findIndex(spot=>spot.cat==='hotel');
+  if(hotelIndex>=0)target.moreSpots.splice(hotelIndex,0,moved);
+  else target.moreSpots.push(moved);
+}
+moveBuiltInSpotToDate("Pak'nSave Dunedin",'9/22');
+moveBuiltInSpotToDate('Whitestone Cheese Diner & Deli','9/19');
+moveBuiltInSpotToDate('The Swan','9/21');
 
 /* ============ 筆記/照片/自訂景點系統 (LocalStorage 永久保存) ============ */
 
@@ -985,6 +1024,34 @@ function setCoverPhoto(key, sel) {
 /* 自訂新增景點：依「天」儲存在 LocalStorage，重新整理後仍會保留 */
 let customSpotsStore = safeLocalJSON('nz_custom_spots',{}) || {};
 function persistCustomSpots(){ safeSetItem('nz_custom_spots', customSpotsStore); }
+function moveCustomSpotToDate(name,date){
+  const targetIndex=days.findIndex(day=>day.date===date);
+  if(targetIndex<0)return false;
+  let moved=null,changed=false;
+  Object.keys(customSpotsStore).forEach(dayIndex=>{
+    const list=Array.isArray(customSpotsStore[dayIndex])?customSpotsStore[dayIndex]:[];
+    customSpotsStore[dayIndex]=list.filter(spot=>{
+      if(spot?.name!==name)return true;
+      if(!moved)moved=spot;
+      if(Number(dayIndex)!==targetIndex)changed=true;
+      return false;
+    });
+  });
+  if(!moved)return false;
+  const target=customSpotsStore[targetIndex]||(customSpotsStore[targetIndex]=[]);
+  target.push(moved);
+  return changed;
+}
+function migrateRequestedCustomSpots(){
+  const changed=[
+    moveCustomSpotToDate('Whitestone Cheese Diner & Deli','9/19'),
+    moveCustomSpotToDate('The Swan','9/21'),
+    moveCustomSpotToDate("Pak'nSave Dunedin",'9/22')
+  ].some(Boolean);
+  if(changed)persistCustomSpots();
+  return changed;
+}
+migrateRequestedCustomSpots();
 function getCustomSpots(dayIdx){ return customSpotsStore[dayIdx] || []; }
 
 /* 依關鍵字與分類，自動組出一段景點簡介（離線生成，不需要網路，句型會隨機變化避免制式感） */
@@ -1851,6 +1918,11 @@ function wearSummaryHTML(value){
   if(!match)return escapeHTMLText(text);
   return `<span class="wear-line">${escapeHTMLText(match[1])}</span><span class="wear-line">${escapeHTMLText(match[2])}</span>`;
 }
+function driveSummaryHTML(value){
+  return String(value||'').split('｜').map((part,index)=>
+    `<span class="drive-part${/實際建議/.test(part)?' recommended':''}">${index?'':part.startsWith('🚗')?'': '🚗 '}${escapeHTMLText(part)}</span>`
+  ).join('');
+}
 function renderDayContent(){
   const currentIceDetails=document.querySelector('.ice-compare-details');
   if(currentIceDetails)iceCompareOpenByDay[activeDay]=currentIceDetails.open;
@@ -1859,6 +1931,9 @@ function renderDayContent(){
     noteDraftStore[input.id.replace('note-input-','')] = input.value;
   });
   const previousScrollY = window.scrollY;
+  const activeCard=document.activeElement?.closest?.('.spot-card[id]');
+  const activeAnchorId=activeCard?.id||'';
+  const activeAnchorTop=activeCard?.getBoundingClientRect().top;
   const d = days[activeDay];
   renderDayQuickNav(d);
   const curSubTab = activeSubTabStore[activeDay] || 'main';
@@ -1907,7 +1982,7 @@ function renderDayContent(){
 
   const daySummaryHTML=`<div class="day-card-head">
       <div class="region">【Day ${d.dayNum}｜${d.date}】<br>${d.region}</div>
-      ${d.drive ? `<div class="drive-info">${d.drive}</div>` : ''}
+      ${d.drive ? `<div class="drive-info">${driveSummaryHTML(d.drive)}</div>` : ''}
       ${d.gas ? `<div class="gas-info">${d.gas}</div>` : ''}
       <h2>${d.title}</h2>
       <div class="day-utility-grid"><div class="weather-strip"><div class="ico">${d.weatherIco}</div><div class="txt"><small class="utility-kicker">今日穿搭</small><b>${wearSummaryHTML(d.wear)}</b><span>${d.enRegion}</span></div></div>${stayQuickCardHTML(activeDay)}</div>
@@ -1925,9 +2000,15 @@ function renderDayContent(){
   `;
   restoreOpenSpotCards();
   /* 背景同步重繪時維持目前閱讀位置，避免畫面突然跳到其他地方。 */
-  if(Math.abs(window.scrollY-previousScrollY)>2){
-    requestAnimationFrame(()=>window.scrollTo({top:previousScrollY, behavior:'auto'}));
-  }
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    const restoredAnchor=activeAnchorId&&document.getElementById(activeAnchorId);
+    if(restoredAnchor&&Number.isFinite(activeAnchorTop)){
+      const delta=restoredAnchor.getBoundingClientRect().top-activeAnchorTop;
+      if(Math.abs(delta)>1)window.scrollBy({top:delta,behavior:'auto'});
+    }else if(Math.abs(window.scrollY-previousScrollY)>2){
+      window.scrollTo({top:previousScrollY, behavior:'auto'});
+    }
+  }));
 }
 
 /* ============ RENDER: ENHANCED LIVE WEATHER & OUTFIT ============ */
