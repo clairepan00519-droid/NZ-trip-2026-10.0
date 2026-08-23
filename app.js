@@ -161,9 +161,10 @@ const SYNC_CONFLICTS_KEY = 'nz_sync_conflicts_v1';
 const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_nav_links','nz_hours_override','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_stay_times','nz_favorites','nz_reminders','nz_pack','nz_shop','nz_rules','nz_docs'];
 const MEDIA_SYNC_KEYS = new Set(['nz_photos','nz_covers','nz_route_maps']);
 const STRUCTURED_LIST_KEYS = new Set(['nz_shop','nz_rules','nz_docs']);
-/* 排序陣列不能像照片或清單一樣合併，否則舊順序會被接回來造成卡片跳動。
-   這兩類資料一律採最後修改者優先。 */
-const LAST_WRITE_WINS_KEYS = new Set(['nz_order','nz_block_order']);
+/* 所有可編輯資料都採最後修改者優先。
+   舊版的「保留式合併」會讓已刪除的清單項目、照片或提醒從雲端復活；
+   因此同步時必須採用較新的完整版本，不能把新舊陣列重新聯集。 */
+const LAST_WRITE_WINS_KEYS = new Set(SYNC_KEYS);
 function loadSyncOutbox(){try{const value=JSON.parse(localStorage.getItem(SYNC_OUTBOX_KEY));return value&&typeof value==='object'&&!Array.isArray(value)?value:{};}catch(e){return {};}}
 function saveSyncOutbox(){try{localStorage.setItem(SYNC_OUTBOX_KEY,JSON.stringify(cloudSync.pending));}catch(e){console.warn('無法保存待同步佇列',e);}}
 function syncOutboxCount(){return Object.keys(cloudSync.pending||{}).length;}
@@ -270,18 +271,6 @@ function getSyncMeta(){ try{return JSON.parse(localStorage.getItem(SYNC_META_KEY
 function setSyncMeta(key,timestamp){const m=getSyncMeta();m[key]=timestamp||new Date().toISOString();try{localStorage.setItem(SYNC_META_KEY,JSON.stringify(m));}catch(e){}}
 function localValueForKey(key){const raw=localStorage.getItem(key);if(raw==null)return null;try{return JSON.parse(raw);}catch(e){return null;}}
 function isBlankSyncValue(v){if(v==null||v==='')return true;if(Array.isArray(v))return v.length===0;if(typeof v==='object')return Object.keys(v).length===0;return false;}
-function mergePreservingLocal(local,remote){
-  if(isBlankSyncValue(local)) return remote;
-  if(isBlankSyncValue(remote)) return local;
-  if(Array.isArray(local)&&Array.isArray(remote)){
-    const out=[];[...local,...remote].forEach(v=>{const sig=typeof v==='string'?v:JSON.stringify(v);if(!out.some(x=>(typeof x==='string'?x:JSON.stringify(x))===sig))out.push(v);});return out;
-  }
-  if(typeof local==='object'&&typeof remote==='object'){
-    const out={...remote};Object.keys(local).forEach(k=>{out[k]=k in remote?mergePreservingLocal(local[k],remote[k]):local[k];});return out;
-  }
-  return local;
-}
-
 function stableItemId(prefix, parts){
   const text=parts.map(v=>String(v??'').trim().toLowerCase()).join('|');
   let h=2166136261;
@@ -413,9 +402,14 @@ async function reconcileInitialCloudData(){
     try{ if(localRaw!=null) localValue=JSON.parse(localRaw); }catch(e){}
     try{ if(remote) remoteValue=JSON.parse(remote.value); }catch(e){}
 
-    /* 刷新前尚未上傳的編輯永遠優先，不可先被舊雲端資料蓋掉。 */
+    /* 刷新前尚未上傳的編輯會保留，但仍須與雲端比較修改時間。 */
     const queuedEdit=cloudSync.pending[key];
     if(queuedEdit&&Object.prototype.hasOwnProperty.call(queuedEdit,'valueObj')){
+      const queuedTime=Date.parse(queuedEdit.updatedAt||0)||0;
+      /* 舊裝置殘留的待傳資料不可在日後復活並覆蓋較新的雲端版本。 */
+      if(LAST_WRITE_WINS_KEYS.has(key)&&remote&&remoteTime>queuedTime){
+        delete cloudSync.pending[key];saveSyncOutbox();applyRemoteRow(remote,true);continue;
+      }
       const queuedValue=normalizeSyncValue(key,queuedEdit.valueObj);
       cloudSync.applyingRemote=true;
       try{replaceLocalJson(key,queuedValue);setSyncMeta(key,queuedEdit.updatedAt);applyStoreUpdate(key,JSON.stringify(queuedValue));}
@@ -426,49 +420,31 @@ async function reconcileInitialCloudData(){
       continue;
     }
 
-    if(MEDIA_SYNC_KEYS.has(key)){
-      const progress={done:0,total:0};
-      if(localValue!=null) localValue=await migrateMediaTree(localValue,`legacy/local/${key}`,progress);
-      if(remoteValue!=null) remoteValue=await migrateMediaTree(remoteValue,`legacy/cloud/${key}`,progress);
-      localValue=normalizeSyncValue(key,localValue);
-      remoteValue=normalizeSyncValue(key,remoteValue);
-      let merged;
-      if(localValue!=null && remoteValue!=null) merged=mergePreservingLocal(localValue,remoteValue);
-      else merged=localValue!=null?localValue:remoteValue;
-      if(merged!=null){
-        const t=new Date(Math.max(localTime,remoteTime,Date.now())).toISOString();
-        cloudSync.applyingRemote=true;
-        try{ replaceLocalJson(key,merged); setSyncMeta(key,t); applyStoreUpdate(key,JSON.stringify(merged)); }
-        finally{ cloudSync.applyingRemote=false; }
-        await restUpsert(key,merged,t);
-      }
-      continue;
-    }
-
     if(LAST_WRITE_WINS_KEYS.has(key)){
-      /* 排序只採用時間較新的完整版本，絕不串接兩份陣列。 */
-      if(localValue!=null && (!remote || localTime>=remoteTime)){
+      /* 所有刪除與排序都採用時間較新的完整版本，絕不串接兩份陣列。 */
+      const localWins=localValue!=null&&(!remote||localTime>=remoteTime);
+      let chosen=localWins?localValue:remoteValue;
+      if(chosen!=null&&MEDIA_SYNC_KEYS.has(key)){
+        const progress={done:0,total:0};
+        chosen=await migrateMediaTree(chosen,`legacy/${localWins?'local':'cloud'}/${key}`,progress);
+      }
+      chosen=normalizeSyncValue(key,chosen);
+      if(localWins){
         const t=meta[key]||new Date().toISOString();
         cloudSync.applyingRemote=true;
-        try{replaceLocalJson(key,localValue);setSyncMeta(key,t);applyStoreUpdate(key,JSON.stringify(localValue));}
+        try{replaceLocalJson(key,chosen);setSyncMeta(key,t);applyStoreUpdate(key,JSON.stringify(chosen));}
         finally{cloudSync.applyingRemote=false;}
-        if(!remote || JSON.stringify(remoteValue)!==JSON.stringify(localValue))await restUpsert(key,localValue,t);
+        if(!remote||JSON.stringify(remoteValue)!==JSON.stringify(chosen))await restUpsert(key,chosen,t);
       }else if(remote){
-        applyRemoteRow(remote,true);
+        const valueStr=JSON.stringify(chosen);
+        cloudSync.applyingRemote=true;
+        try{replaceLocalJson(key,chosen);setSyncMeta(key,remote.updated_at);applyStoreUpdate(key,valueStr);}
+        finally{cloudSync.applyingRemote=false;}
+        if(JSON.stringify(remoteValue)!==valueStr)await restUpsert(key,chosen,remote.updated_at);
       }
       continue;
     }
 
-    if(remote&&localValue!=null&&JSON.stringify(remoteValue)!==JSON.stringify(localValue)){
-      /* 首次載入採保留式合併，禁止僅憑時間戳直接整包覆蓋本機資料。 */
-      const merged=mergePreservingLocal(normalizeSyncValue(key,localValue),normalizeSyncValue(key,remoteValue));
-      const t=new Date(Math.max(localTime,remoteTime,Date.now())).toISOString();
-      cloudSync.applyingRemote=true;
-      try{replaceLocalJson(key,merged);setSyncMeta(key,t);applyStoreUpdate(key,JSON.stringify(merged));}
-      finally{cloudSync.applyingRemote=false;}
-      await restUpsert(key,merged,t);
-    }else if(remote){applyRemoteRow(remote);}
-    else if(localValue!=null){await restUpsert(key,localValue,meta[key]||new Date().toISOString());}
   }
 }
 
@@ -523,7 +499,7 @@ function applyRemoteRow(row, forceApply=false){
   }
   const rt=row.updated_at||new Date().toISOString(), lt=getSyncMeta()[row.key]; if(!forceApply&&lt&&Date.parse(lt)>Date.parse(rt))return;
   cloudSync.applyingRemote=true;
-  try{let remote;try{remote=JSON.parse(row.value);}catch(e){remote=null;}remote=normalizeSyncValue(row.key,remote);let value=remote;if(MEDIA_SYNC_KEYS.has(row.key)){const local=localValueForKey(row.key);value=mergePreservingLocal(local,remote);}const valueStr=JSON.stringify(value);const localStr=JSON.stringify(normalizeSyncValue(row.key,localValueForKey(row.key)));setSyncMeta(row.key,rt);if(valueStr===localStr)return;replaceLocalJson(row.key,value);applyStoreUpdate(row.key,valueStr);}catch(e){console.error('套用家人資料失敗',e);}finally{cloudSync.applyingRemote=false;}
+  try{let remote;try{remote=JSON.parse(row.value);}catch(e){remote=null;}const value=normalizeSyncValue(row.key,remote);const valueStr=JSON.stringify(value);const localStr=JSON.stringify(normalizeSyncValue(row.key,localValueForKey(row.key)));setSyncMeta(row.key,rt);if(valueStr===localStr)return;replaceLocalJson(row.key,value);applyStoreUpdate(row.key,valueStr);}catch(e){console.error('套用家人資料失敗',e);}finally{cloudSync.applyingRemote=false;}
 }
 function applyStoreUpdate(key,jsonStr){
   let parsed;try{parsed=JSON.parse(jsonStr);}catch(e){return;}
@@ -551,11 +527,11 @@ async function flushCloudPush(){
       try{
         const remote=remoteMap.get(key),remoteTime=Date.parse(remote?.updated_at||0)||0,baseTime=Date.parse(item.baseUpdatedAt||0)||0;
         if(remote&&LAST_WRITE_WINS_KEYS.has(key)&&remoteTime>Date.parse(item.updatedAt||0)){
-          /* 另一台裝置的排序更新：採用較新的版本並清掉本機較舊待傳項目。 */
+          /* 另一台裝置的資料較新：採用較新的版本並清掉本機較舊待傳項目。 */
           if(cloudSync.pending[key]?.updatedAt===item.updatedAt)delete cloudSync.pending[key];
           saveSyncOutbox();applyRemoteRow(remote,true);continue;
         }
-        if(remote&&baseTime&&remoteTime>baseTime&&remote.value!==JSON.stringify(item.valueObj)){
+        if(remote&&!LAST_WRITE_WINS_KEYS.has(key)&&baseTime&&remoteTime>baseTime&&remote.value!==JSON.stringify(item.valueObj)){
           let remoteValue=null;try{remoteValue=JSON.parse(remote.value);}catch(e){}
           syncConflicts[key]={key,local:item.valueObj,remote:remoteValue,remoteUpdatedAt:remote.updated_at,detectedAt:new Date().toISOString()};saveSyncConflicts();updateSyncStatus();continue;
         }
