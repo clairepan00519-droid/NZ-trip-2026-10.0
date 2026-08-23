@@ -527,15 +527,22 @@ async function flushCloudPush(){
   finally{cloudSync.flushing=false;}
 }
 function updateSyncStatus(err,state){
-  const el=document.getElementById('cloudSyncStatus');if(!el)return;el.style.display='inline-flex';el.classList.toggle('sync-error',!!err);el.classList.toggle('sync-saving',state==='saving'||state==='connecting');
+  const el=document.getElementById('cloudSyncStatus');if(!el)return;
   const queued=syncOutboxCount()+mediaQueueCount();
   const conflicts=Object.keys(syncConflicts||{}).length;
-  if(conflicts){el.textContent=`⚠️ ${conflicts} 項同步內容待確認`;el.classList.add('sync-error');}
-  else if(err){el.textContent=`⚠️ ${queued?queued+' 項等待同步':'同步失敗'}・${friendlySyncError(err)}`;el.title=String(err&&err.message||err);}
-  else if(state==='connecting')el.textContent='☁️ 正在連接家人同步';
-  else if(state==='saving')el.textContent=`☁️ 正在同步${queued?' '+queued+' 項變更':''}`;
-  else if(state==='queued'||queued)el.textContent=`☁️ ${queued} 項變更等待同步`;
-  else el.textContent='☁️ 家人共享已同步';
+  let text='☁️ 家人共享已同步';
+  if(conflicts)text=`⚠️ ${conflicts} 項同步內容待確認`;
+  else if(err)text=`⚠️ ${queued?queued+' 項等待同步':'同步失敗'}・${friendlySyncError(err)}`;
+  else if(state==='connecting')text='☁️ 正在連接家人同步';
+  else if(state==='saving')text=`☁️ 正在同步${queued?' '+queued+' 項變更':''}`;
+  else if(state==='queued'||queued)text=`☁️ ${queued} 項變更等待同步`;
+  const isError=Boolean(conflicts||err),isSaving=state==='saving'||state==='connecting';
+  /* 輪詢沒有新資料時不重寫 DOM，避免手機每 12 秒觸發不必要的重新排版。 */
+  if(el.textContent!==text)el.textContent=text;
+  if(el.style.display!=='inline-flex')el.style.display='inline-flex';
+  el.classList.toggle('sync-error',isError);
+  el.classList.toggle('sync-saving',isSaving);
+  if(err)el.title=String(err&&err.message||err);else el.removeAttribute('title');
 }
 /* ============ HEADER IMAGES ============ */
 const headerBgs = [
@@ -1310,10 +1317,11 @@ function renderTodayMode(){
   const startUTC=Date.UTC(2026,8,12);
   if(todayUTC<startUTC){
     const daysLeft=Math.ceil((startUTC-todayUTC)/86400000);
+    const html=`<div class="trip-countdown-card"><div class="countdown-copy"><span class="today-kicker">NEW ZEALAND・SOUTH ISLAND</span><b>距離出發還有 <em>${daysLeft}</em> 天</b><small>雪山、湖泊與星空正在前方等我們</small></div><div class="countdown-plane" aria-hidden="true">✦</div></div>`;
     bar.hidden=false;
-    bar.innerHTML=`<div class="trip-countdown-card"><div class="countdown-copy"><span class="today-kicker">NEW ZEALAND・SOUTH ISLAND</span><b>距離出發還有 <em>${daysLeft}</em> 天</b><small>雪山、湖泊與星空正在前方等我們</small></div><div class="countdown-plane" aria-hidden="true">✦</div></div>`;
+    if(bar.innerHTML!==html)bar.innerHTML=html;
   }else{
-    bar.hidden=true;bar.innerHTML='';
+    bar.hidden=true;if(bar.innerHTML)bar.innerHTML='';
   }
 }
 function followNewZealandTripDate(){const i=tripDayIndexForToday();if(i>=0&&i!==lastAutoTripDay){lastAutoTripDay=i;setActiveDay(i);}renderTodayMode();}
@@ -2610,9 +2618,10 @@ function updateNetStatus(){
   const online = navigator.onLine;
   el.classList.toggle('online', online);
   el.classList.toggle('offline', !online);
-  el.innerHTML = online
+  const html = online
     ? '<span class="net-dot online"></span><span class="net-txt">線上</span>'
     : '<span class="net-dot offline"></span><span class="net-txt">離線</span>';
+  if(el.innerHTML!==html)el.innerHTML=html;
 }
 
 /* 完整資料備份／還原：更新前與每日首次開啟時保留最近 3 份本機快照。 */
@@ -2731,7 +2740,17 @@ setDesktopFontSize(localStorage.getItem('nz_desktop_font_size')||'large');
 initRouteSections();
 renderContextQuickBar('itinerary');
 enableFloatingDrag(document.querySelector('.route-float-nav'),'route');
-window.addEventListener('resize',()=>{applyFloatingPosition(document.querySelector('.day-float-nav'),'day');applyFloatingPosition(document.querySelector('.route-float-nav'),'route');});
+/* 手機瀏覽器網址列收合只會改變高度；不應因此反覆重算浮動選單位置。 */
+let stableViewportWidth=window.innerWidth, floatingResizeFrame=0;
+window.addEventListener('resize',()=>{
+  if(Math.abs(window.innerWidth-stableViewportWidth)<3)return;
+  stableViewportWidth=window.innerWidth;
+  cancelAnimationFrame(floatingResizeFrame);
+  floatingResizeFrame=requestAnimationFrame(()=>{
+    applyFloatingPosition(document.querySelector('.day-float-nav'),'day');
+    applyFloatingPosition(document.querySelector('.route-float-nav'),'route');
+  });
+},{passive:true});
 if(localStorage.getItem('nz_last_snapshot_day')!==new Date().toISOString().slice(0,10))createLocalSnapshot('daily');
 updateSpotCount();
 renderTodayMode();

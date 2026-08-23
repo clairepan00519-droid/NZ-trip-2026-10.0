@@ -18,9 +18,9 @@ body{
   background: radial-gradient(circle at 12% 8%, rgba(240,231,34,.15), transparent 40%),
               radial-gradient(circle at 90% 4%, rgba(83,129,236,.1), transparent 38%),
               var(--cream);
-  color:var(--ink); min-height:100vh; padding-bottom:110px;
+  color:var(--ink); min-height:100vh; min-height:100svh; padding-bottom:110px;
 }
-.app{max-width:480px; margin:0 auto; position:relative; min-height:100vh;}
+.app{max-width:480px; margin:0 auto; position:relative; min-height:100vh; min-height:100svh;}
 
 /* ---------- Header ---------- */
 .header{
@@ -51,7 +51,7 @@ body{
 }
 .net-status .net-dot{ width:7px; height:7px; border-radius:50%; display:inline-block; flex:none; }
 .net-status .net-dot.online{ background:#5ee08a; box-shadow:0 0 5px #5ee08a; }
-.net-status .net-dot.offline{ background:#ff8a72; box-shadow:0 0 5px #ff8a72; animation:pulseDot 1.6s ease-in-out infinite; }
+.net-status .net-dot.offline{ background:#ff8a72; box-shadow:0 0 5px #ff8a72; }
 @keyframes pulseDot{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
 .net-status.offline{ background:rgba(193,80,47,.55); }
 
@@ -72,7 +72,6 @@ button, .tab-btn, .day-chip, .btn, .guide-header, .sub-spot-header, .spot-subtab
   touch-action: manipulation;
 }
 .tab-btn, .day-chip, .btn, .guide-card, .sub-spot-card, .guide-header .chevron, .sub-spot-header .chevron{
-  will-change: transform;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
 }
@@ -505,8 +504,7 @@ details[open]>:not(summary){animation:sectionReveal .22s cubic-bezier(.2,.7,.2,1
   .fuel-price-head a{text-align:center;}
 }
 
-.cloud-sync-status.sync-saving{background:rgba(255,255,255,.28); animation:syncPulse 1.2s ease-in-out infinite;}
-@keyframes syncPulse{50%{opacity:.62}}
+.cloud-sync-status.sync-saving{background:rgba(255,255,255,.28);}
 
 /* v9：Windy 內嵌尺寸與環線油價入口 */
 .windy-embed-wrap{position:relative;width:100%;height:clamp(420px,68vh,680px);border-radius:var(--r-md);overflow:hidden;background:#e6ebe3;}
