@@ -396,6 +396,8 @@ async function initCloudSync(){
   }catch(e){cloudSync.lastError=e;console.error('家人同步初始化失敗：',e);updateSyncStatus(e);}
 }
 async function reconcileInitialCloudData(){
+  /* 每次雲端同步前先留存手機現況；即使雲端內容有誤也有機會救回。 */
+  createLocalSnapshot('before-cloud-sync');
   const rows=await restGetRows();
   const remoteMap=new Map(rows.map(r=>[r.key,r]));
   const meta=getSyncMeta();
@@ -407,6 +409,19 @@ async function reconcileInitialCloudData(){
     let localValue=null, remoteValue=null;
     try{ if(localRaw!=null) localValue=JSON.parse(localRaw); }catch(e){}
     try{ if(remote) remoteValue=JSON.parse(remote.value); }catch(e){}
+
+    /* 刷新前尚未上傳的編輯永遠優先，不可先被舊雲端資料蓋掉。 */
+    const queuedEdit=cloudSync.pending[key];
+    if(queuedEdit&&Object.prototype.hasOwnProperty.call(queuedEdit,'valueObj')){
+      const queuedValue=normalizeSyncValue(key,queuedEdit.valueObj);
+      cloudSync.applyingRemote=true;
+      try{replaceLocalJson(key,queuedValue);setSyncMeta(key,queuedEdit.updatedAt);applyStoreUpdate(key,JSON.stringify(queuedValue));}
+      finally{cloudSync.applyingRemote=false;}
+      await restUpsert(key,queuedValue,queuedEdit.updatedAt||new Date().toISOString());
+      if(cloudSync.pending[key]?.updatedAt===queuedEdit.updatedAt)delete cloudSync.pending[key];
+      saveSyncOutbox();
+      continue;
+    }
 
     if(MEDIA_SYNC_KEYS.has(key)){
       const progress={done:0,total:0};
@@ -427,8 +442,16 @@ async function reconcileInitialCloudData(){
       continue;
     }
 
-    if(remote&&remoteTime>=localTime){ applyRemoteRow(remote); }
-    else if(localValue!=null){ await restUpsert(key,localValue,meta[key]||new Date().toISOString()); }
+    if(remote&&localValue!=null&&JSON.stringify(remoteValue)!==JSON.stringify(localValue)){
+      /* 首次載入採保留式合併，禁止僅憑時間戳直接整包覆蓋本機資料。 */
+      const merged=mergePreservingLocal(normalizeSyncValue(key,localValue),normalizeSyncValue(key,remoteValue));
+      const t=new Date(Math.max(localTime,remoteTime,Date.now())).toISOString();
+      cloudSync.applyingRemote=true;
+      try{replaceLocalJson(key,merged);setSyncMeta(key,t);applyStoreUpdate(key,JSON.stringify(merged));}
+      finally{cloudSync.applyingRemote=false;}
+      await restUpsert(key,merged,t);
+    }else if(remote){applyRemoteRow(remote);}
+    else if(localValue!=null){await restUpsert(key,localValue,meta[key]||new Date().toISOString());}
   }
 }
 
@@ -1031,6 +1054,38 @@ function setCoverPhoto(key, sel) {
 /* 自訂新增景點：依「天」儲存在 LocalStorage，重新整理後仍會保留 */
 let customSpotsStore = safeLocalJSON('nz_custom_spots',{}) || {};
 function persistCustomSpots(){ safeSetItem('nz_custom_spots', customSpotsStore); }
+function stableCustomSpotKey(spot){
+  if(!spot)return'';
+  if(!String(spot._storageKey||'').startsWith('spot-'))spot._storageKey=stableItemId('spot',[spot.name,spot.cat]);
+  return spot._storageKey;
+}
+/* 只把目前畫面上的對應原樣接到永久 key，不讀快照、不猜照片歸屬、不刪舊資料。
+   使用者手動整理一次後，日期與卡片順序再變動也不會串台。 */
+function adoptPermanentSpotKeys(){
+  const stores=[photoStore,notesStore,coverStore,navLinkStore,hoursOverrideStore];
+  let metadataChanged=false,customChanged=false;
+  const adopt=(spot,legacy,isCustom=false)=>{
+    if(!spot)return;
+    /* 已取得永久 key 後永遠沿用；改名、換分類、移動日期都不可重新產生。 */
+    const stable=String(spot._storageKey||'').startsWith('spot-')
+      ? spot._storageKey
+      : stableItemId('spot',[spot.name,spot.cat]);
+    if(isCustom&&spot._storageKey!==stable){spot._storageKey=stable;customChanged=true;}
+    else spot._storageKey=stable;
+    if(legacy&&legacy!==stable)stores.forEach(store=>{
+      if(store[stable]==null&&store[legacy]!=null){store[stable]=store[legacy];metadataChanged=true;}
+    });
+  };
+  days.forEach((day,dayIdx)=>{
+    (day.spots||[]).forEach((spot,i)=>adopt(spot,spot._storageKey||`d${dayIdx}-m${i}`));
+    (day.moreSpots||[]).forEach((spot,i)=>adopt(spot,spot._storageKey||`d${dayIdx}-s${i}`));
+  });
+  Object.entries(customSpotsStore).forEach(([dayIdx,list])=>(Array.isArray(list)?list:[]).forEach((spot,i)=>adopt(spot,spot._storageKey||`d${dayIdx}-c${i}`,true)));
+  if(customChanged)persistCustomSpots();
+  if(metadataChanged){persistPhotos();persistNotes();persistCover();persistNavLinks();safeSetItem('nz_hours_override',hoursOverrideStore);}
+  localStorage.setItem('nz_permanent_spot_keys_v66','1');
+}
+adoptPermanentSpotKeys();
 function moveCustomSpotToDate(name,date){
   const targetIndex=days.findIndex(day=>day.date===date);
   if(targetIndex<0)return false;
@@ -1150,7 +1205,7 @@ async function addCustomSpot(dayIdx){
     short = offline.short; full = offline.full; genSource = 'offline';
   }
 
-  const spot = S(name, catKey, short, { fullDesc: full, dur: dur || null, genSource });
+  const spot = S(name, catKey, short, { fullDesc: full, dur: dur || null, genSource, _storageKey:stableItemId('spot',[name,catKey]) });
   if(!customSpotsStore[dayIdx]) customSpotsStore[dayIdx] = [];
   customSpotsStore[dayIdx].push(spot);
   persistCustomSpots();
@@ -1203,7 +1258,7 @@ function getNaturalList(dayIdx, listType){
   const cats = listType === 'main' ? MAIN_CATS : LIFE_CATS;
   const allFixed = d.spots.map((s,i)=>({spot:s, key:s._storageKey || `d${dayIdx}-m${i}`}))
     .concat((d.moreSpots||[]).map((s,i)=>({spot:s, key:s._storageKey || `d${dayIdx}-s${i}`})));
-  const allCustom = customSpots.map((s,i)=>({spot:s, key:`d${dayIdx}-c${i}`, customMeta:{dayIdx, i}}));
+  const allCustom = customSpots.map((s,i)=>({spot:s, key:stableCustomSpotKey(s), customMeta:{dayIdx, i}}));
   return allFixed.filter(o=>cats.includes(o.spot.cat)).concat(allCustom.filter(o=>cats.includes(o.spot.cat)));
 }
 
@@ -2628,7 +2683,7 @@ function updateNetStatus(){
 const BACKUP_KEYS=[...SYNC_KEYS,'nz_desktop_layout','nz_use_mode','nz_desktop_font_size','nz_float_pos_day','nz_float_pos_route'];
 function collectTripBackup(){const data={};BACKUP_KEYS.forEach(k=>{const v=localStorage.getItem(k);if(v!=null)data[k]=v;});return{app:'NZ Trip 2026',schema:1,createdAt:new Date().toISOString(),data};}
 function createLocalSnapshot(reason='auto'){
-  try{const list=safeLocalJSON('nz_local_snapshots',[])||[];list.unshift({...collectTripBackup(),reason});localStorage.setItem('nz_local_snapshots',JSON.stringify(list.slice(0,3)));localStorage.setItem('nz_last_snapshot_day',new Date().toISOString().slice(0,10));}catch(e){console.warn('本機快照建立失敗',e);}
+  try{const list=safeLocalJSON('nz_local_snapshots',[])||[];list.unshift({...collectTripBackup(),reason});localStorage.setItem('nz_local_snapshots',JSON.stringify(list.slice(0,10)));localStorage.setItem('nz_last_snapshot_day',new Date().toISOString().slice(0,10));}catch(e){console.warn('本機快照建立失敗',e);}
 }
 function exportTripBackup(){const backup=collectTripBackup(),blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`NZ-Trip-2026-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 async function importTripBackup(event){const file=event.target.files?.[0];event.target.value='';if(!file)return;try{const backup=JSON.parse(await file.text());if(backup?.app!=='NZ Trip 2026'||!backup.data||typeof backup.data!=='object')throw new Error('不是有效的 NZ Trip 備份檔');if(!confirm(`要還原 ${new Date(backup.createdAt||Date.now()).toLocaleString()} 的備份嗎？目前資料會先自動保存。`))return;createLocalSnapshot('before-import');Object.entries(backup.data).forEach(([k,v])=>{if(BACKUP_KEYS.includes(k)&&typeof v==='string')localStorage.setItem(k,v);});location.reload();}catch(e){alert('⚠️ 無法還原備份：'+String(e.message||e));}}
