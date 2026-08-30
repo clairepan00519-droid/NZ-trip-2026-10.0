@@ -2749,7 +2749,12 @@ function updateNetStatus(){
 const BACKUP_KEYS=[...SYNC_KEYS,'nz_desktop_layout','nz_use_mode','nz_desktop_font_size','nz_float_pos_day','nz_float_pos_route'];
 function collectTripBackup(){const data={};BACKUP_KEYS.forEach(k=>{const v=localStorage.getItem(k);if(v!=null)data[k]=v;});return{app:'NZ Trip 2026',schema:1,createdAt:new Date().toISOString(),data};}
 function createLocalSnapshot(reason='auto'){
-  try{const list=safeLocalJSON('nz_local_snapshots',[])||[];list.unshift({...collectTripBackup(),reason});localStorage.setItem('nz_local_snapshots',JSON.stringify(list.slice(0,10)));localStorage.setItem('nz_last_snapshot_day',new Date().toISOString().slice(0,10));}catch(e){console.warn('本機快照建立失敗',e);}
+  try{
+    const list=safeLocalJSON('nz_local_snapshots',[])||[],snapshot={...collectTripBackup(),reason};
+    /* 相同內容只留一份，避免反覆刷新用空白快照把真正有資料的舊快照擠掉。 */
+    const signature=JSON.stringify(snapshot.data),unique=list.filter(s=>JSON.stringify(s?.data)!==signature);
+    unique.unshift(snapshot);localStorage.setItem('nz_local_snapshots',JSON.stringify(unique.slice(0,10)));localStorage.setItem('nz_last_snapshot_day',new Date().toISOString().slice(0,10));
+  }catch(e){console.warn('本機快照建立失敗',e);}
 }
 function recoverMissingSpotDataFromSnapshots(){
   const snapshots=safeLocalJSON('nz_local_snapshots',[])||[];
@@ -2779,6 +2784,45 @@ function recoverMissingSpotDataFromSnapshots(){
   notesStore=current.nz_notes;photoStore=current.nz_photos;coverStore=current.nz_covers;navLinkStore=current.nz_nav_links;hoursOverrideStore=current.nz_hours_override;
   safeSetItem('nz_notes',notesStore);safeSetItem('nz_photos',photoStore);safeSetItem('nz_covers',coverStore);safeSetItem('nz_nav_links',navLinkStore);safeSetItem('nz_hours_override',hoursOverrideStore);
   renderDayContent();alert(`已合併找回 ${total} 筆遺失的景點資訊／照片；目前資料沒有被刪除或覆蓋。`);
+}
+async function listStorageObjectsRecursive(prefix,maxDepth=5){
+  const files=[];
+  async function walk(path,depth){
+    if(depth>maxDepth)return;
+    for(let offset=0;;offset+=1000){
+      const response=await secureSupabaseFetch(`${SUPABASE_URL}/storage/v1/object/list/${MEDIA_BUCKET}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prefix:path,limit:1000,offset,sortBy:{column:'created_at',order:'desc'}})});
+      const text=await response.text();if(!response.ok)throw new Error(text||`Storage HTTP ${response.status}`);
+      const entries=text?JSON.parse(text):[];
+      for(const entry of entries){
+        const full=path?`${path}/${entry.name}`:entry.name;
+        if(entry.id||entry.metadata)files.push(full);else await walk(full,depth+1);
+      }
+      if(entries.length<1000)break;
+    }
+  }
+  await walk(prefix,0);return files;
+}
+async function recoverOrphanSpotPhotosFromCloud(){
+  if(!navigator.onLine){alert('掃描雲端照片需要先連上網路。');return;}
+  if(!confirm('要掃描雲端 Storage 中仍存在、但目前沒有顯示的景點照片嗎？\n掃描不會刪除或覆蓋任何現有資料。'))return;
+  updateSyncStatus(null,'connecting');
+  try{
+    const paths=[...(await listStorageObjectsRecursive('spot-photos',3)),...(await listStorageObjectsRecursive('legacy',6))];
+    const recovered={};
+    paths.forEach(path=>{
+      const parts=path.split('/');let key='';
+      if(parts[0]==='spot-photos'&&parts.length>=3)key=parts[1];
+      else{const i=parts.indexOf('nz_photos');if(i>=0&&parts[i+1])key=parts[i+1];}
+      if(!key||!String(key).startsWith('spot-'))return;
+      const url=publicMediaUrl(path);(recovered[key]||(recovered[key]=[])).push(url);
+    });
+    let missing=0;Object.entries(recovered).forEach(([key,urls])=>{const now=photoStore[key]||[];missing+=urls.filter(url=>!now.includes(url)).length;});
+    if(!missing){alert(`已掃描 ${paths.length} 個雲端圖片檔，但沒有找到可重新接回的遺失景點照片。`);updateSyncStatus();return;}
+    if(!confirm(`在雲端找到 ${missing} 張目前未顯示的景點照片。\n將依永久景點 ID 合併接回，不改評論、排序或現有照片。要繼續嗎？`)){updateSyncStatus();return;}
+    createLocalSnapshot('before-cloud-photo-relink');
+    Object.entries(recovered).forEach(([key,urls])=>photoStore[key]=mergeUniqueUrls(photoStore[key],urls));
+    persistPhotos();renderDayContent();updateSyncStatus();alert(`已重新接回 ${missing} 張雲端景點照片。`);
+  }catch(e){updateSyncStatus(e);alert('雲端照片掃描失敗：'+friendlySyncError(e));}
 }
 function exportTripBackup(){const backup=collectTripBackup(),blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`NZ-Trip-2026-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 async function importTripBackup(event){const file=event.target.files?.[0];event.target.value='';if(!file)return;try{const backup=JSON.parse(await file.text());if(backup?.app!=='NZ Trip 2026'||!backup.data||typeof backup.data!=='object')throw new Error('不是有效的 NZ Trip 備份檔');if(!confirm(`要還原 ${new Date(backup.createdAt||Date.now()).toLocaleString()} 的備份嗎？目前資料會先自動保存。`))return;createLocalSnapshot('before-import');Object.entries(backup.data).forEach(([k,v])=>{if(BACKUP_KEYS.includes(k)&&typeof v==='string')localStorage.setItem(k,v);});location.reload();}catch(e){alert('⚠️ 無法還原備份：'+String(e.message||e));}}
