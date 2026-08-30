@@ -857,6 +857,46 @@ moveBuiltInSpotToDate('Whitestone Cheese Diner & Deli','9/19');
 moveBuiltInSpotToDate('The Swan','9/21');
 moveBuiltInSpotToDate('First Church of Otago','9/21');
 
+/* v75：把曾由使用者新增、但遭同步舊版本覆蓋的景點寫回固定行程。
+   固定資料不依賴 nz_custom_spots，因此雲端自訂景點清單即使為空也不會再消失。 */
+(function restoreLostSpotsAsBuiltIn(){
+  const restored=[
+    ['9/13','moreSpots',S('Kika','food','Wānaka 人氣現代紐西蘭餐廳，以共享式小盤料理呈現在地食材。',{tags:['必吃'],fullDesc:'Kika 是 Wānaka 評價很高的現代紐西蘭餐廳，菜色採適合多人分食的 sharing plates 形式，會依季節運用南島肉品、海鮮與蔬菜。料理風格精緻但氣氛不過度正式，適合四人一起點數道小盤與主菜分享；熱門晚餐時段建議事先訂位。',recDishes:'依當季菜單選擇共享小盤、慢燉肉料理與甜點'} )],
+    ['9/15','moreSpots',S('Kohan','food','Lake Tekapo 人氣日式餐廳，以高山鮭魚丼、鮭魚定食與日式料理聞名。',{tags:['必吃'],fullDesc:'Kohan 位於 Lake Tekapo 小鎮中心，是當地最具代表性的日式餐廳之一。主打來自 Mackenzie Basin 的高山鮭魚，可選鮭魚丼、鮭魚定食、壽司及熟食料理；口味清爽，適合連續吃西式餐點後換換口味。用餐尖峰經常客滿，建議提早訂位或避開正餐時段。',recDishes:'高山鮭魚丼、鮭魚定食'} )],
+    ['9/13','moreSpots',S('The Stoaker Room','food','Cromwell 酒莊區的酒桶燻烤餐廳，以改造橡木桶烹調肉類與海鮮。',{fullDesc:'The Stoaker Room 位於 Cromwell 周邊葡萄酒產區，招牌特色是使用退役葡萄酒橡木桶改造成的 Stoaker 烹調食物，帶出溫和煙燻與木質香氣。菜單常見牛羊肉、鹿肉、鮭魚及分享拼盤，也可搭配 Wild Earth 酒款；若行車路線順路，適合作為較有紐西蘭特色的一餐。',recDishes:'Stoaker 慢烤肉類、鮭魚或綜合分享盤'} )],
+    ['9/13','moreSpots',S('Black Peak Gelato','food','Wānaka 湖畔人氣義式冰淇淋店，適合散步時順路品嚐。',{fullDesc:'Black Peak Gelato 位於 Wānaka 市中心、鄰近湖畔，供應每日製作的義式冰淇淋與雪酪。口味會隨季節調整，通常可找到巧克力、堅果、水果與紐西蘭乳製品風味；份量可自由選擇，適合湖邊散步或晚餐後作為甜點。',recDishes:'當季水果雪酪、巧克力或開心果 Gelato'} )],
+    ['9/13','moreSpots',S('Red Star Burger Bar','food','Wānaka 在地漢堡店，份量扎實，適合抵達後快速外帶。',{fullDesc:'Red Star Burger Bar 是 Wānaka 經營多年的在地漢堡店，提供牛肉、雞肉、羊肉及素食選擇，漢堡份量充足並可搭配薯條。店面以外帶為主，適合自駕抵達較晚、想快速解決晚餐時選擇；熱門時段可能需要等候，可先電話或線上確認。',recDishes:'牛肉起司漢堡、羊肉漢堡、薯條'} )],
+    ['9/13','moreSpots',S('Kai Kikokiko','food','Wānaka 的紐西蘭風味餐飲選擇，主打在地食材與輕鬆用餐氣氛。',{fullDesc:'Kai Kikokiko 以紐西蘭在地風味與友善輕鬆的用餐氣氛為特色，適合安排在 Wānaka 市區行程中。餐點可依當日菜單選擇肉類、海鮮或輕食，建議抵達前確認最新營業狀況及菜單，以免季節性調整而撲空。'} )],
+    ['9/19','moreSpots',S('Harbour Bakery','food','Oamaru／港區周邊的烘焙補給選擇，可購買麵包、甜點與簡單餐食。',{fullDesc:'Harbour Bakery 適合作為 Oamaru 行程中的早餐或自駕補給點，主要販售現烤麵包、甜點、鹹食及咖啡。可依當天櫃檯品項挑選肉派、可頌或甜點外帶；熱門商品可能較早售完，建議上午前往。'} )],
+    ['9/20','moreSpots',S('Maggies Dunedin','food','Dunedin 溫馨風格的早午餐與咖啡選擇，適合市區行程休息。',{fullDesc:'Maggies Dunedin 是適合安排早餐、早午餐或午後咖啡的店家，餐點以咖啡館料理、烘焙甜點與季節菜色為主。整體氣氛輕鬆，適合在 Dunedin 市區散步途中休息；週末或早午餐尖峰建議預留候位時間。'} )],
+    ['9/21','moreSpots',S('Careys Bay Historic Hotel','food','Port Chalmers 海灣旁的歷史餐廳，以海鮮料理及港灣景色著稱。',{tags:['必吃'],fullDesc:'Careys Bay Historic Hotel 位於 Port Chalmers 附近，是一棟具有歷史感的海灣餐廳。菜單以南島海鮮、魚料理、青口及經典紐西蘭餐點為主，窗邊可欣賞港灣與漁船景色；很適合與 Otago Peninsula 或港區行程搭配，熱門時段建議訂位。',recDishes:'當日鮮魚、海鮮濃湯、青口料理'} )],
+    ['9/19','moreSpots',S('Cucina','food','Oamaru 歷史街區的義式與南美風格餐廳，重視在地食材。',{fullDesc:'Cucina 位於 Oamaru 維多利亞歷史街區，以義大利與南美風味結合紐西蘭在地食材。菜單常見手工義大利麵、慢燉肉類、海鮮及分享料理，餐廳氣氛溫暖，適合安排一頓較完整的晚餐；座位有限，建議事先預約。',recDishes:'手工義大利麵、慢燉肉料理、當日甜點'} )],
+    ['9/19','moreSpots',S('Scotts Brewing Co.','food','Oamaru Harbour Street 附近的精釀啤酒餐廳，提供披薩與休閒餐點。',{fullDesc:'Scotts Brewing Co. 位於 Oamaru 港區與歷史街區附近，是當地知名精釀啤酒廠兼餐廳。除了自家啤酒，也供應窯烤披薩、薯條與適合分享的休閒餐點；空間輕鬆，若不喝酒也能單純用餐，適合作為藍企鵝活動前後的彈性選擇。',recDishes:'窯烤披薩、薯條；飲酒者可選啤酒試飲組'} )],
+    ['9/20','moreSpots',S('Gypsy Oven','food','Dunedin 的手作烘焙與咖啡店，可尋找酸種麵包及每日糕點。',{fullDesc:'Gypsy Oven 主打小批量手作烘焙，常見酸種麵包、可頌、肉桂捲與每日甜鹹糕點，也供應咖啡。品項依當天出爐狀況變化，適合上午前往選購，作為早餐或隔日自駕點心。'} )],
+    ['9/20','moreSpots',S('The Boat Shed Bakery','food','海灣周邊的烘焙小店，適合購買甜點、麵包與咖啡外帶。',{fullDesc:'The Boat Shed Bakery 是適合沿海行程中短暫停留的烘焙選擇，主打每日製作的麵包、甜點與簡單鹹食。可依現場品項挑選外帶，在港灣或海邊休息時享用；營業日與出爐品項可能調整，出發前宜再確認。'} )],
+    ['9/20','moreSpots',S('Little Street Kitchen','food','Dunedin／周邊地區的小型咖啡館，供應早午餐與自家烘焙。',{fullDesc:'Little Street Kitchen 以舒適社區咖啡館氛圍、早餐與早午餐料理為主，也可找到櫃檯甜點和咖啡。適合在市區或沿途行程安排輕鬆的一餐；若時間有限，可直接選擇外帶烘焙品。'} )],
+    ['9/21','moreSpots',S('Esplanade Restaurant','food','St Clair 海灘旁的義式餐廳，可看海享用披薩與義大利麵。',{tags:['必吃'],fullDesc:'Esplanade Restaurant 位於 Dunedin 的 St Clair 海濱，大片窗景正對海灘與太平洋。餐點以義式料理為主，包括窯烤披薩、手工義大利麵、海鮮及甜點，適合安排在海邊散步後用餐；窗邊座位熱門，建議預約並註明希望靠窗。',recDishes:'窯烤披薩、義大利麵、提拉米蘇'} )],
+    ['9/21','spots',S('Royal Albatross Centre','attraction','Taiaroa Head 的皇家信天翁保育中心，可近距離了解全球唯一的大陸繁殖地。',{tags:['必拍'],fullDesc:'Royal Albatross Centre 位於 Otago Peninsula 盡頭的 Taiaroa Head，是觀察北方皇家信天翁的重要保育據點，也是全球唯一位於有人居住大陸上的皇家信天翁繁殖地。參加導覽可進入觀察室了解築巢與育雛生態；能否看到飛行活動受季節、風勢與天候影響，務必依預約時間提早抵達。',dur:'約1–1.5小時',park:'中心設有停車場；半島道路狹窄多彎，請預留比導航更充裕的車程。'} )],
+    ['9/21','spots',S('Allans Beach','attraction','Otago Peninsula 較原始安靜的沙灘，有機會遠距觀察海獅與海岸生態。',{tags:['必拍'],fullDesc:'Allans Beach 位於 Otago Peninsula 南側，從停車處需步行穿越農地小徑抵達長形沙灘。這裡遊客相對少，有機會看到紐西蘭海獅在沙灘休息；必須保持至少 20 公尺距離，不可阻擋牠們返回海中的路線。海灘風勢較大、地面可能濕滑，建議穿防風外套與防水鞋。',dur:'約45–60分鐘',park:'道路末端有小型停車區，勿阻擋私人農場出入口。'} )],
+    ['9/22','moreSpots',S('Miles Better Pies','food','Te Anau 人氣手工鹹派店，以酥香外皮與扎實大塊肉餡聞名。',{tags:['必吃'],fullDesc:'Miles Better Pies 是 Te Anau 相當具代表性的平價派店，供應多種甜、鹹口味以及咖啡、糕點。熱門選擇包括鹿肉李子醬、羊肉薄荷、牛排起司與牛排蘑菇培根派；肉餡份量紮實、外皮酥脆。店內座位不多，以外帶為主，建議早上或抵達後盡早購買，以免人氣口味售完。',recDishes:'Venison & Plum Sauce、Lamb & Mint、Steak Mushroom & Bacon'} )],
+    ['9/22','moreSpots',S('Luxmore Souvenirs 南方禮品中心','shopping','Te Anau 市中心品項豐富、價格相對親切的伴手禮店。',{tags:['必買'],fullDesc:'Luxmore Souvenirs 創立於 1994 年，位於 Te Anau 市中心，主要販售 Possum Merino 羊毛服飾、圍巾手套、綿羊油、麥蘆卡蜂蜜保養品、玩偶及各式紐西蘭紀念品。選擇多且價位普遍親切，適合集中比較並補買伴手禮；部分店員可使用華語協助。',note:'地址：5 Town Centre, Te Anau；營業時間會隨季節調整。'} )],
+    ['9/26','moreSpots',S('Pure NZ Gifts','shopping','Queenstown 市中心的紐西蘭伴手禮店，適合旅程最後集中補買。',{tags:['必買'],fullDesc:'Pure NZ Gifts 位於 Queenstown 熱鬧的 Shotover Street，主打紐西蘭製造及紐西蘭主題商品。店內包含 Kiwi 紀念品、Merino／Possum 羊毛服飾、羊駝毛毯、Pounamu 綠玉飾品、手工家飾，以及 UMF 認證麥蘆卡蜂蜜；從容易分送的小禮物到較高單價保暖用品都有，適合行程最後補齊伴手禮。',note:'地址：26A Shotover Street, Queenstown；高單價蜂蜜、羊毛及綠玉建議先比較價格與產地。',_storageKey:stableItemId('spot',['Pure NZ gift','shopping'])} )],
+    ['9/22','moreSpots',S('The Fat Duck','food','Te Anau 人氣餐廳，以紐西蘭在地食材、鹿肉與現代餐酒館料理聞名。',{tags:['必吃'],fullDesc:'The Fat Duck 是 Te Anau 市中心的人氣餐廳，菜色以紐西蘭在地肉品、海鮮與季節食材為主，兼具現代餐酒館風格與舒適氣氛。常見選擇包含鹿肉、羊肉、牛排及當季魚料理，適合安排為抵達 Te Anau 後較完整的一頓晚餐；熱門時段容易客滿，建議事先訂位。',recDishes:'鹿肉、羊肉、當日鮮魚與季節甜點'} )],
+    ['9/25','moreSpots',S('Devil Burger','food','皇后鎮在地人氣漢堡店，是 Fergburger 之外評價很高的選擇。',{tags:['必吃'],fullDesc:'Devil Burger 是 Queenstown 的在地人氣漢堡店，提供牛肉、羊肉、雞肉及素食漢堡，份量扎實、口味選擇多。相較於經常大排長龍的 Fergburger，這裡也是適合安排在市區行程中的漢堡選擇；可依當天路線與候位狀況彈性決定。',recDishes:'牛肉起司漢堡、羊肉漢堡、薯條'} )],
+    ['9/26','moreSpots',S('Bespoke Kitchen','food','Queenstown 人氣早午餐店，環境舒適並重視新鮮、色彩豐富的餐點。',{tags:['必吃'],fullDesc:'Bespoke Kitchen 是 Queenstown 市區廣受歡迎的早午餐店，菜單以新鮮食材、豐富蔬菜與精緻擺盤著稱，也有咖啡、烘焙甜點及多種飲食需求選擇。店內氣氛舒適，適合安排在皇后鎮散步或 Skyline 行程前後；早午餐尖峰可能需要候位。'} )],
+    ['9/26','moreSpots',S('Saigon Kingdom Vietnamese Restaurant','food','Queenstown 市中心的越南料理選擇，適合以河粉與清爽亞洲口味轉換口味。',{fullDesc:'Saigon Kingdom Vietnamese Restaurant 提供越南河粉、米線、春捲及多種熱炒料理，是連續享用西式餐點後適合轉換口味的選擇。餐廳位於 Queenstown 市中心，可和湖畔散步或購物行程順路安排；若作為旅程倒數晚餐，建議先確認營業時間並訂位。',recDishes:'越南牛肉河粉、春捲、米線料理'} )],
+    ['9/26','moreSpots',S('Vudu Café','food','Queenstown 市中心人氣咖啡館，適合湖畔散步途中安排早餐、早午餐或咖啡。',{fullDesc:'Vudu Café 是 Queenstown 市中心的熱門咖啡館，以咖啡、早午餐、櫃檯甜點與新鮮烘焙品受到旅客喜愛。它曾被安排在市中心步行路線中，適合在 Queenstown Mall 與湖濱景點之間休息；熱門時段可能需要候位，可視當天散步進度彈性停留。'} )]
+    ,['9/13','moreSpots',S('New World Three Parks','shopping','Wānaka 入住前的大型超市補給站，適合一次買齊早餐、飲水與自炊食材。',{tags:['必買'],fullDesc:'New World Three Parks 位於 Wānaka 南側，從 Queenstown 經 Cardrona Valley Road 抵達市區前後都方便順路停靠。店內可一次補齊早餐、牛奶、飲用水、水果、零食、簡單熟食與公寓自炊食材，也適合購買隔日行車補給；四人同行建議先依購物清單集中採買，避免入住後再繞回市區。',note:'安排於 9/13 抵達 Wānaka、入住前補給。'} )]
+  ];
+  const existing=new Set(days.flatMap(day=>[...(day.spots||[]),...(day.moreSpots||[])]).map(spot=>String(spot.name).trim().toLowerCase()));
+  restored.forEach(([date,listName,spot])=>{
+    const normalized=String(spot.name).trim().toLowerCase();if(existing.has(normalized))return;
+    const day=days.find(d=>d.date===date);if(!day)return;
+    const list=day[listName]||(day[listName]=[]),hotelIndex=listName==='moreSpots'?list.findIndex(x=>x.cat==='hotel'):-1;
+    if(hotelIndex>=0)list.splice(hotelIndex,0,spot);else list.push(spot);existing.add(normalized);
+  });
+})();
+
 /* ============ 筆記/照片/自訂景點系統 (LocalStorage 永久保存) ============ */
 
 /* 共用安全寫入函式：localStorage 容量有限（通常僅 5-10MB／裝置），
@@ -1312,7 +1352,10 @@ function getNaturalList(dayIdx, listType){
   const allFixed = d.spots.map((s,i)=>({spot:s, key:s._storageKey || `d${dayIdx}-m${i}`}))
     .concat((d.moreSpots||[]).map((s,i)=>({spot:s, key:s._storageKey || `d${dayIdx}-s${i}`})));
   const allCustom = customSpots.map((s,i)=>({spot:s, key:stableCustomSpotKey(s), customMeta:{dayIdx, i}}));
-  return allFixed.filter(o=>cats.includes(o.spot.cat)).concat(allCustom.filter(o=>cats.includes(o.spot.cat)));
+  const nameId=value=>String(value||'').trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'');
+  const fixedNames=new Set(allFixed.map(o=>nameId(o.spot.name)));
+  /* 舊自訂資料若日後從某台裝置回來，保留在儲存層但不重複畫出同名固定卡片。 */
+  return allFixed.filter(o=>cats.includes(o.spot.cat)).concat(allCustom.filter(o=>cats.includes(o.spot.cat)&&!fixedNames.has(nameId(o.spot.name))));
 }
 
 function applyOrder(dayIdx, listType, list){
@@ -2753,8 +2796,24 @@ function createLocalSnapshot(reason='auto'){
     const list=safeLocalJSON('nz_local_snapshots',[])||[],snapshot={...collectTripBackup(),reason};
     /* 相同內容只留一份，避免反覆刷新用空白快照把真正有資料的舊快照擠掉。 */
     const signature=JSON.stringify(snapshot.data),unique=list.filter(s=>JSON.stringify(s?.data)!==signature);
-    unique.unshift(snapshot);localStorage.setItem('nz_local_snapshots',JSON.stringify(unique.slice(0,10)));localStorage.setItem('nz_last_snapshot_day',new Date().toISOString().slice(0,10));
-  }catch(e){console.warn('本機快照建立失敗',e);}
+    unique.unshift(snapshot);localStorage.setItem('nz_local_snapshots',JSON.stringify(unique.slice(0,10)));localStorage.setItem('nz_last_snapshot_day',new Date().toISOString().slice(0,10));return true;
+  }catch(e){console.warn('本機快照建立失敗',e);return false;}
+}
+async function manualSaveNow(button){
+  const btn=button||document.getElementById('manualSaveBtn'),time=new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',hour12:false});
+  if(btn){btn.disabled=true;btn.classList.remove('is-saved','is-error');btn.classList.add('is-saving');btn.textContent='💾 儲存中…';}
+  const localSaved=createLocalSnapshot('manual-save');
+  if(!localSaved){if(btn){btn.disabled=false;btn.classList.remove('is-saving');btn.classList.add('is-error');btn.textContent='⚠️ 本機儲存失敗';}alert('本機儲存失敗，可能是瀏覽器儲存空間不足。原有資料沒有被刪除，請先下載完整備份。');return;}
+  try{localStorage.setItem('nz_manual_save_at',new Date().toISOString());}catch(e){}
+  if(navigator.onLine&&cloudSync.enabled){await flushMediaUploadQueue();await flushCloudPush();}
+  const waiting=syncOutboxCount()+mediaQueueCount(),cloudOk=navigator.onLine&&cloudSync.enabled&&!cloudSync.lastError&&!waiting;
+  if(btn){btn.disabled=false;btn.classList.remove('is-saving');btn.classList.add('is-saved');btn.textContent=cloudOk?`✓ 裝置＋雲端已存 ${time}`:waiting?`✓ 裝置已存 ${time}・${waiting} 項待同步`:`✓ 此裝置已存 ${time}`;}
+  updateSyncStatus(cloudSync.lastError,waiting?'queued':null);
+}
+function initManualSaveLabel(){
+  const btn=document.getElementById('manualSaveBtn'),savedAt=localStorage.getItem('nz_manual_save_at');if(!btn||!savedAt)return;
+  const d=new Date(savedAt);if(Number.isNaN(d.getTime()))return;
+  btn.classList.add('is-saved');btn.textContent=`✓ 上次儲存 ${d.toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',hour12:false})}`;
 }
 function recoverMissingSpotDataFromSnapshots(){
   const snapshots=safeLocalJSON('nz_local_snapshots',[])||[];
@@ -2936,6 +2995,7 @@ document.documentElement.classList.remove('dark-theme');document.body.classList.
 setTravelFontSize(localStorage.getItem('nz_travel_font_size')||'standard');
 setDesktopFontSize(localStorage.getItem('nz_desktop_font_size')||'large');
 initRouteSections();
+initManualSaveLabel();
 renderContextQuickBar('itinerary');
 enableFloatingDrag(document.querySelector('.route-float-nav'),'route');
 /* 手機瀏覽器網址列收合只會改變高度；不應因此反覆重算浮動選單位置。 */

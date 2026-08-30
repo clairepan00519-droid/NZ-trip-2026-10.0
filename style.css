@@ -64,6 +64,7 @@ body{
   font-size:10px; font-weight:700; color:#fff; letter-spacing:.02em;
 }
 .cloud-sync-status.sync-error{ background:rgba(193,80,47,.55); }
+.manual-save-btn{border-color:#8dbda5!important;background:#eaf7ef!important;color:#256044!important;font-weight:900!important;white-space:nowrap}.manual-save-btn.is-saving{opacity:.7;pointer-events:none}.manual-save-btn.is-saved{background:#dff4e8!important;border-color:#5aaa7d!important}.manual-save-btn.is-error{background:#fff0ec!important;border-color:#d7775c!important;color:#9a3827!important}
 
 /* ---------- Smoother interactions ---------- */
 .ui-icon-sprite{position:absolute;width:0;height:0;overflow:hidden}
