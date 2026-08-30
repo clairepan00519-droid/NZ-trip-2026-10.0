@@ -158,7 +158,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const SYNC_META_KEY = 'nz_sync_meta_v3';
 const SYNC_OUTBOX_KEY = 'nz_sync_outbox_v1';
 const SYNC_CONFLICTS_KEY = 'nz_sync_conflicts_v1';
-const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_nav_links','nz_hours_override','nz_custom_spots','nz_order','nz_block_order','nz_route_maps','nz_stay_times','nz_favorites','nz_reminders','nz_pack','nz_shop','nz_rules','nz_docs'];
+const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_nav_links','nz_hours_override','nz_custom_spots','nz_spot_dates','nz_order','nz_block_order','nz_route_maps','nz_stay_times','nz_favorites','nz_reminders','nz_pack','nz_shop','nz_rules','nz_docs'];
 const MEDIA_SYNC_KEYS = new Set(['nz_photos','nz_covers','nz_route_maps']);
 const STRUCTURED_LIST_KEYS = new Set(['nz_shop','nz_rules','nz_docs']);
 /* 所有可編輯資料都採最後修改者優先。
@@ -503,7 +503,7 @@ function applyRemoteRow(row, forceApply=false){
 }
 function applyStoreUpdate(key,jsonStr){
   let parsed;try{parsed=JSON.parse(jsonStr);}catch(e){return;}
-  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_nav_links':navLinkStore=parsed;break;case'nz_hours_override':hoursOverrideStore=parsed||{};break;case'nz_custom_spots':customSpotsStore=parsed||{};migrateRequestedCustomSpots();break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=normalizeRouteMapStore(parsed);break;case'nz_stay_times':stayTimeStore=parsed||{};break;case'nz_favorites':favoriteStore=parsed||{};break;case'nz_reminders':reminderStore=Array.isArray(parsed)?parsed:[];updateJourneyHubBadge();if(journeyHubTab==='reminders')renderReminders();return;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=normalizeStructuredList('nz_shop',parsed);renderShopList();return;case'nz_rules':rulesData=normalizeStructuredList('nz_rules',parsed);renderRulesList();return;case'nz_docs':docsData=normalizeStructuredList('nz_docs',parsed);renderDocsList();return;default:return;}
+  switch(key){case'nz_notes':notesStore=parsed;break;case'nz_photos':photoStore=parsed;break;case'nz_covers':coverStore=parsed;break;case'nz_nav_links':navLinkStore=parsed;break;case'nz_hours_override':hoursOverrideStore=parsed||{};break;case'nz_custom_spots':customSpotsStore=parsed||{};migrateRequestedCustomSpots();break;case'nz_spot_dates':spotDateStore=parsed||{};applyFixedSpotDateOverrides();break;case'nz_order':orderStore=parsed;break;case'nz_block_order':blockOrderStore=parsed;break;case'nz_route_maps':routeMapStore=normalizeRouteMapStore(parsed);break;case'nz_stay_times':stayTimeStore=parsed||{};break;case'nz_favorites':favoriteStore=parsed||{};break;case'nz_reminders':reminderStore=Array.isArray(parsed)?parsed:[];updateJourneyHubBadge();if(journeyHubTab==='reminders')renderReminders();return;case'nz_pack':packData=migratePackCategoryNames(parsed);if(isPackComposerEditing()){window._packRemoteRenderPending=true;}else{renderPackList();}return;case'nz_shop':shopData=normalizeStructuredList('nz_shop',parsed);renderShopList();return;case'nz_rules':rulesData=normalizeStructuredList('nz_rules',parsed);renderRulesList();return;case'nz_docs':docsData=normalizeStructuredList('nz_docs',parsed);renderDocsList();return;default:return;}
   if(typeof renderDayContent==='function')renderDayContent();if(typeof updateSpotCount==='function')updateSpotCount();
 }
 function scheduleCloudPush(key,valueObj){
@@ -931,6 +931,8 @@ function addNote(key) {
   if(!input) return;
   const text = input.value.trim();
   if(!text) return;
+  input.value = '';
+  input.blur();
   if(!notesStore[key]) notesStore[key] = [];
   notesStore[key].push(text);
   noteDraftStore[key] = '';
@@ -1089,6 +1091,54 @@ function adoptPermanentSpotKeys(){
   localStorage.setItem('nz_permanent_spot_keys_v66','1');
 }
 adoptPermanentSpotKeys();
+
+/* 自由移動日期只記錄永久景點 ID，不重建卡片或搬動任何附屬資料。 */
+let spotDateStore=safeLocalJSON('nz_spot_dates',{})||{};
+function persistSpotDates(){safeSetItem('nz_spot_dates',spotDateStore);}
+function findFixedSpotByKey(key){
+  for(let dayIdx=0;dayIdx<days.length;dayIdx++)for(const listName of ['spots','moreSpots']){
+    const list=days[dayIdx][listName]||[],index=list.findIndex(spot=>String(spot._storageKey)===String(key));
+    if(index>=0)return{dayIdx,listName,index,spot:list[index]};
+  }
+  return null;
+}
+function applyFixedSpotDateOverrides(){
+  Object.entries(spotDateStore||{}).forEach(([key,targetDate])=>{
+    const targetIdx=days.findIndex(day=>day.date===targetDate),found=findFixedSpotByKey(key);
+    if(targetIdx<0||!found||found.dayIdx===targetIdx)return;
+    const [spot]=days[found.dayIdx][found.listName].splice(found.index,1);
+    const listName=['attraction','activity','transport'].includes(spot.cat)?'spots':'moreSpots';
+    const target=days[targetIdx][listName]||(days[targetIdx][listName]=[]);
+    const hotelIndex=listName==='moreSpots'?target.findIndex(item=>item.cat==='hotel'):-1;
+    if(hotelIndex>=0&&spot.cat!=='hotel')target.splice(hotelIndex,0,spot);else target.push(spot);
+  });
+}
+applyFixedSpotDateOverrides();
+
+function spotMoveDateOptions(currentDayIdx){
+  return days.map((day,i)=>`<option value="${i}"${i===currentDayIdx?' selected':''}>${escapeHTMLText(day.date)}・${escapeHTMLText(day.region)}</option>`).join('');
+}
+function isMovableSpotKey(key){
+  let count=0;days.forEach(day=>['spots','moreSpots'].forEach(listName=>(day[listName]||[]).forEach(spot=>{if(String(spot._storageKey)===String(key))count++;})));
+  Object.values(customSpotsStore||{}).forEach(list=>(list||[]).forEach(spot=>{if(String(stableCustomSpotKey(spot))===String(key))count++;}));
+  return count===1;
+}
+function moveSpotToSelectedDate(key,sourceDayIdx,targetValue){
+  const targetIdx=Number(targetValue);if(!Number.isInteger(targetIdx)||!days[targetIdx]||targetIdx===sourceDayIdx)return;
+  const lookup=getNaturalList(sourceDayIdx,'main').concat(getNaturalList(sourceDayIdx,'life')).find(item=>String(item.key)===String(key));
+  if(!lookup)return alert('找不到這個景點，請重新整理後再試一次。');
+  if(!confirm(`將「${lookup.spot.name}」從 ${days[sourceDayIdx].date} 移至 ${days[targetIdx].date}？\n照片、評論、收藏、營業時間與導航都會原樣保留。`)){renderDayContent();return;}
+  if(lookup.customMeta){
+    const source=customSpotsStore[sourceDayIdx]||[],index=source.findIndex(spot=>String(stableCustomSpotKey(spot))===String(key));
+    if(index<0)return alert('找不到這個自訂景點，請重新整理後再試一次。');
+    const [spot]=source.splice(index,1);(customSpotsStore[targetIdx]||(customSpotsStore[targetIdx]=[])).push(spot);persistCustomSpots();
+  }else{
+    spotDateStore[String(key)]=days[targetIdx].date;applyFixedSpotDateOverrides();persistSpotDates();
+  }
+  activeDay=targetIdx;activeSubTabStore[targetIdx]=MAIN_CATS.includes(lookup.spot.cat)?'main':'more';
+  renderDayChips();renderDayContent();updateSpotCount();
+  setTimeout(()=>{const card=document.getElementById('spot-card-'+key);if(card){card.classList.add('open');openSpotCardKeys.add(String(key));card.scrollIntoView({behavior:'smooth',block:'center'});}},80);
+}
 function moveCustomSpotToDate(name,date){
   const targetIndex=days.findIndex(day=>day.date===date);
   if(targetIndex<0)return false;
@@ -1211,8 +1261,8 @@ async function addCustomSpot(dayIdx){
   const spot = S(name, catKey, short, { fullDesc: full, dur: dur || null, genSource, _storageKey:stableItemId('spot',[name,catKey]) });
   if(!customSpotsStore[dayIdx]) customSpotsStore[dayIdx] = [];
   customSpotsStore[dayIdx].push(spot);
+  nameEl.value=''; kwEl.value=''; durEl.value=''; catEl.selectedIndex=0; nameEl.blur();
   persistCustomSpots();
-  nameEl.value=''; kwEl.value=''; durEl.value='';
   renderDayContent();
   updateSpotCount();
 }
@@ -1541,7 +1591,7 @@ function buildEditStatusResults(){
   if(mediaQueueCount())items.push({status:'sync',group:'guide',title:`${mediaQueueCount()} 張離線圖片`,subtitle:'等待恢復網路後自動上傳',snippet:'圖片原檔已安全保留在此裝置。',action:'none'});
   return items;
 }
-function syncKeyLabel(key){return ({nz_notes:'評論與資訊',nz_photos:'景點圖片',nz_covers:'封面設定',nz_nav_links:'導航修正',nz_hours_override:'營業時間',nz_custom_spots:'自訂景點',nz_route_maps:'路線圖',nz_stay_times:'住宿時間',nz_pack:'行李清單',nz_shop:'購物清單',nz_rules:'旅遊提醒',nz_docs:'票券住宿'})[key]||key;}
+function syncKeyLabel(key){return ({nz_notes:'評論與資訊',nz_photos:'景點圖片',nz_covers:'封面設定',nz_nav_links:'導航修正',nz_hours_override:'營業時間',nz_custom_spots:'自訂景點',nz_spot_dates:'景點日期',nz_route_maps:'路線圖',nz_stay_times:'住宿時間',nz_pack:'行李清單',nz_shop:'購物清單',nz_rules:'旅遊提醒',nz_docs:'票券住宿'})[key]||key;}
 function renderStatusFilters(){
   const all=buildEditStatusResults(),counts={};Object.keys(STATUS_FILTERS).forEach(k=>counts[k]=k==='all'?all.length:all.filter(x=>x.status===k).length);
   document.getElementById('globalSearchStatusFilters').innerHTML=Object.entries(STATUS_FILTERS).map(([k,v])=>`<button class="${globalStatusFilter===k?'active':''}" onclick="globalStatusFilter='${k}';renderStatusFilters();renderEditStatusResults()">${v}<em>${counts[k]}</em></button>`).join('');
@@ -1645,7 +1695,7 @@ if(!Array.isArray(reminderStore))reminderStore=[];
 const REMINDER_CATEGORIES={booking:'預訂',dining:'餐廳',ticket:'票券',transport:'交通',other:'其他'};
 function reminderDueCount(){const now=Date.now();return reminderStore.filter(r=>!r.done&&r.due&&new Date(r.due).getTime()<=now).length;}
 function persistReminders(){safeSetItem('nz_reminders',reminderStore);updateJourneyHubBadge();}
-const SYNC_KEY_LABELS={nz_notes:'評論與資訊',nz_photos:'景點照片',nz_covers:'景點封面',nz_nav_links:'導航修正',nz_hours_override:'營業時間',nz_custom_spots:'自訂景點',nz_order:'景點排序',nz_block_order:'卡片排序',nz_route_maps:'路線圖',nz_stay_times:'住宿資料',nz_favorites:'收藏',nz_reminders:'行前提醒',nz_pack:'打包清單',nz_shop:'購物清單',nz_rules:'旅遊規範',nz_docs:'票券住宿'};
+const SYNC_KEY_LABELS={nz_notes:'評論與資訊',nz_photos:'景點照片',nz_covers:'景點封面',nz_nav_links:'導航修正',nz_hours_override:'營業時間',nz_custom_spots:'自訂景點',nz_spot_dates:'景點日期',nz_order:'景點排序',nz_block_order:'卡片排序',nz_route_maps:'路線圖',nz_stay_times:'住宿資料',nz_favorites:'收藏',nz_reminders:'行前提醒',nz_pack:'打包清單',nz_shop:'購物清單',nz_rules:'旅遊規範',nz_docs:'票券住宿'};
 function updateJourneyHubBadge(){const conflicts=Object.keys(syncConflicts||{}).length,due=reminderDueCount(),n=conflicts+due,b=document.getElementById('journeyHubBadge'),c=document.getElementById('conflictTabCount'),r=document.getElementById('reminderTabCount');if(b){b.hidden=!n;b.textContent=n;}if(c)c.textContent=conflicts;if(r)r.textContent=due;}
 function openJourneyHub(tab='favorites'){journeyHubTab=tab;document.getElementById('journeyHubModal').hidden=false;document.body.classList.add('journey-hub-active');renderJourneyHub();}
 function closeJourneyHub(){document.getElementById('journeyHubModal').hidden=true;document.body.classList.remove('journey-hub-active');}
@@ -1658,7 +1708,9 @@ function reminderId(){return crypto.randomUUID?crypto.randomUUID():'rem-'+Date.n
 function addReminder(template=''){
   const title=document.getElementById('reminderTitle'),due=document.getElementById('reminderDue'),category=document.getElementById('reminderCategory');
   const name=String(template||title?.value||'').trim();if(!name){title?.focus();return;}
-  reminderStore.unshift({id:reminderId(),title:name,due:due?.value||'',category:category?.value||'booking',done:false,notified:false,createdAt:new Date().toISOString()});persistReminders();renderReminders();
+  const dueValue=due?.value||'',categoryValue=category?.value||'booking';
+  if(title){title.value='';title.blur();}if(due)due.value='';if(category)category.selectedIndex=0;
+  reminderStore.unshift({id:reminderId(),title:name,due:dueValue,category:categoryValue,done:false,notified:false,createdAt:new Date().toISOString()});persistReminders();renderReminders();
 }
 function updateReminder(id,field,value){const item=reminderStore.find(r=>r.id===id);if(!item)return;item[field]=field==='done'?Boolean(value):value;if(field==='due')item.notified=false;persistReminders();renderReminders();}
 function deleteReminder(id){const index=reminderStore.findIndex(r=>r.id===id);if(index<0)return;const [removed]=reminderStore.splice(index,1);persistReminders();renderReminders();offerUndo('已刪除提醒',()=>{reminderStore.splice(index,0,removed);persistReminders();renderReminders();});}
@@ -1813,9 +1865,10 @@ function spotCardHTML(spot, key, isMainSpot, customMeta, orderInfo){
 
   const genLabel = spot.genSource === 'edited' ? '✏️ 簡介已由您編輯' : (spot.genSource === 'online' ? '🔍 簡介已透過網路搜尋生成' : (spot.genSource === 'offline' ? '📝 簡介為簡易生成（未連上網路）' : '🆕 自訂景點'));
   const orderBtns = orderInfo ? `<button class="structural-edit-control" onclick="event.stopPropagation(); moveSpot(${orderInfo.dayIdx}, '${orderInfo.listType}', '${idx}', -1)" style="background:#eef1e6; color:var(--ink-soft); border:none; padding:4px 9px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer;">⬆ 上移</button><button class="structural-edit-control" onclick="event.stopPropagation(); moveSpot(${orderInfo.dayIdx}, '${orderInfo.listType}', '${idx}', 1)" style="background:#eef1e6; color:var(--ink-soft); border:none; padding:4px 9px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer;">⬇ 下移</button>` : '';
+  const moveDateSelect=orderInfo&&isMovableSpotKey(idx)?`<label class="structural-edit-control" style="display:inline-flex;align-items:center;gap:5px;background:#f4f0fa;color:#6a4b86;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;">📅 移動至<select aria-label="移動景點日期" onclick="event.stopPropagation()" onchange="event.stopPropagation();moveSpotToSelectedDate('${idx}',${orderInfo.dayIdx},this.value)" style="border:0;background:transparent;color:inherit;font:inherit;max-width:145px;">${spotMoveDateOptions(orderInfo.dayIdx)}</select></label>`:'';
   const delBtn = customMeta ? `<button class="structural-edit-control" onclick="event.stopPropagation(); delCustomSpot(${customMeta.dayIdx}, ${customMeta.i})" style="background:#fff0ec; color:#c1502f; border:none; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap;">🗑️ 刪除此景點</button>` : '';
   const editBtn = customMeta ? `<button class="structural-edit-control" onclick="event.stopPropagation(); toggleEditSpot('${idx}')" style="background:#eef3fb; color:var(--blue); border:none; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap;">✏️ 編輯簡介</button>` : '';
-  const customBar = (customMeta || orderInfo) ? `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px; flex-wrap:wrap;"><span style="display:flex; gap:6px; flex-wrap:wrap;">${customMeta ? `<span class="badge" style="background:#eef3fb; color:var(--blue);">${genLabel}</span>` : ''}</span><span style="display:flex; gap:6px; flex-wrap:wrap;">${orderBtns}${editBtn}${delBtn}</span></div>` : '';
+  const customBar = (customMeta || orderInfo) ? `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px; flex-wrap:wrap;"><span style="display:flex; gap:6px; flex-wrap:wrap;">${customMeta ? `<span class="badge" style="background:#eef3fb; color:var(--blue);">${genLabel}</span>` : ''}</span><span style="display:flex; gap:6px; flex-wrap:wrap;">${orderBtns}${moveDateSelect}${editBtn}${delBtn}</span></div>` : '';
   const editSpotAreaHTML = customMeta ? `<div id="spot-edit-${idx}" style="display:none; margin-bottom:10px; background:#f7f9fc; border:1px dashed #c7d6ea; border-radius:8px; padding:10px;" onclick="event.stopPropagation()">
       <div style="font-size:11px; font-weight:700; color:var(--ink-soft); margin-bottom:4px;">簡短介紹（列表中顯示）</div>
       <textarea id="spot-edit-short-${idx}" style="width:100%; border:1px solid var(--line); border-radius:6px; padding:6px; font-size:12px; font-family:inherit; resize:vertical; min-height:40px; outline:none; margin-bottom:8px; box-sizing:border-box;">${(spot.desc||'').replace(/</g,'&lt;')}</textarea>
@@ -2449,7 +2502,7 @@ function syncPackSubcatOptions(){ renderPackSubcatChips(); }
 function togglePack(cat,i){ packData[cat][i].checked = !packData[cat][i].checked; persistPack(); renderPackList(); }
 function changeQty(cat,i,delta){ packData[cat][i].qty = Math.max(1, packData[cat][i].qty+delta); persistPack(); renderPackList(); }
 function delPack(cat,i){ const [removed]=packData[cat].splice(i,1); persistPack(); renderPackList(); offerUndo(`已刪除「${removed?.name||'行李品項'}」`,()=>{packData[cat].splice(i,0,removed);persistPack();renderPackList();}); }
-function addPackItem(){ const cat=window._packSelectedCat||Object.keys(packData)[0]; const subcat=window._packSelectedSubcat||(PACK_SUBCATS[cat]||['其他'])[0]; const input=document.getElementById('newPackItem'); if(input&&input.value.trim()){ packData[cat].push({name:input.value.trim(),qty:1,checked:false,subcat}); persistPack(); listSectionOpen.pack[cat]=true; window._packSelectedCat=cat; window._packSelectedSubcat=subcat; renderPackList(); setTimeout(()=>togglePackComposer(true),0); } }
+function addPackItem(){ const cat=window._packSelectedCat||Object.keys(packData)[0]; const subcat=window._packSelectedSubcat||(PACK_SUBCATS[cat]||['其他'])[0]; const input=document.getElementById('newPackItem'); const name=input?.value.trim()||''; if(name){ input.value=''; input.blur(); packData[cat].push({name,qty:1,checked:false,subcat}); persistPack(); listSectionOpen.pack[cat]=true; window._packSelectedCat=cat; window._packSelectedSubcat=subcat; renderPackList(); setTimeout(()=>togglePackComposer(true),0); } }
 
 function shopImgs(it){
   if(Array.isArray(it.imgs)) return it.imgs;
@@ -2498,7 +2551,7 @@ function removeShopImg(i, photoIdx){ const imgs = shopImgs(shopData[i]); const [
 function toggleShop(i){ shopData[i].checked = !shopData[i].checked; persistShop(); renderShopList(); }
 function changeShopQty(i,delta){ shopData[i].qty = Math.max(1, shopData[i].qty+delta); persistShop(); renderShopList(); }
 function delShop(i){ const [removed]=shopData.splice(i,1); persistShop(); renderShopList(); offerUndo(`已刪除「${removed?.name||'購物項目'}」`,()=>{shopData.splice(i,0,removed);persistShop();renderShopList();}); }
-function addShopItem(){ const input = document.getElementById('newShopItem'); const cat = document.getElementById('newShopCat')?.value || 'food'; if(input && input.value.trim()){ shopData.push({id:'shop-'+crypto.randomUUID(),name:input.value.trim(), qty:1, checked:false, imgs:[], cat, location:'',freshFoodFixedV51:true}); persistShop(); listSectionOpen.shop[cat] = true; renderShopList(); } }
+function addShopItem(){ const input=document.getElementById('newShopItem'),catSelect=document.getElementById('newShopCat'); const cat=catSelect?.value||'food',name=input?.value.trim()||''; if(name){input.value='';input.blur();if(catSelect)catSelect.selectedIndex=0;shopData.push({id:'shop-'+crypto.randomUUID(),name,qty:1,checked:false,imgs:[],cat,location:'',freshFoodFixedV51:true});persistShop();listSectionOpen.shop[cat]=true;renderShopList();} }
 function setShopCat(i, val){ shopData[i].cat = val; persistShop(); renderShopList(); }
 function setShopLocation(i, val){ shopData[i].location = val; persistShop(); }
 
@@ -2566,8 +2619,10 @@ function addRuleItem() {
   const titleInput = document.getElementById('newRuleTitle');
   const input = document.getElementById('newRuleItem');
   if(input && input.value.trim()){
-    const cat=document.getElementById('newRuleCat')?.value||'other';
-    rulesData.push({ id:'rule-'+crypto.randomUUID(), title: titleInput ? titleInput.value.trim() : '', text: input.value.trim(), imgs: [], img: null, cat });
+    const catSelect=document.getElementById('newRuleCat'),cat=catSelect?.value||'other';
+    const title=titleInput?.value.trim()||'',text=input.value.trim();
+    input.value='';input.blur();if(titleInput)titleInput.value='';if(catSelect)catSelect.selectedIndex=0;
+    rulesData.push({ id:'rule-'+crypto.randomUUID(), title, text, imgs: [], img: null, cat });
     ruleSectionOpen[cat]=true;
     persistRules(); renderRulesList();
   }
