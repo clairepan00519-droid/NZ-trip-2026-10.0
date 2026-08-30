@@ -159,6 +159,7 @@ const SYNC_META_KEY = 'nz_sync_meta_v3';
 const SYNC_OUTBOX_KEY = 'nz_sync_outbox_v1';
 const SYNC_CONFLICTS_KEY = 'nz_sync_conflicts_v1';
 const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_nav_links','nz_hours_override','nz_custom_spots','nz_spot_dates','nz_order','nz_block_order','nz_route_maps','nz_stay_times','nz_favorites','nz_reminders','nz_pack','nz_shop','nz_rules','nz_docs'];
+const UPDATE_SAFETY_KEY = 'nz_update_safety_v80';
 const MEDIA_SYNC_KEYS = new Set(['nz_photos','nz_covers','nz_route_maps']);
 const STRUCTURED_LIST_KEYS = new Set(['nz_shop','nz_rules','nz_docs']);
 /* 所有可編輯資料都採最後修改者優先。
@@ -169,6 +170,47 @@ function loadSyncOutbox(){try{const value=JSON.parse(localStorage.getItem(SYNC_O
 function saveSyncOutbox(){try{localStorage.setItem(SYNC_OUTBOX_KEY,JSON.stringify(cloudSync.pending));}catch(e){console.warn('無法保存待同步佇列',e);}}
 function syncOutboxCount(){return Object.keys(cloudSync.pending||{}).length;}
 const cloudSync = {enabled:false, applyingRemote:false, pending:loadSyncOutbox(), timer:null, pollTimer:null, lastError:null, ready:false, flushing:false};
+let updateSafetyResolver=null;
+function hasLocalTripContent(){return SYNC_KEYS.some(key=>localStorage.getItem(key)!=null);}
+function updateSafetyState(){try{return JSON.parse(localStorage.getItem(UPDATE_SAFETY_KEY)||'null');}catch(e){return null;}}
+function waitForUpdateSafetyDecision(){
+  const state=updateSafetyState();
+  if(!hasLocalTripContent()||state?.localAuthorityQueued)return Promise.resolve(true);
+  const gate=document.getElementById('updateSafetyGate');
+  if(gate)gate.hidden=false;
+  updateSyncStatus(null,'paused');
+  return new Promise(resolve=>{updateSafetyResolver=resolve;});
+}
+function downloadUpdateSafetyBackup(){
+  exportTripBackup();
+  const state={...(updateSafetyState()||{}),backupDownloadedAt:new Date().toISOString()};
+  localStorage.setItem(UPDATE_SAFETY_KEY,JSON.stringify(state));
+  const confirmBtn=document.getElementById('updateSafetyConfirmBtn');if(confirmBtn)confirmBtn.disabled=false;
+  const msg=document.getElementById('updateSafetyMessage');if(msg)msg.textContent='完整備份已下載。現在可以安全指定這台裝置為主版本。';
+}
+function confirmLocalDeviceAsSource(){
+  const state=updateSafetyState();
+  if(!state?.backupDownloadedAt){alert('請先下載目前裝置的完整備份。');return;}
+  createLocalSnapshot('before-v80-local-authority');
+  const updatedAt=new Date().toISOString();
+  const meta=getSyncMeta();
+  SYNC_KEYS.forEach(key=>{
+    const raw=localStorage.getItem(key);if(raw==null)return;
+    let valueObj;try{valueObj=JSON.parse(raw);}catch(e){return;}
+    cloudSync.pending[key]={valueObj:normalizeSyncValue(key,valueObj),updatedAt,baseUpdatedAt:meta[key]||null,forceLocal:true};
+    setSyncMeta(key,updatedAt);
+  });
+  saveSyncOutbox();
+  localStorage.setItem(UPDATE_SAFETY_KEY,JSON.stringify({...state,localAuthorityQueued:true,confirmedAt:updatedAt}));
+  const gate=document.getElementById('updateSafetyGate');if(gate)gate.hidden=true;
+  const resolve=updateSafetyResolver;updateSafetyResolver=null;if(resolve)resolve(true);
+  updateSyncStatus(null,'saving');
+}
+function keepUpdateSyncPaused(){
+  const gate=document.getElementById('updateSafetyGate');if(gate)gate.hidden=true;
+  const resolve=updateSafetyResolver;updateSafetyResolver=null;if(resolve)resolve(false);
+  updateSyncStatus(null,'paused');
+}
 let syncConflicts=safeConflictJSON();
 function safeConflictJSON(){try{const v=JSON.parse(localStorage.getItem(SYNC_CONFLICTS_KEY));return v&&typeof v==='object'&&!Array.isArray(v)?v:{};}catch(e){return {};}}
 function saveSyncConflicts(){try{localStorage.setItem(SYNC_CONFLICTS_KEY,JSON.stringify(syncConflicts));}catch(e){}if(typeof updateJourneyHubBadge==='function')updateJourneyHubBadge();}
@@ -407,7 +449,7 @@ async function reconcileInitialCloudData(){
     if(queuedEdit&&Object.prototype.hasOwnProperty.call(queuedEdit,'valueObj')){
       const queuedTime=Date.parse(queuedEdit.updatedAt||0)||0;
       /* 舊裝置殘留的待傳資料不可在日後復活並覆蓋較新的雲端版本。 */
-      if(LAST_WRITE_WINS_KEYS.has(key)&&remote&&remoteTime>queuedTime){
+      if(!queuedEdit.forceLocal&&LAST_WRITE_WINS_KEYS.has(key)&&remote&&remoteTime>queuedTime){
         delete cloudSync.pending[key];saveSyncOutbox();applyRemoteRow(remote,true);continue;
       }
       const queuedValue=normalizeSyncValue(key,queuedEdit.valueObj);
@@ -526,7 +568,7 @@ async function flushCloudPush(){
     for(const[key,item]of entries){
       try{
         const remote=remoteMap.get(key),remoteTime=Date.parse(remote?.updated_at||0)||0,baseTime=Date.parse(item.baseUpdatedAt||0)||0;
-        if(remote&&LAST_WRITE_WINS_KEYS.has(key)&&remoteTime>Date.parse(item.updatedAt||0)){
+        if(!item.forceLocal&&remote&&LAST_WRITE_WINS_KEYS.has(key)&&remoteTime>Date.parse(item.updatedAt||0)){
           /* 另一台裝置的資料較新：採用較新的版本並清掉本機較舊待傳項目。 */
           if(cloudSync.pending[key]?.updatedAt===item.updatedAt)delete cloudSync.pending[key];
           saveSyncOutbox();applyRemoteRow(remote,true);continue;
@@ -559,6 +601,7 @@ function updateSyncStatus(err,state){
   if(conflicts)text=`⚠️ ${conflicts} 項同步內容待確認`;
   else if(err)text=`⚠️ ${queued?queued+' 項等待同步':'同步失敗'}・${friendlySyncError(err)}`;
   else if(state==='connecting')text='☁️ 正在連接家人同步';
+  else if(state==='paused')text='🛡️ 更新保護中・雲端同步已暫停';
   else if(state==='saving')text=`☁️ 正在同步${queued?' '+queued+' 項變更':''}`;
   else if(state==='queued'||queued)text=`☁️ ${queued} 項變更等待同步`;
   const isError=Boolean(conflicts||err),isSaving=state==='saving'||state==='connecting';
@@ -1164,9 +1207,11 @@ function spotMoveDateOptions(currentDayIdx){
   return days.map((day,i)=>`<option value="${i}"${i===currentDayIdx?' selected':''}>${escapeHTMLText(day.date)}・${escapeHTMLText(day.region)}</option>`).join('');
 }
 function isMovableSpotKey(key){
-  let count=0;days.forEach(day=>['spots','moreSpots'].forEach(listName=>(day[listName]||[]).forEach(spot=>{if(String(spot._storageKey)===String(key))count++;})));
-  Object.values(customSpotsStore||{}).forEach(list=>(list||[]).forEach(spot=>{if(String(stableCustomSpotKey(spot))===String(key))count++;}));
-  return count===1;
+  let fixedCount=0,customCount=0;
+  days.forEach(day=>['spots','moreSpots'].forEach(listName=>(day[listName]||[]).forEach(spot=>{if(String(spot._storageKey)===String(key))fixedCount++;})));
+  Object.values(customSpotsStore||{}).forEach(list=>(list||[]).forEach(spot=>{if(String(stableCustomSpotKey(spot))===String(key))customCount++;}));
+  /* 同名舊自訂卡會被固定候選卡取代顯示；它不應阻止畫面上的固定卡移動日期。 */
+  return fixedCount===1||(fixedCount===0&&customCount===1);
 }
 function moveSpotToSelectedDate(key,sourceDayIdx,targetValue){
   const targetIdx=Number(targetValue);if(!Number.isInteger(targetIdx)||!days[targetIdx]||targetIdx===sourceDayIdx)return;
@@ -1365,8 +1410,15 @@ function getNaturalList(dayIdx, listType){
 
 function hideCandidateSpot(key,name){
   if(!confirm(`刪除候選景點「${name}」？\n照片與其他資料不會從儲存空間刪除，只是不再顯示這張卡片。`))return;
+  const found=findFixedSpotByKey(key);
+  if(!found)return alert('找不到這張候選景點卡，請重新整理後再試一次。');
+  const [removed]=days[found.dayIdx][found.listName].splice(found.index,1);
   spotDateStore[String(key)]='__hidden__';persistSpotDates();renderDayContent();updateSpotCount();
-  offerUndo(`已隱藏「${name}」`,()=>{delete spotDateStore[String(key)];persistSpotDates();renderDayContent();updateSpotCount();});
+  offerUndo(`已隱藏「${name}」`,()=>{
+    delete spotDateStore[String(key)];persistSpotDates();
+    const list=days[found.dayIdx][found.listName]||(days[found.dayIdx][found.listName]=[]);list.splice(Math.min(found.index,list.length),0,removed);
+    renderDayContent();updateSpotCount();
+  });
 }
 
 function applyOrder(dayIdx, listType, list){
@@ -2761,6 +2813,8 @@ async function migrateLegacyMediaToCloud(){
 
 async function startFamilyCloud(){
   try{
+    const maySync=await waitForUpdateSafetyDecision();
+    if(!maySync)return;
     updateSyncStatus(null,'connecting');
     await migrateLegacyMediaToCloud();
     await initCloudSync();

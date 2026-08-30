@@ -799,6 +799,12 @@ body.travel-mode.travel-font-large .day-utility-grid .weather-strip .txt b .wear
 .day-utility-grid .stay-quick-card[open] .stay-quick-head{min-height:0}
 .day-utility-grid .stay-quick-card[open] .stay-quick-body{display:block;visibility:visible;padding-top:9px}
 
+/* v80 · 更新前先保護目前裝置資料，未確認前禁止第一次雲端讀寫 */
+.update-safety-gate{position:fixed;inset:0;z-index:100000;display:grid;place-items:center;padding:20px;background:rgba(22,31,35,.78);backdrop-filter:blur(8px)}
+.update-safety-gate[hidden]{display:none}
+.update-safety-card{width:min(430px,100%);max-height:calc(100dvh - 40px);overflow:auto;border:1px solid rgba(255,255,255,.65);border-radius:25px;background:#fff;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,.3);color:#263a40;text-align:center}
+.update-safety-icon{font-size:36px}.update-safety-card>small{display:block;margin-top:6px;color:#3e806e;font-weight:900;letter-spacing:.12em}.update-safety-card h2{margin:5px 0 8px;font-size:24px}.update-safety-card p{margin:0;color:#5c6e72;font-size:14px;line-height:1.65;text-align:left}.update-safety-card ol{display:grid;gap:10px;margin:18px 0 10px;padding:0;list-style:none}.update-safety-card li button{width:100%;min-height:49px;border:0;border-radius:14px;background:#2f7468;color:#fff;padding:11px 13px;font:inherit;font-size:14px;font-weight:900}.update-safety-card li+li button{background:#477fea}.update-safety-card li button:disabled{background:#c5cdd0;color:#f5f6f6}.update-safety-pause{border:0;background:transparent;color:#6f7d80;padding:9px;font:inherit;font-size:12px;text-decoration:underline}.update-safety-message{margin-top:8px;border-radius:11px;background:#f0f6f2;padding:9px;color:#427063;font-size:11px;line-height:1.5}
+
 /* v58 · 粗字穿搭與行前提醒 */
 .day-utility-grid .weather-strip .txt b{font-weight:900!important}
 .journey-hub-tabs{grid-template-columns:repeat(4,1fr)}
