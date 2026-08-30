@@ -255,13 +255,13 @@ function updateMigrationStatus(progress){
 function replaceLocalJson(key,value){
   const json=JSON.stringify(value);
   try{
-    localStorage.removeItem(key);
+    /* localStorage.setItem 對既有 key 本身就是原子覆寫。絕不可先刪除：
+       手機空間不足時若第二步失敗，先刪會讓唯一的本機副本永久消失。 */
     localStorage.setItem(key,json);
     return true;
   }catch(e){
-    /* 本機快取滿不應阻止雲端共用；資料仍保留在記憶體與 Supabase。 */
-    console.warn('本機快取空間不足，略過快取：',key,e);
-    try{ localStorage.removeItem(key); }catch(_e){}
+    /* 寫入失敗時保留原值，不做任何 removeItem。 */
+    console.warn('本機快取空間不足，已保留原資料：',key,e);
     return false;
   }
 }
@@ -2750,6 +2750,35 @@ const BACKUP_KEYS=[...SYNC_KEYS,'nz_desktop_layout','nz_use_mode','nz_desktop_fo
 function collectTripBackup(){const data={};BACKUP_KEYS.forEach(k=>{const v=localStorage.getItem(k);if(v!=null)data[k]=v;});return{app:'NZ Trip 2026',schema:1,createdAt:new Date().toISOString(),data};}
 function createLocalSnapshot(reason='auto'){
   try{const list=safeLocalJSON('nz_local_snapshots',[])||[];list.unshift({...collectTripBackup(),reason});localStorage.setItem('nz_local_snapshots',JSON.stringify(list.slice(0,10)));localStorage.setItem('nz_last_snapshot_day',new Date().toISOString().slice(0,10));}catch(e){console.warn('本機快照建立失敗',e);}
+}
+function recoverMissingSpotDataFromSnapshots(){
+  const snapshots=safeLocalJSON('nz_local_snapshots',[])||[];
+  const keys=['nz_notes','nz_photos','nz_covers','nz_nav_links','nz_hours_override'];
+  const parse=v=>{try{const x=JSON.parse(v);return x&&typeof x==='object'?x:{};}catch(e){return {};}};
+  const current=Object.fromEntries(keys.map(k=>[k,parse(localStorage.getItem(k))]));
+  const recoverableCount=s=>keys.reduce((sum,k)=>sum+Object.entries(parse(s?.data?.[k])).reduce((n,[id,value])=>{
+    if(Array.isArray(value)){const now=Array.isArray(current[k][id])?current[k][id]:[];return n+value.filter(x=>!now.includes(x)).length;}
+    return n+(current[k][id]==null&&value!=null?1:0);
+  },0),0);
+  const candidate=snapshots.filter(s=>s?.data).sort((a,b)=>recoverableCount(b)-recoverableCount(a))[0];
+  if(!candidate){alert('目前的本機快照中沒有找到比現況更多的景點資訊或照片。請先不要清除瀏覽器資料，我們還可以再檢查其他裝置或雲端版本。');return;}
+  const previous=Object.fromEntries(keys.map(k=>[k,parse(candidate.data[k])]));
+  let total=0;
+  keys.forEach(k=>Object.entries(previous[k]).forEach(([id,value])=>{
+    if(Array.isArray(value)){const now=Array.isArray(current[k][id])?current[k][id]:[];total+=value.filter(x=>!now.includes(x)).length;}
+    else if(current[k][id]==null&&value!=null)total++;
+  }));
+  if(!total){alert('快照中的項目目前都已存在，不需要重複還原。');return;}
+  const when=new Date(candidate.createdAt||Date.now()).toLocaleString('zh-TW',{hour12:false});
+  if(!confirm(`找到 ${when} 的同步前快照，可合併找回約 ${total} 筆景點資料。\n只補回目前缺少的評論、照片、封面、導航與營業時間，不刪除或覆蓋現有內容。要繼續嗎？`))return;
+  createLocalSnapshot('before-safe-spot-recovery');
+  keys.forEach(k=>Object.entries(previous[k]).forEach(([id,value])=>{
+    if(Array.isArray(value))current[k][id]=[...new Set([...(Array.isArray(current[k][id])?current[k][id]:[]),...value])];
+    else if(current[k][id]==null&&value!=null)current[k][id]=value;
+  }));
+  notesStore=current.nz_notes;photoStore=current.nz_photos;coverStore=current.nz_covers;navLinkStore=current.nz_nav_links;hoursOverrideStore=current.nz_hours_override;
+  safeSetItem('nz_notes',notesStore);safeSetItem('nz_photos',photoStore);safeSetItem('nz_covers',coverStore);safeSetItem('nz_nav_links',navLinkStore);safeSetItem('nz_hours_override',hoursOverrideStore);
+  renderDayContent();alert(`已合併找回 ${total} 筆遺失的景點資訊／照片；目前資料沒有被刪除或覆蓋。`);
 }
 function exportTripBackup(){const backup=collectTripBackup(),blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`NZ-Trip-2026-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 async function importTripBackup(event){const file=event.target.files?.[0];event.target.value='';if(!file)return;try{const backup=JSON.parse(await file.text());if(backup?.app!=='NZ Trip 2026'||!backup.data||typeof backup.data!=='object')throw new Error('不是有效的 NZ Trip 備份檔');if(!confirm(`要還原 ${new Date(backup.createdAt||Date.now()).toLocaleString()} 的備份嗎？目前資料會先自動保存。`))return;createLocalSnapshot('before-import');Object.entries(backup.data).forEach(([k,v])=>{if(BACKUP_KEYS.includes(k)&&typeof v==='string')localStorage.setItem(k,v);});location.reload();}catch(e){alert('⚠️ 無法還原備份：'+String(e.message||e));}}

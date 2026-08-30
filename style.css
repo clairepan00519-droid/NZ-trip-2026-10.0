@@ -175,7 +175,7 @@ body.search-open{overflow:hidden}.global-search-modal[hidden]{display:none}.glob
 .day-utility-grid .weather-strip .txt{min-width:0;line-height:1.35}
 .day-utility-grid .weather-strip .txt b,.day-utility-grid .weather-strip .txt span,.day-utility-grid .weather-strip .txt small{display:block;min-width:0}
 .day-utility-grid .utility-kicker,.day-utility-grid .stay-kicker{display:block;margin:0 0 4px;color:#4d8a79;font-size:8px;font-weight:900;letter-spacing:.08em}
-.day-utility-grid .weather-strip .txt b{font-family:'Zen Kaku Gothic New',sans-serif;font-size:11px;line-height:1.45;white-space:normal;overflow-wrap:break-word}
+.day-utility-grid .weather-strip .txt b{font-family:'Zen Maru Gothic','Zen Kaku Gothic New',sans-serif;font-size:11px;font-weight:700;line-height:1.45;white-space:normal;overflow-wrap:break-word}
 .day-utility-grid .weather-strip .txt span{margin-top:4px;color:var(--ink-soft);font-size:8px;font-weight:700;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .day-utility-grid .stay-quick-card{min-width:0;height:100%;margin:0;border-color:#dce5e8;background:#fbfcfa}
 .day-utility-grid .stay-quick-card[open]{grid-column:1/-1}
@@ -192,7 +192,7 @@ body.search-open{overflow:hidden}.global-search-modal[hidden]{display:none}.glob
 .weather-strip{ display:flex; align-items:center; gap:10px; background:linear-gradient(120deg,var(--pale),var(--sand)); border-radius:var(--r-sm); padding:10px 12px; margin-top:6px; }
 .weather-strip .ico{font-size:22px;}
 .weather-strip .txt{font-size:12px; color:var(--ink); line-height:1.5;}
-.weather-strip b{font-size:14px; font-family:'Zen Kaku Gothic New', sans-serif;}
+.weather-strip b{font-size:14px; font-family:'Zen Maru Gothic','Zen Kaku Gothic New',sans-serif; font-weight:700;}
 .stay-line{ margin-top:10px; font-size:12.5px; color:var(--ink-soft); display:flex; gap:6px; align-items:center; }
 
 /* ---------- Spot Sub-tabs ---------- */
