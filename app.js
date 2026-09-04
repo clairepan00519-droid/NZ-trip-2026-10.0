@@ -2874,7 +2874,7 @@ function snapshotSummary(snapshot){return `自訂景點 ${snapshotDataCount(snap
 function openLocalSnapshotManager(){
   const modal=document.getElementById('snapshotManager'),list=document.getElementById('snapshotManagerList');if(!modal||!list)return;
   const snapshots=safeLocalJSON('nz_local_snapshots',[])||[];
-  list.innerHTML=snapshots.length?snapshots.map((s,i)=>`<article class="snapshot-item"><div><b>${new Date(s.createdAt||0).toLocaleString()}</b><small>${escapeHtml(s.reason||'自動保存')}</small><p>${escapeHtml(snapshotSummary(s))}</p></div><div><button type="button" onclick="downloadLocalSnapshot(${i})">下載這份</button><button class="restore" type="button" onclick="restoreLocalSnapshot(${i})">完整還原</button></div></article>`).join(''):'<div class="snapshot-empty">這支裝置目前找不到本機快照。請改用先前下載的 JSON 備份檔。</div>';
+  list.innerHTML=snapshots.length?snapshots.map((s,i)=>`<article class="snapshot-item"><div><b>${new Date(s.createdAt||0).toLocaleString()}</b><small>${escapeHTMLText(s.reason||'自動保存')}</small><p>${escapeHTMLText(snapshotSummary(s))}</p></div><div><button type="button" onclick="downloadLocalSnapshot(${i})">下載這份</button><button class="restore" type="button" onclick="restoreLocalSnapshot(${i})">完整還原</button></div></article>`).join(''):'<div class="snapshot-empty">這支裝置目前找不到本機快照。請改用先前下載的 JSON 備份檔。</div>';
   modal.hidden=false;
 }
 function closeLocalSnapshotManager(){const modal=document.getElementById('snapshotManager');if(modal)modal.hidden=true;}
