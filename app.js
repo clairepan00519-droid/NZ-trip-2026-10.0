@@ -1697,8 +1697,39 @@ const SEARCH_ALIASES={
   '但尼丁':'dunedin', '奧瑪魯':'oamaru', '蒂阿瑙':'te anau', '公車專用':'bus only bus lane',
   '單線橋':'one lane bridge', '圓環':'roundabout', '住宿':'hotel stay check in check out'
 };
+const SEARCH_SYNONYM_GROUPS=[
+  ['牛奶','鮮奶','milk','fresh milk','乳製品','dairy'],
+  ['無乳糖','lactose free','lactose-free'],
+  ['優格','優酪乳','yogurt','yoghurt'],
+  ['起司','乳酪','cheese'],
+  ['奶油','牛油','butter'],
+  ['鮮奶油','cream'],
+  ['肉','meat','豬扒','豬排','pork chop','pork','牛肉腸','beef sausage','sausage','香腸','fillet','filet','菲力','羊排','lamb chop','lamb','牛排','steak','培根','bacon','鹿肉','venison','雞肉','chicken'],
+  ['豬扒','豬排','pork chop'],
+  ['牛肉腸','beef sausage'],
+  ['fillet','filet','菲力'],
+  ['羊排','lamb chop'],
+  ['牛排','steak']
+];
 function normalizeSearchText(v){return String(v||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();}
 function expandedSearchQuery(q){const n=normalizeSearchText(q);let out=n;Object.entries(SEARCH_ALIASES).forEach(([k,v])=>{if(n.includes(k))out+=' '+v;});return out;}
+function searchTermGroups(query){
+  const normalized=normalizeSearchText(query),rawTokens=normalized.split(' ').filter(Boolean);
+  return rawTokens.map(token=>{
+    const related=new Set([token]);
+    const matchingGroups=SEARCH_SYNONYM_GROUPS.map(group=>group.map(normalizeSearchText)).filter(group=>group.includes(token));
+    if(matchingGroups.length){
+      const mostSpecificSize=Math.min(...matchingGroups.map(group=>group.length));
+      matchingGroups.filter(group=>group.length===mostSpecificSize).forEach(group=>group.forEach(term=>related.add(term)));
+    }
+    Object.entries(SEARCH_ALIASES).forEach(([key,value])=>{
+      const aliasTerms=normalizeSearchText(value).split(' ').filter(Boolean);
+      if(token===normalizeSearchText(key))aliasTerms.forEach(term=>related.add(term));
+      if(aliasTerms.includes(token))related.add(normalizeSearchText(key));
+    });
+    return [...related];
+  });
+}
 function allSpotSearchEntries(){
   const out=[];
   days.forEach((day,dayIdx)=>{
@@ -1736,9 +1767,22 @@ function buildGlobalSearchIndex(){
   return items;
 }
 function searchScore(item,query){
-  const q=expandedSearchQuery(query),tokens=q.split(' ').filter(Boolean),title=normalizeSearchText(item.title),hay=normalizeSearchText([item.title,item.subtitle,item.snippet,item.search].join(' '));
-  if(!tokens.every(t=>hay.includes(t)))return -1;
-  let score=0;if(title===q)score+=150;if(title.startsWith(q))score+=90;if(title.includes(q))score+=60;tokens.forEach(t=>{if(title.includes(t))score+=18;if(hay.includes(t))score+=5;});return score;
+  const q=normalizeSearchText(query),groups=searchTermGroups(query),title=normalizeSearchText(item.title),subtitle=normalizeSearchText(item.subtitle),snippet=normalizeSearchText(item.snippet),hay=normalizeSearchText([item.title,item.subtitle,item.snippet,item.search].join(' '));
+  if(!groups.length||!groups.every(group=>group.some(term=>hay.includes(term))))return -1;
+  let score=0;
+  if(title===q)score+=220;
+  if(title.startsWith(q))score+=130;
+  if(title.includes(q))score+=100;
+  if(subtitle.includes(q))score+=30;
+  if(snippet.includes(q))score+=18;
+  groups.forEach(group=>{
+    const direct=group[0];
+    if(title.includes(direct))score+=42;
+    else if(group.some(term=>title.includes(term)))score+=28;
+    if(hay.includes(direct))score+=12;
+    else if(group.some(term=>hay.includes(term)))score+=6;
+  });
+  return score;
 }
 function openGlobalSearch(){
   globalSearchMode='search';globalSearchCategory='all';
@@ -1757,12 +1801,21 @@ function openEditStatus(){
 }
 function closeGlobalSearch(){document.getElementById('globalSearchModal').hidden=true;document.body.classList.remove('search-open');}
 function renderGlobalSearchFilters(){
-  document.getElementById('globalSearchFilters').innerHTML=Object.entries(SEARCH_CATEGORIES).map(([k,v])=>`<button class="${globalSearchCategory===k?'active':''}" onclick="globalSearchCategory='${k}';renderGlobalSearchFilters();runGlobalSearch()">${v}</button>`).join('');
+  const wrap=document.getElementById('globalSearchFilters');
+  wrap.innerHTML=Object.entries(SEARCH_CATEGORIES).map(([k,v])=>`<button data-search-category="${k}" class="${globalSearchCategory===k?'active':''}" onclick="selectGlobalSearchCategory('${k}')">${v}</button>`).join('');
+  requestAnimationFrame(()=>wrap.querySelector('.active')?.scrollIntoView({block:'nearest',inline:'nearest'}));
+}
+function selectGlobalSearchCategory(category){
+  globalSearchCategory=category;
+  const wrap=document.getElementById('globalSearchFilters');
+  wrap?.querySelectorAll('button').forEach(button=>button.classList.toggle('active',button.dataset.searchCategory===category));
+  wrap?.querySelector('.active')?.scrollIntoView({behavior:'smooth',block:'nearest',inline:'nearest'});
+  runGlobalSearch();
 }
 function runGlobalSearch(){
   if(globalSearchMode!=='search')return;
   const q=document.getElementById('globalSearchInput')?.value.trim()||'',wrap=document.getElementById('globalSearchResults'),summary=document.getElementById('globalSearchSummary');
-  if(!q){currentGlobalResults=[];summary.textContent='可搜尋中英文名稱、日期、交通規則與自己新增的內容';wrap.innerHTML='<div class="search-empty"><b>試著搜尋</b><span>Tekapo・9/20・冰淇淋・單線橋・住宿・心宿二</span></div>';return;}
+  if(!q){currentGlobalResults=[];summary.textContent='可搜尋中英文名稱、同義詞、日期、交通規則與自己新增的內容';wrap.innerHTML='<div class="search-empty"><b>試著搜尋</b><span>牛奶／milk・優格／yogurt・肉／fillet・Tekapo・單線橋</span></div>';return;}
   currentGlobalResults=buildGlobalSearchIndex().map(x=>({...x,_score:searchScore(x,q)})).filter(x=>x._score>=0&&(globalSearchCategory==='all'||x.group===globalSearchCategory)).sort((a,b)=>b._score-a._score).slice(0,80);
   summary.textContent=`找到 ${currentGlobalResults.length} 筆結果${navigator.onLine?'':'・離線搜尋可用'}`;
   renderGlobalResultList();
@@ -2737,18 +2790,27 @@ function renderShopList(){
     const entries = shopData.map((it,i)=>({it,i})).filter(x=>(x.it.cat || 'food') === catKey);
     const isOpen = listSectionOpen.shop[catKey] === true;
     const done = entries.filter(x=>x.it.checked).length;
-    const itemsHTML = entries.length ? entries.map(({it,i})=>{
+    const taggedGroups=[];
+    entries.forEach(entry=>{
+      const tag=String(entry.it.tag||'').trim();
+      let group=taggedGroups.find(x=>x.tag===tag);
+      if(!group){group={tag,entries:[]};taggedGroups.push(group);}
+      group.entries.push(entry);
+    });
+    const renderShopItem=({it,i},position,total)=>{
       const imgs = shopImgs(it);
       const photosHTML = imgs.length ? `<div class="shop-photo-row">${imgs.map((src,pi)=>`<div class="shop-photo"><img loading="lazy" decoding="async" src="${src}" onerror="handleImageError(this)" onclick="openShopGallery(${i},${pi})"><button onclick="removeShopImg(${i},${pi})">✕</button></div>`).join('')}</div>` : '';
       const galleryHTML=imgs.length
         ? `<button type="button" class="shop-gallery-cover" onclick="openShopGallery(${i},0)" aria-label="查看 ${escapeHTMLText(it.name)} 商品照片"><img loading="lazy" decoding="async" src="${imgs[0]}" onerror="handleImageError(this)">${imgs.length>1?`<span>${imgs.length} 張</span>`:''}</button>`
         : `<button type="button" class="shop-gallery-cover shop-gallery-empty" onclick="document.getElementById('shopFile-${i}').click()"><b>＋</b><span>拍攝商品</span></button>`;
       const galleryDelete=imgs.length?`<button type="button" class="shop-gallery-remove" onclick="removeShopImg(${i},0)" aria-label="刪除 ${escapeHTMLText(it.name)} 目前商品照片">×</button>`:'';
-      return `<div class="pack-item shop-item ${it.checked?'checked':''}">${galleryHTML}${galleryDelete}<input type="checkbox" ${it.checked?'checked':''} onchange="toggleShop(${i})" aria-label="${it.checked?'取消完成':'標記完成'} ${escapeHTMLText(it.name)}"><div class="name shop-item-title">${escapeHTMLText(it.name)}</div><div class="qty"><button onclick="document.getElementById('shopFile-${i}').click()" class="camera-btn" aria-label="上傳商品照片">📷</button><button onclick="changeShopQty(${i},-1)">－</button><span>${Number(it.qty)||1}</span><button onclick="changeShopQty(${i},1)">＋</button></div><button class="del" onclick="delShop(${i})">✕</button><input type="file" id="shopFile-${i}" accept="image/*" multiple style="display:none" onchange="handleShopPhoto(event, ${i})"><div class="shop-extra"><input type="text" value="${escAttr(it.location||'')}" placeholder="建議購買位置或其他資訊..." onchange="setShopLocation(${i}, this.value)"></div><div class="shop-gallery-location">${escapeHTMLText(it.location||'尚未填寫購買位置')}</div>${photosHTML}</div>`;
-    }).join('') : '<div class="empty compact">此清單目前沒有項目。</div>';
+      const tagText=String(it.tag||'').trim();
+      return `<div class="pack-item shop-item ${it.checked?'checked':''}">${galleryHTML}${galleryDelete}<input type="checkbox" ${it.checked?'checked':''} onchange="toggleShop(${i})" aria-label="${it.checked?'取消完成':'標記完成'} ${escapeHTMLText(it.name)}"><div class="name shop-item-title">${escapeHTMLText(it.name)}${tagText?`<span class="shop-tag-badge">${escapeHTMLText(tagText)}</span>`:''}</div><div class="qty"><button onclick="document.getElementById('shopFile-${i}').click()" class="camera-btn" aria-label="上傳商品照片">📷</button><button onclick="changeShopQty(${i},-1)">－</button><span>${Number(it.qty)||1}</span><button onclick="changeShopQty(${i},1)">＋</button></div><button class="del" onclick="delShop(${i})">✕</button><input type="file" id="shopFile-${i}" accept="image/*" multiple style="display:none" onchange="handleShopPhoto(event, ${i})"><div class="shop-organize-row"><input type="text" list="shopTagSuggestions" value="${escAttr(tagText)}" placeholder="小標籤，例如：乳製品" onchange="setShopTag(${i},this.value)"><div class="shop-order-buttons"><button type="button" onclick="moveShopWithinGroup(${i},-1)" ${position===0?'disabled':''} aria-label="上移 ${escapeHTMLText(it.name)}">↑</button><button type="button" onclick="moveShopWithinGroup(${i},1)" ${position===total-1?'disabled':''} aria-label="下移 ${escapeHTMLText(it.name)}">↓</button></div></div><div class="shop-extra"><input type="text" value="${escAttr(it.location||'')}" placeholder="建議購買位置或其他資訊..." onchange="setShopLocation(${i}, this.value)"></div><div class="shop-gallery-location">${tagText?`<span class="shop-tag-badge">${escapeHTMLText(tagText)}</span>`:''}${escapeHTMLText(it.location||'尚未填寫購買位置')}</div>${photosHTML}</div>`;
+    };
+    const itemsHTML = entries.length ? taggedGroups.map(group=>`<div class="shop-tag-group">${group.tag?`<div class="shop-tag-heading">${escapeHTMLText(group.tag)}<small>${group.entries.length}</small></div>`:''}${group.entries.map((entry,position)=>renderShopItem(entry,position,group.entries.length)).join('')}</div>`).join('') : '<div class="empty compact">此清單目前沒有項目。</div>';
     return `<section class="checklist-group shop-group shop-${catKey}"><button class="checklist-group-head" onclick="toggleListSection('shop','${catKey}')" aria-expanded="${isOpen}"><span>${meta.label}</span><small>${done}/${entries.length}</small><b>${isOpen?'⌃':'⌄'}</b></button><div class="checklist-group-body ${isOpen?'open':''}">${itemsHTML}</div></section>`;
   }).join('');
-  wrap.innerHTML = groups + `<div class="add-row shop-add-row"><select id="newShopCat" class="pill-select">${Object.keys(SHOP_CATS).map(k=>`<option value="${k}">${SHOP_CATS[k].label}</option>`).join('')}</select><input type="text" id="newShopItem" placeholder="新增購物項目..."><button onclick="addShopItem()">＋</button></div>`;
+  wrap.innerHTML = groups + `<datalist id="shopTagSuggestions"><option value="乳製品"><option value="肉類"><option value="蔬果"><option value="早餐"><option value="零食"><option value="伴手禮"></datalist><div class="add-row shop-add-row"><select id="newShopCat" class="pill-select">${Object.keys(SHOP_CATS).map(k=>`<option value="${k}">${SHOP_CATS[k].label}</option>`).join('')}</select><input type="text" id="newShopItem" placeholder="新增購物項目..."><input type="text" id="newShopTag" list="shopTagSuggestions" placeholder="小標籤（可留空）"><button onclick="addShopItem()">＋</button></div>`;
 }
 async function handleShopPhoto(e,i){
   const files=Array.from(e.target.files||[]);
@@ -2768,9 +2830,19 @@ function removeShopImg(i, photoIdx){ const imgs = shopImgs(shopData[i]); const [
 function toggleShop(i){ shopData[i].checked = !shopData[i].checked; persistShop(); renderShopList(); }
 function changeShopQty(i,delta){ shopData[i].qty = Math.max(1, shopData[i].qty+delta); persistShop(); renderShopList(); }
 function delShop(i){ const [removed]=shopData.splice(i,1); persistShop(); renderShopList(); offerUndo(`已刪除「${removed?.name||'購物項目'}」`,()=>{shopData.splice(i,0,removed);persistShop();renderShopList();}); }
-function addShopItem(){ const input=document.getElementById('newShopItem'),catSelect=document.getElementById('newShopCat'); const cat=catSelect?.value||'food',name=input?.value.trim()||''; if(name){input.value='';input.blur();if(catSelect)catSelect.selectedIndex=0;shopData.push({id:'shop-'+crypto.randomUUID(),name,qty:1,checked:false,imgs:[],cat,location:'',freshFoodFixedV51:true});persistShop();listSectionOpen.shop[cat]=true;renderShopList();} }
+function addShopItem(){ const input=document.getElementById('newShopItem'),tagInput=document.getElementById('newShopTag'),catSelect=document.getElementById('newShopCat'); const cat=catSelect?.value||'food',name=input?.value.trim()||'',tag=tagInput?.value.trim()||''; if(name){input.value='';input.blur();if(tagInput)tagInput.value='';if(catSelect)catSelect.selectedIndex=0;shopData.push({id:'shop-'+crypto.randomUUID(),name,qty:1,checked:false,imgs:[],cat,tag,location:'',freshFoodFixedV51:true});persistShop();listSectionOpen.shop[cat]=true;renderShopList();} }
 function setShopCat(i, val){ shopData[i].cat = val; persistShop(); renderShopList(); }
 function setShopLocation(i, val){ shopData[i].location = val; persistShop(); }
+function setShopTag(i,val){if(!shopData[i])return;shopData[i].tag=String(val||'').trim();persistShop();renderShopList();}
+function moveShopWithinGroup(i,direction){
+  const item=shopData[i];if(!item)return;
+  const cat=item.cat||'food',tag=String(item.tag||'').trim();
+  const peers=shopData.map((it,index)=>({it,index})).filter(x=>(x.it.cat||'food')===cat&&String(x.it.tag||'').trim()===tag);
+  const position=peers.findIndex(x=>x.index===i),target=peers[position+direction];
+  if(position<0||!target)return;
+  [shopData[i],shopData[target.index]]=[shopData[target.index],shopData[i]];
+  persistShop();renderShopList();
+}
 
 /* ============ CUSTOM TRAVEL RULES ============ */
 const defaultRulesData = [
