@@ -420,6 +420,23 @@ async function restUpsert(key,valueObj,updatedAt){
   const r=await secureSupabaseFetch(`${SUPABASE_URL}/rest/v1/nz_sync?on_conflict=key`,{method:'POST',headers:syncHeaders({'Prefer':'resolution=merge-duplicates,return=minimal'}),body:JSON.stringify({key,value:JSON.stringify(valueObj),updated_at:updatedAt||new Date().toISOString()})});
   const text=await r.text(); if(!r.ok) throw new Error(text||`HTTP ${r.status}`); return true;
 }
+async function restPublishCompleteLocalVersion(){
+  const publishedAt=new Date().toISOString(),arrayKeys=new Set(['nz_reminders','nz_pack','nz_shop','nz_rules','nz_docs']);
+  const rows=SYNC_KEYS.map(key=>{let value=localValueForKey(key);if(value==null)value=arrayKeys.has(key)?[]:{};return{key,value:JSON.stringify(normalizeSyncValue(key,value)),updated_at:publishedAt};});
+  rows.push({key:'nz_manual_release',value:JSON.stringify({schema:'manual-v83',publishedAt,keyCount:SYNC_KEYS.length}),updated_at:publishedAt});
+  const r=await secureSupabaseFetch(`${SUPABASE_URL}/rest/v1/nz_sync?on_conflict=key`,{method:'POST',headers:syncHeaders({'Prefer':'resolution=merge-duplicates,return=minimal'}),body:JSON.stringify(rows)});
+  const text=await r.text();if(!r.ok)throw new Error(text||`HTTP ${r.status}`);return publishedAt;
+}
+async function getCompleteManualFamilyVersion(){
+  const rows=await restGetRows(),map=new Map(rows.map(row=>[row.key,row])),markerRow=map.get('nz_manual_release');
+  if(!markerRow)throw new Error('家人主版本尚未發布');
+  let marker;try{marker=JSON.parse(markerRow.value);}catch(e){throw new Error('家人主版本標記損壞');}
+  const sameReleaseTime=value=>Date.parse(value||0)===Date.parse(marker?.publishedAt||0);
+  if(marker?.schema!=='manual-v83'||marker.keyCount!==SYNC_KEYS.length||!sameReleaseTime(markerRow.updated_at))throw new Error('家人主版本標記不完整');
+  const values={};
+  for(const key of SYNC_KEYS){const row=map.get(key);if(!row||!sameReleaseTime(row.updated_at))throw new Error(`家人主版本不完整：缺少${SYNC_KEY_LABELS[key]||key}`);try{values[key]=JSON.parse(row.value);}catch(e){throw new Error(`家人主版本損壞：${SYNC_KEY_LABELS[key]||key}`);}}
+  return{publishedAt:marker.publishedAt,values};
+}
 async function initCloudSync(){
   updateSyncStatus(null,'connecting');
   try{
@@ -1841,7 +1858,26 @@ function renderReminders(){
 function dataPhotoCount(){let n=0;Object.values(photoStore||{}).forEach(v=>n+=(v||[]).length);Object.values(routeMapStore||{}).forEach(v=>n+=(v||[]).length);(shopData||[]).forEach(v=>n+=shopImgs(v).length);(rulesData||[]).forEach(v=>n+=ruleImgs(v).length);(docsData||[]).forEach(v=>n+=v.img?1:0);return n;}
 function healthRow(ok,title,detail){return `<div class="health-row ${ok?'ok':'warn'}"><span>${ok?'✓':'!'}</span><div><b>${title}</b><small>${detail}</small></div></div>`;}
 async function renderOfflineHealth(){const wrap=document.getElementById('journeyHubContent');wrap.innerHTML='<div class="hub-loading">正在檢查這台裝置…</div>';let cacheCount=0,swReady=false,usage='尚無法估算';try{if('caches'in window){for(const name of await caches.keys())cacheCount+=(await caches.open(name).then(c=>c.keys())).length;}swReady=Boolean(navigator.serviceWorker?.controller||await navigator.serviceWorker?.ready);const est=await navigator.storage?.estimate?.();if(est?.usage!=null)usage=`已使用 ${(est.usage/1024/1024).toFixed(1)} MB`;}catch(e){}const weather=loadWeatherCache(),times=Object.values(weather).map(v=>v?.fetchedAt).filter(Boolean),latest=times.length?new Date(Math.max(...times)).toLocaleString('zh-TW',{hour12:false}):'尚未下載';const queued=syncOutboxCount()+mediaQueueCount(),photos=dataPhotoCount(),coreKeys=SYNC_KEYS.filter(k=>localStorage.getItem(k)!=null).length;wrap.innerHTML=`<div class="hub-health-hero"><small>THIS DEVICE</small><b>${navigator.onLine?'目前在線':'目前離線'}</b><span>${usage}</span></div><div class="health-list">${healthRow(swReady&&cacheCount>0,'網站程式已離線保存',cacheCount?`共 ${cacheCount} 個快取資源`:'尚未建立完整快取')}${healthRow(coreKeys>0,'行程資料已保存在裝置',`${coreKeys}/${SYNC_KEYS.length} 類共用資料已有本機副本`)}${healthRow(photos>0,'旅程圖片',photos?`目前可辨識 ${photos} 張；曾開啟過的圖片較有機會離線顯示`:'尚未保存自訂圖片')}${healthRow(times.length>0,'天氣資料',`最後更新：${latest}`)}${healthRow(queued===0,'待上傳佇列',queued?`${queued} 項等待恢復網路後同步`:'沒有等待同步的內容')}</div><div class="hub-health-note">出發前請在 Wi‑Fi 下開啟一次各日期、票券與重要圖片。Google Maps、即時天氣及外部 Webcam 仍需要網路。</div>`;}
-function renderSyncConflicts(){const wrap=document.getElementById('journeyHubContent'),items=Object.values(syncConflicts||{});if(!items.length){wrap.innerHTML='<div class="hub-empty good"><b>同步內容安全</b><span>目前沒有需要人工確認的版本衝突。</span></div>';return;}wrap.innerHTML='<div class="conflict-intro">兩台裝置在相近時間修改了同一類資料。網站已暫停覆蓋，請選擇要保留的版本。</div>'+items.map(c=>`<section class="conflict-card"><div><small>需要確認</small><b>${escapeHTMLText(SYNC_KEY_LABELS[c.key]||c.key)}</b><span>${new Date(c.detectedAt).toLocaleString('zh-TW',{hour12:false})}</span></div><p>本機變更與家人雲端版本不同。</p><div><button onclick="resolveSyncConflict('${jsQuote(c.key)}','local')">保留這台裝置</button><button class="cloud" onclick="resolveSyncConflict('${jsQuote(c.key)}','remote')">採用家人版本</button></div></section>`).join('');}
+function renderSyncConflicts(){
+  const wrap=document.getElementById('journeyHubContent'),last=localStorage.getItem('nz_manual_publish_at');
+  wrap.innerHTML=`<div class="manual-sync-hero"><small>MANUAL FAMILY TRANSFER</small><b>只有按下按鈕才會傳輸</b><span>背景同步、時間戳競爭與自動覆蓋皆已停用</span></div><section class="manual-sync-card publish"><b>這支手機資料正確</b><p>在已還原的手機上使用。先下載完整備份，再將目前 17 類資料以單一完整批次發布給家人。</p><button type="button" onclick="manualPublishLocalToFamily(this)">⬆ 發布這台裝置給家人</button>${last?`<small>上次發布：${new Date(last).toLocaleString('zh-TW',{hour12:false})}</small>`:''}</section><section class="manual-sync-card receive"><b>家人裝置要取得主版本</b><p>接收前會先下載並保存該裝置現況；只有完整批次通過驗證才會套用。</p><button type="button" onclick="manualReceiveFamilyVersion(this)">⬇ 下載家人主版本</button></section><div class="hub-health-note">請勿在同一台裝置連續按兩個方向。發布完成後，家人再於各自裝置按「下載家人主版本」。</div>`;
+}
+async function manualPublishLocalToFamily(button){
+  if(!confirm('確定以這支裝置目前顯示的完整行程為唯一主版本嗎？\n\n發布前會先下載備份；家人必須手動接收，不會自動覆蓋。'))return;
+  exportTripBackup();createLocalSnapshot('before-manual-family-publish');button.disabled=true;button.textContent='正在發布完整版本…';
+  try{const publishedAt=await restPublishCompleteLocalVersion();localStorage.setItem('nz_manual_publish_at',publishedAt);localStorage.setItem(SYNC_OUTBOX_KEY,'{}');cloudSync.pending={};button.textContent='✓ 已完整發布';alert('已發布完成。現在才可以讓家人開啟 v83，按「下載家人主版本」。');renderSyncConflicts();}
+  catch(e){button.disabled=false;button.textContent='⬆ 重新發布這台裝置';alert('發布失敗，雲端主版本未完成，家人裝置將拒絕接收。\n'+friendlySyncError(e));}
+}
+async function manualReceiveFamilyVersion(button){
+  if(!confirm('要下載家人已發布的完整主版本嗎？\n\n目前這台裝置會先自動下載備份；未通過完整性檢查時不會更動任何資料。'))return;
+  exportTripBackup();createLocalSnapshot('before-manual-family-receive');button.disabled=true;button.textContent='正在驗證完整版本…';
+  try{
+    const release=await getCompleteManualFamilyVersion(),before=collectTripBackup();
+    try{SYNC_KEYS.forEach(key=>localStorage.setItem(key,JSON.stringify(normalizeSyncValue(key,release.values[key]))));localStorage.setItem(SYNC_OUTBOX_KEY,'{}');localStorage.setItem(SYNC_CONFLICTS_KEY,'{}');localStorage.setItem('nz_manual_received_at',release.publishedAt);}
+    catch(writeError){BACKUP_KEYS.forEach(key=>{const value=before.data[key];if(typeof value==='string')localStorage.setItem(key,value);else localStorage.removeItem(key);});throw new Error('裝置寫入失敗，已回復接收前資料');}
+    alert(`完整主版本驗證成功，發布時間：${new Date(release.publishedAt).toLocaleString('zh-TW',{hour12:false})}`);location.reload();
+  }catch(e){button.disabled=false;button.textContent='⬇ 重新下載家人主版本';alert('未套用任何資料：'+friendlySyncError(e));}
+}
 function resolveSyncConflict(key,choice){const c=syncConflicts[key];if(!c)return;if(choice==='remote'){delete cloudSync.pending[key];saveSyncOutbox();delete syncConflicts[key];saveSyncConflicts();applyRemoteRow({key,value:JSON.stringify(c.remote),updated_at:c.remoteUpdatedAt},true);}else{delete syncConflicts[key];saveSyncConflicts();safeSetItem(key,c.local);}updateSyncStatus();renderJourneyHub();}
 document.addEventListener('DOMContentLoaded',()=>{updateJourneyHubBadge();setTimeout(checkReminderNotifications,1500);});
 setInterval(checkReminderNotifications,60000);
