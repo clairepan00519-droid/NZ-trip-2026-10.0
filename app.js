@@ -160,6 +160,9 @@ const SYNC_OUTBOX_KEY = 'nz_sync_outbox_v1';
 const SYNC_CONFLICTS_KEY = 'nz_sync_conflicts_v1';
 const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_nav_links','nz_hours_override','nz_custom_spots','nz_spot_dates','nz_order','nz_block_order','nz_route_maps','nz_stay_times','nz_favorites','nz_reminders','nz_pack','nz_shop','nz_rules','nz_docs'];
 const FAMILY_SYNC_DISABLED_V81 = true;
+const V2_STATE_KEY='nz_sync_v2_state',V2_BASE_KEY='nz_sync_v2_base',V2_OUTBOX_KEY='nz_sync_v2_outbox',V2_APPLIED_KEY='nz_sync_v2_applied';
+const v2json=(key,fallback)=>{try{const v=JSON.parse(localStorage.getItem(key));return v??fallback;}catch(e){return fallback;}};
+const v2state=()=>v2json(V2_STATE_KEY,null);
 const UPDATE_SAFETY_KEY = 'nz_update_safety_v80';
 const MEDIA_SYNC_KEYS = new Set(['nz_photos','nz_covers','nz_route_maps']);
 const STRUCTURED_LIST_KEYS = new Set(['nz_shop','nz_rules','nz_docs']);
@@ -399,6 +402,7 @@ function normalizeStructuredList(key,value){
 }
 function normalizeSyncValue(key,value){
   if(key==='nz_route_maps')return normalizeRouteMapStore(value);
+  if(key==='nz_pack')return migratePackCategoryNames(value);
   return STRUCTURED_LIST_KEYS.has(key)?normalizeStructuredList(key,value):value;
 }
 function friendlySyncError(e){
@@ -437,6 +441,56 @@ async function getCompleteManualFamilyVersion(){
   for(const key of SYNC_KEYS){const row=map.get(key);if(!row||!sameReleaseTime(row.updated_at))throw new Error(`家人主版本不完整：缺少${SYNC_KEY_LABELS[key]||key}`);try{values[key]=JSON.parse(row.value);}catch(e){throw new Error(`家人主版本損壞：${SYNC_KEY_LABELS[key]||key}`);}}
   return{publishedAt:marker.publishedAt,values};
 }
+
+/* ============ v84 append-only per-item-safe collaboration ============ */
+function v2DeviceId(){let id=localStorage.getItem('nz_sync_v2_device');if(!id){id='dev-'+(crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random().toString(36).slice(2));localStorage.setItem('nz_sync_v2_device',id);}return id;}
+function v2AllLocal(){const out={};SYNC_KEYS.forEach(key=>{let value=localValueForKey(key);if(value==null)value=['nz_reminders','nz_pack','nz_shop','nz_rules','nz_docs'].includes(key)?[]:{};out[key]=normalizeSyncValue(key,value);});return out;}
+function v2Save(key,value){localStorage.setItem(key,JSON.stringify(value));}
+function queueV2Change(storeKey,baseValue,nextValue){
+  if(!window.NZSyncV2||NZSyncV2.equal(baseValue,nextValue))return;
+  const outbox=v2json(V2_OUTBOX_KEY,{}),existing=outbox[storeKey];
+  outbox[storeKey]={base:existing?existing.base:baseValue,next:nextValue,createdAt:existing?.createdAt||new Date().toISOString()};
+  v2Save(V2_OUTBOX_KEY,outbox);updateSyncStatus(null,'v2-queued');clearTimeout(window._v2PushTimer);if(navigator.onLine)window._v2PushTimer=setTimeout(syncV2Cycle,8500);
+}
+async function v2RestRowsWithRetry(){let error;for(let i=0;i<3;i++){try{return await restGetRows();}catch(e){error=e;if(i<2)await new Promise(r=>setTimeout(r,600*(i+1)));}}throw error;}
+async function v2BatchUpsert(rows){const r=await secureSupabaseFetch(`${SUPABASE_URL}/rest/v1/nz_sync?on_conflict=key`,{method:'POST',headers:syncHeaders({'Prefer':'resolution=merge-duplicates,return=minimal'}),body:JSON.stringify(rows)});const text=await r.text();if(!r.ok)throw new Error(text||`HTTP ${r.status}`);}
+async function createV2Baseline(){
+  const releaseId=(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)),publishedAt=new Date().toISOString(),data=v2AllLocal(),rows=[];
+  SYNC_KEYS.forEach(key=>rows.push({key:`v84_base_${releaseId}_${key}`,value:JSON.stringify(data[key]),updated_at:publishedAt}));
+  rows.push({key:'v84_manifest_latest',value:JSON.stringify({schema:'v84',releaseId,publishedAt,keys:SYNC_KEYS}),updated_at:publishedAt});
+  await v2BatchUpsert(rows);v2Save(V2_BASE_KEY,data);v2Save(V2_APPLIED_KEY,[]);v2Save(V2_STATE_KEY,{enabled:true,role:'owner',releaseId,joinedAt:publishedAt});return publishedAt;
+}
+async function fetchV2Baseline(){
+  const rows=await v2RestRowsWithRetry(),map=new Map(rows.map(r=>[r.key,r])),manifestRow=map.get('v84_manifest_latest');if(!manifestRow)throw new Error('安全多人同步主版本尚未建立');
+  let manifest;try{manifest=JSON.parse(manifestRow.value);}catch(e){throw new Error('主版本標記損壞');}
+  if(manifest?.schema!=='v84'||!manifest.releaseId||!Array.isArray(manifest.keys)||manifest.keys.length!==SYNC_KEYS.length)throw new Error('主版本不完整');
+  const data={};for(const key of SYNC_KEYS){const row=map.get(`v84_base_${manifest.releaseId}_${key}`);if(!row)throw new Error(`主版本缺少：${SYNC_KEY_LABELS[key]||key}`);try{data[key]=JSON.parse(row.value);}catch(e){throw new Error(`主版本損壞：${SYNC_KEY_LABELS[key]||key}`);}}
+  return{manifest,data};
+}
+function v2AtomicApply(data,reason){
+  const before=collectTripBackup();createLocalSnapshot(reason);cloudSync.applyingRemote=true;
+  try{SYNC_KEYS.forEach(key=>localStorage.setItem(key,JSON.stringify(normalizeSyncValue(key,data[key]))));}
+  catch(e){BACKUP_KEYS.forEach(key=>{const value=before.data[key];if(typeof value==='string')localStorage.setItem(key,value);else localStorage.removeItem(key);});throw new Error('裝置寫入失敗，已回復套用前資料');}
+  finally{cloudSync.applyingRemote=false;}
+}
+async function joinV2Family(){const release=await fetchV2Baseline();v2AtomicApply(release.data,'before-v84-family-join');v2Save(V2_BASE_KEY,release.data);v2Save(V2_APPLIED_KEY,[]);v2Save(V2_STATE_KEY,{enabled:true,role:'family',releaseId:release.manifest.releaseId,joinedAt:new Date().toISOString()});localStorage.setItem(V2_OUTBOX_KEY,'{}');return release.manifest.publishedAt;}
+async function fetchAndApplyV2Events(){
+  const state=v2state();if(!state?.enabled)return 0;const rows=await v2RestRowsWithRetry(),applied=new Set(v2json(V2_APPLIED_KEY,[])),device=v2DeviceId();
+  const events=rows.filter(r=>String(r.key).startsWith('v84_evt_')&&!applied.has(r.key)).map(r=>{try{return{row:r,event:JSON.parse(r.value)};}catch(e){return null;}}).filter(x=>x?.event?.schema==='v84-event').sort((a,b)=>Date.parse(a.row.updated_at)-Date.parse(b.row.updated_at));
+  if(!events.length)return 0;const before=collectTripBackup(),baseStore=v2json(V2_BASE_KEY,{});createLocalSnapshot('before-v84-event-apply');let changed=0;cloudSync.applyingRemote=true;
+  try{for(const {row,event} of events){if(event.deviceId===device){applied.add(row.key);continue;}const local=localValueForKey(event.storeKey),merged=NZSyncV2.threeWayMerge(event.storeKey,event.base,local,event.next);if(!NZSyncV2.equal(local,merged.value)){localStorage.setItem(event.storeKey,JSON.stringify(merged.value));applyStoreUpdate(event.storeKey,JSON.stringify(merged.value));changed++;}baseStore[event.storeKey]=merged.value;if(merged.conflicts.length){syncConflicts[row.key]={key:event.storeKey,eventId:row.key,paths:merged.conflicts.map(c=>c.path||'(整項)'),base:event.base,local,remote:event.next,detectedAt:new Date().toISOString(),kept:'local'};}applied.add(row.key);}}
+  catch(e){BACKUP_KEYS.forEach(key=>{const value=before.data[key];if(typeof value==='string')localStorage.setItem(key,value);else localStorage.removeItem(key);});throw new Error('接收變更失敗，已回復接收前資料');}
+  finally{cloudSync.applyingRemote=false;}
+  v2Save(V2_BASE_KEY,baseStore);v2Save(V2_APPLIED_KEY,[...applied].slice(-1500));saveSyncConflicts();return changed;
+}
+async function flushV2Outbox(){
+  const state=v2state(),outbox=v2json(V2_OUTBOX_KEY,{});if(!state?.enabled||!Object.keys(outbox).length)return 0;const device=v2DeviceId(),sentAt=new Date().toISOString(),rows=[];
+  Object.entries(outbox).forEach(([storeKey,item])=>{const id=`v84_evt_${device}_${Date.now()}_${Math.random().toString(36).slice(2)}`;rows.push({key:id,value:JSON.stringify({schema:'v84-event',deviceId:device,storeKey,base:item.base,next:item.next,createdAt:item.createdAt}),updated_at:sentAt});});
+  await v2BatchUpsert(rows);const latest=v2json(V2_OUTBOX_KEY,{}),baseStore=v2json(V2_BASE_KEY,{});Object.entries(outbox).forEach(([key,item])=>{if(NZSyncV2.equal(latest[key]?.next,item.next))delete latest[key];baseStore[key]=item.next;});v2Save(V2_OUTBOX_KEY,latest);v2Save(V2_BASE_KEY,baseStore);const applied=new Set(v2json(V2_APPLIED_KEY,[]));rows.forEach(r=>applied.add(r.key));v2Save(V2_APPLIED_KEY,[...applied].slice(-1500));return rows.length;
+}
+let v2SyncRunning=false;
+async function syncV2Cycle(){if(v2SyncRunning||!navigator.onLine||!v2state()?.enabled)return;v2SyncRunning=true;updateSyncStatus(null,'v2-saving');try{await fetchAndApplyV2Events();await flushV2Outbox();cloudSync.lastError=null;updateSyncStatus(null,'v2');}catch(e){cloudSync.lastError=e;updateSyncStatus(e,'v2-error');}finally{v2SyncRunning=false;}}
+function startV2Cloud(){clearInterval(window._v2PollTimer);syncV2Cycle();window._v2PollTimer=setInterval(()=>{if(!document.hidden)syncV2Cycle();},20000);}
 async function initCloudSync(){
   updateSyncStatus(null,'connecting');
   try{
@@ -614,10 +668,16 @@ async function flushCloudPush(){
 }
 function updateSyncStatus(err,state){
   const el=document.getElementById('cloudSyncStatus');if(!el)return;
-  const queued=syncOutboxCount()+mediaQueueCount();
+  const legacyQueued=syncOutboxCount()+mediaQueueCount(),v2Queued=Object.keys(v2json(V2_OUTBOX_KEY,{})).length,queued=v2state()?.enabled?v2Queued:legacyQueued;
   const conflicts=Object.keys(syncConflicts||{}).length;
-  let text=FAMILY_SYNC_DISABLED_V81?'🛡️ 家人同步已停用・目前僅保存在這台裝置':'☁️ 家人共享已同步';
-  if(FAMILY_SYNC_DISABLED_V81){err=null;state='disabled';}
+  let text=v2state()?.enabled?'🔒 安全逐項同步已開啟':'🛡️ 家人同步已停用・目前僅保存在這台裝置';
+  if(v2state()?.enabled){
+    if(conflicts)text=`🔒 已保留本機・${conflicts} 項差異待確認`;
+    else if(err)text=`⚠️ 連線失敗・本機資料未變更`;
+    else if(state==='v2-saving')text=`🔒 正在安全同步${queued?' '+queued+' 類變更':''}`;
+    else if(state==='v2-queued'||queued)text=`🔒 ${queued} 類變更等待同步`;
+  }
+  else if(FAMILY_SYNC_DISABLED_V81){err=null;state='disabled';}
   else if(conflicts)text=`⚠️ ${conflicts} 項同步內容待確認`;
   else if(err)text=`⚠️ ${queued?queued+' 項等待同步':'同步失敗'}・${friendlySyncError(err)}`;
   else if(state==='connecting')text='☁️ 正在連接家人同步';
@@ -625,7 +685,7 @@ function updateSyncStatus(err,state){
   else if(state==='disabled')text='🛡️ 家人同步已停用・目前僅保存在這台裝置';
   else if(state==='saving')text=`☁️ 正在同步${queued?' '+queued+' 項變更':''}`;
   else if(state==='queued'||queued)text=`☁️ ${queued} 項變更等待同步`;
-  const isError=Boolean(conflicts||err),isSaving=state==='saving'||state==='connecting';
+  const isError=Boolean(err),isSaving=state==='saving'||state==='connecting'||state==='v2-saving';
   /* 輪詢沒有新資料時不重寫 DOM，避免手機每 12 秒觸發不必要的重新排版。 */
   if(el.textContent!==text)el.textContent=text;
   if(el.style.display!=='inline-flex')el.style.display='inline-flex';
@@ -974,6 +1034,7 @@ moveBuiltInSpotToDate('First Church of Otago','9/21');
    照片存多了可能會寫入失敗。統一在這裡攔截錯誤並提示使用者，
    而不是讓資料默默遺失、卻讓使用者誤以為「上傳照片沒反應」。 */
 function safeSetItem(key, valueObj){
+  const previousValue=localValueForKey(key);
   let localOk = true;
   try {
     localStorage.setItem(key, JSON.stringify(valueObj));
@@ -984,6 +1045,7 @@ function safeSetItem(key, valueObj){
   // 若已啟用家人共享同步，改把資料推上雲端；雲端會自動用它自己的（容量大很多的）
   // 離線快取保存，所以就算這台裝置的 localStorage 滿了也不代表資料真的保不住。
   valueObj=normalizeSyncValue(key,valueObj);
+  if (!cloudSync.applyingRemote && v2state()?.enabled && SYNC_KEYS.includes(key)) queueV2Change(key,previousValue,valueObj);
   if (!cloudSync.applyingRemote) scheduleCloudPush(key, valueObj);
   if (!localOk && !cloudSync.enabled) {
     alert('⚠️ 這台裝置瀏覽器的儲存空間已滿，剛才的變更可能無法保存。請先刪除幾張較舊或較大的照片，再重新上傳。');
@@ -1859,9 +1921,15 @@ function dataPhotoCount(){let n=0;Object.values(photoStore||{}).forEach(v=>n+=(v
 function healthRow(ok,title,detail){return `<div class="health-row ${ok?'ok':'warn'}"><span>${ok?'✓':'!'}</span><div><b>${title}</b><small>${detail}</small></div></div>`;}
 async function renderOfflineHealth(){const wrap=document.getElementById('journeyHubContent');wrap.innerHTML='<div class="hub-loading">正在檢查這台裝置…</div>';let cacheCount=0,swReady=false,usage='尚無法估算';try{if('caches'in window){for(const name of await caches.keys())cacheCount+=(await caches.open(name).then(c=>c.keys())).length;}swReady=Boolean(navigator.serviceWorker?.controller||await navigator.serviceWorker?.ready);const est=await navigator.storage?.estimate?.();if(est?.usage!=null)usage=`已使用 ${(est.usage/1024/1024).toFixed(1)} MB`;}catch(e){}const weather=loadWeatherCache(),times=Object.values(weather).map(v=>v?.fetchedAt).filter(Boolean),latest=times.length?new Date(Math.max(...times)).toLocaleString('zh-TW',{hour12:false}):'尚未下載';const queued=syncOutboxCount()+mediaQueueCount(),photos=dataPhotoCount(),coreKeys=SYNC_KEYS.filter(k=>localStorage.getItem(k)!=null).length;wrap.innerHTML=`<div class="hub-health-hero"><small>THIS DEVICE</small><b>${navigator.onLine?'目前在線':'目前離線'}</b><span>${usage}</span></div><div class="health-list">${healthRow(swReady&&cacheCount>0,'網站程式已離線保存',cacheCount?`共 ${cacheCount} 個快取資源`:'尚未建立完整快取')}${healthRow(coreKeys>0,'行程資料已保存在裝置',`${coreKeys}/${SYNC_KEYS.length} 類共用資料已有本機副本`)}${healthRow(photos>0,'旅程圖片',photos?`目前可辨識 ${photos} 張；曾開啟過的圖片較有機會離線顯示`:'尚未保存自訂圖片')}${healthRow(times.length>0,'天氣資料',`最後更新：${latest}`)}${healthRow(queued===0,'待上傳佇列',queued?`${queued} 項等待恢復網路後同步`:'沒有等待同步的內容')}</div><div class="hub-health-note">出發前請在 Wi‑Fi 下開啟一次各日期、票券與重要圖片。Google Maps、即時天氣及外部 Webcam 仍需要網路。</div>`;}
 function renderSyncConflicts(){
-  const wrap=document.getElementById('journeyHubContent'),last=localStorage.getItem('nz_manual_publish_at');
-  wrap.innerHTML=`<div class="manual-sync-hero"><small>MANUAL FAMILY TRANSFER</small><b>只有按下按鈕才會傳輸</b><span>背景同步、時間戳競爭與自動覆蓋皆已停用</span></div><section class="manual-sync-card publish"><b>這支手機資料正確</b><p>在已還原的手機上使用。先下載完整備份，再將目前 17 類資料以單一完整批次發布給家人。</p><button type="button" onclick="manualPublishLocalToFamily(this)">⬆ 發布這台裝置給家人</button>${last?`<small>上次發布：${new Date(last).toLocaleString('zh-TW',{hour12:false})}</small>`:''}</section><section class="manual-sync-card receive"><b>家人裝置要取得主版本</b><p>接收前會先下載並保存該裝置現況；只有完整批次通過驗證才會套用。</p><button type="button" onclick="manualReceiveFamilyVersion(this)">⬇ 下載家人主版本</button></section><div class="hub-health-note">請勿在同一台裝置連續按兩個方向。發布完成後，家人再於各自裝置按「下載家人主版本」。</div>`;
+  const wrap=document.getElementById('journeyHubContent'),state=v2state(),items=Object.values(syncConflicts||{}).filter(c=>c.eventId);
+  if(!state?.enabled){wrap.innerHTML=`<div class="manual-sync-hero"><small>SAFE COLLABORATION V84</small><b>逐項同步尚未啟用</b><span>舊的整包同步仍永久停用</span></div><section class="manual-sync-card publish"><b>已還原成功的主手機</b><p>只在資料最完整的手機按一次；會先建立本機快照，再以目前資料建立不可覆寫的共同基準。</p><button type="button" onclick="enableV2Owner(this)">建立安全多人同步基準</button></section><section class="manual-sync-card receive"><b>其他家人裝置</b><p>主手機建立完成後，家人在自己的裝置按一次。之後新增、修改與刪除會逐項同步。</p><button type="button" onclick="enableV2Family(this)">加入安全多人同步</button></section>`;return;}
+  const role=state.role==='owner'?'主手機':'家人裝置',queued=Object.keys(v2json(V2_OUTBOX_KEY,{})).length;
+  wrap.innerHTML=`<div class="manual-sync-hero"><small>SAFE COLLABORATION V84</small><b>🔒 ${role}・安全逐項同步</b><span>${queued?queued+' 類本機變更等待送出':'目前沒有待送出的本機變更'}</span></div><section class="manual-sync-card"><b>同步控制</b><p>平時會安全接收不衝突的逐項變更；連線失敗或內容衝突時保留本機。</p><button type="button" onclick="manualV2Sync(this)">立即安全同步</button></section>${items.length?`<div class="conflict-intro">以下差異均已保留本機，沒有自動刪除：</div>${items.map(c=>`<section class="conflict-card"><div><small>已保留本機</small><b>${escapeHTMLText(SYNC_KEY_LABELS[c.key]||c.key)}</b><span>${c.paths.length} 處差異</span></div><p>${c.paths.slice(0,3).map(escapeHTMLText).join('、')}</p><div><button onclick="resolveV2Conflict('${jsQuote(c.eventId)}','local')">以本機重新送出</button><button class="cloud" onclick="resolveV2Conflict('${jsQuote(c.eventId)}','remote')">改採家人內容</button></div></section>`).join('')}`:'<div class="hub-empty good"><b>沒有資料衝突</b><span>每項資料都已安全合併。</span></div>'}`;
 }
+async function enableV2Owner(button){if(!confirm('只可在剛剛還原成功、資料最完整的手機執行。確定建立共同基準嗎？'))return;createLocalSnapshot('before-v84-owner-enable');button.disabled=true;button.textContent='正在建立完整基準…';try{await createV2Baseline();startV2Cloud();alert('安全多人同步基準已建立。家人現在可在自己的裝置按「加入安全多人同步」。');renderSyncConflicts();updateSyncStatus(null,'v2');}catch(e){button.disabled=false;button.textContent='重新建立安全基準';alert('建立失敗，未啟用同步：'+friendlySyncError(e));}}
+async function enableV2Family(button){if(!confirm('確定這是家人裝置嗎？加入前會保留本機快照，只有完整主版本通過驗證才會套用。'))return;button.disabled=true;button.textContent='正在驗證共同基準…';try{const time=await joinV2Family();startV2Cloud();alert(`已安全加入，主版本時間：${new Date(time).toLocaleString('zh-TW',{hour12:false})}`);location.reload();}catch(e){button.disabled=false;button.textContent='重新加入安全多人同步';alert('未更動本機資料：'+friendlySyncError(e));}}
+async function manualV2Sync(button){button.disabled=true;button.textContent='安全同步中…';await syncV2Cycle();button.disabled=false;button.textContent=cloudSync.lastError?'連線失敗，點此重試':'✓ 同步完成';renderSyncConflicts();}
+function resolveV2Conflict(eventId,choice){const c=syncConflicts[eventId];if(!c)return;createLocalSnapshot('before-v84-conflict-choice');if(choice==='remote'){cloudSync.applyingRemote=true;try{localStorage.setItem(c.key,JSON.stringify(c.remote));applyStoreUpdate(c.key,JSON.stringify(c.remote));}finally{cloudSync.applyingRemote=false;}}else{const outbox=v2json(V2_OUTBOX_KEY,{});outbox[c.key]={base:c.remote,next:localValueForKey(c.key),createdAt:new Date().toISOString()};v2Save(V2_OUTBOX_KEY,outbox);}delete syncConflicts[eventId];saveSyncConflicts();renderSyncConflicts();syncV2Cycle();}
 async function manualPublishLocalToFamily(button){
   if(!confirm('確定以這支裝置目前顯示的完整行程為唯一主版本嗎？\n\n發布前會先下載備份；家人必須手動接收，不會自動覆蓋。'))return;
   exportTripBackup();createLocalSnapshot('before-manual-family-publish');button.disabled=true;button.textContent='正在發布完整版本…';
@@ -2567,7 +2635,7 @@ function migratePackCategoryNames(data){
   if(!data) data = structuredClone(defaultPackData);
   Object.keys(data).forEach(cat=>{
     const fallback=(PACK_SUBCATS[cat]||['其他'])[0];
-    data[cat]=(data[cat]||[]).map(it=>({...it, subcat:it.subcat || fallback}));
+    data[cat]=(data[cat]||[]).map(it=>({...it,id:it.id||stableItemId('pack',[cat,it.subcat||fallback,it.name]),subcat:it.subcat || fallback}));
   });
   return data;
 }
@@ -2855,11 +2923,12 @@ async function migrateLegacyMediaToCloud(){
 }
 
 async function startFamilyCloud(){
-  /* v81 緊急資料保護：停止所有雲端讀取、寫入、媒體搬移與輪詢。 */
+  /* 舊整包同步永久停用；只有完成 v84 安全初始化的裝置才啟動追加式逐項同步。 */
   cloudSync.enabled=false;
   cloudSync.ready=false;
   clearInterval(cloudSync.pollTimer);
-  updateSyncStatus(null,'disabled');
+  if(v2state()?.enabled){updateSyncStatus(null,'v2');startV2Cloud();}
+  else updateSyncStatus(null,'disabled');
 }
 
 /* 將使用者上傳的憑證、路線圖、清單附圖與景點照片預先放進瀏覽器快取。
@@ -3010,7 +3079,7 @@ async function recoverOrphanSpotPhotosFromCloud(){
 }
 function exportTripBackup(){const backup=collectTripBackup(),blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`NZ-Trip-2026-backup-${new Date().toISOString().slice(0,10)}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 async function importTripBackup(event){const file=event.target.files?.[0];event.target.value='';if(!file)return;try{const backup=JSON.parse(await file.text());if(backup?.app!=='NZ Trip 2026'||!backup.data||typeof backup.data!=='object')throw new Error('不是有效的 NZ Trip 備份檔');if(!confirm(`要還原 ${new Date(backup.createdAt||Date.now()).toLocaleString()} 的備份嗎？目前資料會先自動保存。`))return;createLocalSnapshot('before-import');Object.entries(backup.data).forEach(([k,v])=>{if(BACKUP_KEYS.includes(k)&&typeof v==='string')localStorage.setItem(k,v);});location.reload();}catch(e){alert('⚠️ 無法還原備份：'+String(e.message||e));}}
-window.addEventListener('online', ()=>{ updateNetStatus(); loadLiveWeather(); refreshRainRadar(); if(cloudSync.enabled){flushCloudPush();flushMediaUploadQueue();} });
+window.addEventListener('online', ()=>{ updateNetStatus(); loadLiveWeather(); refreshRainRadar(); if(v2state()?.enabled)syncV2Cycle();else if(cloudSync.enabled){flushCloudPush();flushMediaUploadQueue();} });
 window.addEventListener('offline', updateNetStatus);
 
 /* ============ Service Worker（離線快取整個網頁） ============ */

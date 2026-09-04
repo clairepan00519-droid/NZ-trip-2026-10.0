@@ -17,7 +17,7 @@
    連結使用，此檔案就會正常運作並提供離線瀏覽能力。
    =========================================================== */
 
-const CACHE_VERSION = 'nz-trip-v83-manual-family-transfer';
+const CACHE_VERSION = 'nz-trip-v84-safe-collaboration';
 const SHELL_CACHE = `nz-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `nz-runtime-${CACHE_VERSION}`;
 
@@ -27,7 +27,7 @@ self.addEventListener('install', (event) => {
     caches.open(SHELL_CACHE).then((cache) => {
       // 逐檔快取：單一圖片暫時失效時，不再拖累整個網站離線安裝。
       const files=[
-        './', './index.html', './app.js', './style.css', './manifest.webmanifest',
+        './', './index.html', './sync-v2.js', './app.js', './style.css', './manifest.webmanifest',
         './images/map.webp', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
         './images/road-rules/roundabout.svg', './images/road-rules/one-lane-bridge.svg',
         './images/road-rules/bus-only.svg', './images/road-rules/keep-left.svg'
