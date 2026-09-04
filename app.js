@@ -159,6 +159,7 @@ const SYNC_META_KEY = 'nz_sync_meta_v3';
 const SYNC_OUTBOX_KEY = 'nz_sync_outbox_v1';
 const SYNC_CONFLICTS_KEY = 'nz_sync_conflicts_v1';
 const SYNC_KEYS = ['nz_notes','nz_photos','nz_covers','nz_nav_links','nz_hours_override','nz_custom_spots','nz_spot_dates','nz_order','nz_block_order','nz_route_maps','nz_stay_times','nz_favorites','nz_reminders','nz_pack','nz_shop','nz_rules','nz_docs'];
+const FAMILY_SYNC_DISABLED_V81 = true;
 const UPDATE_SAFETY_KEY = 'nz_update_safety_v80';
 const MEDIA_SYNC_KEYS = new Set(['nz_photos','nz_covers','nz_route_maps']);
 const STRUCTURED_LIST_KEYS = new Set(['nz_shop','nz_rules','nz_docs']);
@@ -551,6 +552,7 @@ function applyStoreUpdate(key,jsonStr){
 function scheduleCloudPush(key,valueObj){
   if(cloudSync.applyingRemote)return;
   const t=new Date().toISOString();
+  if(FAMILY_SYNC_DISABLED_V81){setSyncMeta(key,t);updateSyncStatus(null,'disabled');return;}
   const baseUpdatedAt=cloudSync.pending[key]?.baseUpdatedAt||getSyncMeta()[key]||null;
   setSyncMeta(key,t);
   cloudSync.pending[key]={valueObj,updatedAt:t,baseUpdatedAt};
@@ -597,11 +599,13 @@ function updateSyncStatus(err,state){
   const el=document.getElementById('cloudSyncStatus');if(!el)return;
   const queued=syncOutboxCount()+mediaQueueCount();
   const conflicts=Object.keys(syncConflicts||{}).length;
-  let text='☁️ 家人共享已同步';
-  if(conflicts)text=`⚠️ ${conflicts} 項同步內容待確認`;
+  let text=FAMILY_SYNC_DISABLED_V81?'🛡️ 家人同步已停用・目前僅保存在這台裝置':'☁️ 家人共享已同步';
+  if(FAMILY_SYNC_DISABLED_V81){err=null;state='disabled';}
+  else if(conflicts)text=`⚠️ ${conflicts} 項同步內容待確認`;
   else if(err)text=`⚠️ ${queued?queued+' 項等待同步':'同步失敗'}・${friendlySyncError(err)}`;
   else if(state==='connecting')text='☁️ 正在連接家人同步';
   else if(state==='paused')text='🛡️ 更新保護中・雲端同步已暫停';
+  else if(state==='disabled')text='🛡️ 家人同步已停用・目前僅保存在這台裝置';
   else if(state==='saving')text=`☁️ 正在同步${queued?' '+queued+' 項變更':''}`;
   else if(state==='queued'||queued)text=`☁️ ${queued} 項變更等待同步`;
   const isError=Boolean(conflicts||err),isSaving=state==='saving'||state==='connecting';
@@ -663,6 +667,7 @@ const days = [
     S('Burger Club','food','人氣美式漢堡，嚴選草飼牛，肉汁飽滿。', {tags:['必吃'], hours:'11:30–21:00', fullDesc:'位於瓦納卡市區的人氣美式漢堡店。嚴選紐西蘭優質草飼牛與在地新鮮蔬菜，外皮烤得酥脆、肉汁飽滿。份量極為紮實，是長途駕車後迅速補充體力的最佳選擇。', img:'https://upload.wikimedia.org/wikipedia/commons/thumb/4/4d/Cheeseburger_with_fries.jpg/640px-Cheeseburger_with_fries.jpg', customInfo:'⚠️ 尖峰時段需排隊20分以上', recDishes:'黑松露蘑菇起司堡'}), 
     S('Wanaka Apartment','hotel','今日住宿。湖畔新建度假社區，附室內溫水泳池。',{link:'https://www.airbnb.com.tw/rooms/835936560022815796', linkLabel:'查看 Airbnb 房源', fullDesc:'位於瓦納卡湖畔新建度假社區，Superhost 評等4.97分，步行5分鐘可達市區。2房1床，附設施包含室內恆溫泳池、水療池與健身房（皆可眺望湖景），公寓內附全套廚房、壁爐、專屬車位及滑雪／單車置物櫃。', img:'https://a0.muscache.com/im/pictures/miso/Hosting-835936560022815796/original/dd4fb9bb-715a-426e-ab37-cea8697a0aae.jpeg?im_w=720'})]},
 {dayNum:'2', date:'9/14', weekday:'一', region:'尋幽・鑽石光', enRegion:'Wanaka', drive:'🚗 單趟約 30 km / 40分', title:'漫步 Rocky Mountain，尋味法式晨光', dayDesc:'登高俯瞰 Diamond Lake 與 Wanaka 湖景，穿插在地知名烘焙坊', wear:'排汗長袖＋防風外套＋登山鞋', weatherIco:'🌤️', spots:[
+  S('Wānaka 日出・日照金山','attraction','清晨從 Marina Terrace 朝湖面與西北方雪山，守候初升陽光染亮南阿爾卑斯山。',{tags:['必拍'],dur:'06:25–07:00', hours:'9/14 日出約 06:48', deletable:true, fullDesc:'Wānaka 最適合主攻日出。清晨先在 Marina Terrace 住宿的露台或客廳面向湖面及西北方雪山觀察，東方升起的晨光有機會從側前方將山峰染成金黃或粉紅色。若住宿前方視線受阻，可步行約 5–10 分鐘前往 Wānaka Marina 或湖岸；這裡看到的是 Wānaka 周邊的南阿爾卑斯雪山群，並非 Aoraki／Mt Cook 本身。能否出現日照金山仍取決於山區雲層及東方地平線是否留有陽光通道。', tip:'06:25 前就定位，鏡頭朝西北方雪山而不是朝東方太陽；可先用 35–50mm 拍山峰，金光有時只維持數分鐘。'}),
   S('Diamond Lake & Rocky Mtn','activity','指標健行路線。陡升至山頂，可 360 度鳥瞰瓦納卡群山。',{tags:['必拍'],dur:'約2–3小時', hours:'全天開放', fullDesc:'瓦納卡指標性的徒步健行路線。步道極具層次感：第一階段為平緩的鑽石湖環線；第二階段上升至鑽石湖觀景台；最後陡升至 Rocky Mountain 山頂（海拔 775 公尺），可 360 度鳥瞰整片瓦納卡湖群山、克魯薩河谷及冰河地形遺跡。', tip:'若時間與體力允許，強烈建議直接攻頂 Rocky Mountain，攻頂段有多處土路與岩石，需穿著抓地力強的登山鞋。', park:'設有寬敞的免費專屬停車場，備有流動廁所。', docMap:'https://www.doc.govt.nz/parks-and-recreation/places-to-go/otago/places/wanaka-area/tracks/diamond-lake-and-rocky-mountain-tracks/', img:'https://images.hika.app/hikes/images/original/new-zealand/otago/diamond-lake-and-rocky-mountain-track.jpeg'}), 
   S('Upper Clutha River Track','activity','沿克魯薩河的平緩步道。沿途河水呈現剔透湛藍色。',{tags:['必拍'], hours:'全天開放', fullDesc:'沿著紐西蘭水量最大的河流——克魯薩河所建的平緩徒步/單車道。沿途河水呈現不可思議的剔透湛藍色，兩岸初春時林木漸綠，走起來平舒放鬆，能近距離欣賞純淨的河岸生態。', img:'https://www.newzealand.com/assets/Tourism-NZ/Wanaka/img-1536921212-6476-20360-p-719AD18A-EF0A-41E2-6B640C81E94AD5DF-2544003__ExtRewriteWyJwbmciLCJqcGciXQ_aWxvdmVrZWxseQo_CropResizeWzE5MDAsMTAwMCw3NSwianBnIl0.jpg'}), 
   S('Lake Hawea','attraction','瓦納卡姊妹湖，保留原始靜謐。湖水因深度更深呈深邃寶藍色。',{tags:['必拍'], fullDesc:'與瓦納卡湖僅一山之隔的姊妹湖，由於遊客大幅減少，這裡保留了更多原始與靜謐。哈威亞湖的湖水顏色因深度更深，呈現出更為深邃神祕的寶藍色，岸邊矗立著高聳的陡峭山壁，景致震撼。', img:'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQkT3XGOA0yxemYMlmNtUii05ezWaIeXaON-ZMXA4wQxQ&s=10'}), 
@@ -686,6 +691,7 @@ const days = [
     S('High Country Salmon','food','高山鮭魚養殖場。可購買新鮮生魚片，戶外餵食鮭魚。',{tags:['必吃','必買'], hours:'09:00–17:00', fullDesc:'位於 Twizel 庫克山公路附近的冰河水高山鮭魚養殖場。肉質極度肥美緊實。可以現場購買超新鮮生魚片、鮭魚漢堡，還能走到戶外魚池免費拿飼料體驗餵食巨大的鮭魚。', img:'https://www.highcountrysalmon.co.nz/cdn/shop/files/Highcountry_Salmon-7542.jpg?v=1748402578&width=3840', recDishes:'鮭魚生魚片、漢堡'}), 
     S('Starview 88 - Tekapo','hotel','今晚住宿。落地窗直面蒂卡波湖與雪山。',{link:'https://www.agoda.com/zh-tw/starview-88/hotel/lake-tekapo-nz.html', linkLabel:'查看 Agoda 房源', fullDesc:'位於 Lochinver Rise 高處的現代度假宅，挑高客廳＋壁爐，落地窗直面蒂卡波湖與雪山，距湖畔步行約15分鐘、距小鎮車程約3分鐘，離今日行程的 Sunset Rock 觀景點僅約1.6公里。天氣晴朗時建議夜間留意星空。', img:'https://upload.wikimedia.org/wikipedia/commons/thumb/b/bf/Church_of_the_Good_Shepherd_Tekapo.jpg/640px-Church_of_the_Good_Shepherd_Tekapo.jpg'})]},
 {dayNum:'4', date:'9/16', weekday:'三', region:'仰星・觀天象', enRegion:'Lake Tekapo', drive:'🚗 單趟約 10 km / 15分', title:'Mt John 宇宙之眼，Lake Alexandrina', dayDesc:'沉浸於天文台的星穹視角，並在隱秘湖畔捕捉最純淨的自然光影', wear:'防風外套＋保暖帽，山頂溫差大', weatherIco:'☀️', spots:[
+  S('Lake Tekapo 日落・日照金山','attraction','在 Starview 88 露台朝北至西北方守候，夕陽有機會將湖後方雪山染成金色與粉紅色。',{tags:['必拍'],dur:'18:05–18:45', hours:'9/16 日落約 18:27', deletable:true, fullDesc:'Tekapo 最適合主攻日落，不必摸黑爬 Mt John。18:05 起可在 Starview 88 的客廳或露台面向湖面與北至西北方雪山等待；太陽會在左側西方落下，以側光照亮遠方群峰。日落前可能出現金黃色直射光，日落後約 10–20 分鐘則可能轉為粉紅或紫紅色晚霞，因此 18:27 後不要立刻收相機。是否形成日照金山仍取決於西方地平線與山區雲層，且遠方亮起的是 Tekapo 周邊雪山群峰，不保證看見 Aoraki／Mt Cook 本身。', tip:'室內燈先關掉以免玻璃反光；鏡頭朝北至西北方雪山，不要只拍左側落日。建議先用 35–50mm 拍山峰，再補湖景廣角。'}),
   S('Mt John Summit Track','activity','環繞約翰山頂的景觀步道。擁有震撼的 360 度視角。',{tags:['必拍'],dur:'約2–3小時', fullDesc:'環繞約翰山頂的頂級景觀步道。山頂視野毫無遮蔽，擁有震撼的 360 度視角，可同時俯瞰碧藍的蒂卡波湖、寶藍的亞歷山德里納湖。', tip:'山頂完全暴露在風口中，即使是大晴天也往往狂風大作，防風防水外套、毛帽與太陽眼鏡為必備。', park:'步道口有免費停車場；若選擇開車上山頂需在山腳閘門支付道路使用費。', docMap:'https://www.doc.govt.nz/parks-and-recreation/places-to-go/canterbury/places/lake-tekapo-area/tracks/mount-john-summit-track/', img:'https://cdn.prod.rexby.com/image/9f8fa577cdd143059ad1f07343635b74?format=webp&width=1080&height=1350&quality=80'}), 
   S('Mt John Observatory','attraction','坎特伯里大學天文觀測台。夜間可觀星。',{tags:['必拍'], hours:'咖啡廳 09:00–15:00', note:'開車上山需收費', fullDesc:'坎特伯里大學設於紐西蘭的重要天文研究觀測台。由於蒂卡波屬於國際黑暗天空保護區，這裡擁有全紐西蘭最純淨、無光害的星空環境。夜間可報名參加專業觀星導覽。', img:'https://cloudfront-ap-southeast-2.images.arcpublishing.com/nzme/SBRRQJLB47WWHMFRG7BH3BPOS4.jpg'}), 
   S('Lake Alexandrina','attraction','蒂卡波湖旁的私房隱密湖泊。深邃寶藍色，嚴禁動力船進入。',{fullDesc:'距離蒂卡波湖僅約 15 分鐘車程的私房隱密湖泊。不同於蒂卡波湖的冰河懸浮土耳其藍，這座湖是純淨的地下泉水與雨水匯集，湖水呈深邃清透的寶藍色，嚴禁任何動力船隻進入，是尋求極致安寧的世外桃源。', img:'https://cdn.sanity.io/images/n1o990un/production/0bfb837ba10be9becbf00dda9b661028527416ac-1600x1200.jpg?auto=format&fit=max&w=3840'}), 
@@ -1409,9 +1415,10 @@ function getNaturalList(dayIdx, listType){
 }
 
 function hideCandidateSpot(key,name){
-  if(!confirm(`刪除候選景點「${name}」？\n照片與其他資料不會從儲存空間刪除，只是不再顯示這張卡片。`))return;
   const found=findFixedSpotByKey(key);
   if(!found)return alert('找不到這張候選景點卡，請重新整理後再試一次。');
+  const kind=found.spot?._candidate?'候選景點':'景點';
+  if(!confirm(`刪除${kind}「${name}」？\n照片與其他資料不會從儲存空間刪除，只是不再顯示這張卡片。`))return;
   const [removed]=days[found.dayIdx][found.listName].splice(found.index,1);
   spotDateStore[String(key)]='__hidden__';persistSpotDates();renderDayContent();updateSpotCount();
   offerUndo(`已隱藏「${name}」`,()=>{
@@ -1972,7 +1979,7 @@ function spotCardHTML(spot, key, isMainSpot, customMeta, orderInfo){
   const genLabel = spot.genSource === 'edited' ? '✏️ 簡介已由您編輯' : (spot.genSource === 'online' ? '🔍 簡介已透過網路搜尋生成' : (spot.genSource === 'offline' ? '📝 簡介為簡易生成（未連上網路）' : '🆕 自訂景點'));
   const orderBtns = orderInfo ? `<button class="structural-edit-control" onclick="event.stopPropagation(); moveSpot(${orderInfo.dayIdx}, '${orderInfo.listType}', '${idx}', -1)" style="background:#eef1e6; color:var(--ink-soft); border:none; padding:4px 9px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer;">⬆ 上移</button><button class="structural-edit-control" onclick="event.stopPropagation(); moveSpot(${orderInfo.dayIdx}, '${orderInfo.listType}', '${idx}', 1)" style="background:#eef1e6; color:var(--ink-soft); border:none; padding:4px 9px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer;">⬇ 下移</button>` : '';
   const moveDateSelect=orderInfo&&isMovableSpotKey(idx)?`<label class="structural-edit-control" style="display:inline-flex;align-items:center;gap:5px;background:#f4f0fa;color:#6a4b86;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:700;">📅 移動至<select aria-label="移動景點日期" onclick="event.stopPropagation()" onchange="event.stopPropagation();moveSpotToSelectedDate('${idx}',${orderInfo.dayIdx},this.value)" style="border:0;background:transparent;color:inherit;font:inherit;max-width:145px;">${spotMoveDateOptions(orderInfo.dayIdx)}</select></label>`:'';
-  const delBtn = customMeta ? `<button class="structural-edit-control" onclick="event.stopPropagation(); delCustomSpot(${customMeta.dayIdx}, ${customMeta.i})" style="background:#fff0ec; color:#c1502f; border:none; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap;">🗑️ 刪除此景點</button>` : (spot._candidate?`<button class="structural-edit-control" onclick="event.stopPropagation(); hideCandidateSpot('${idx}','${jsQuote(spot.name)}')" style="background:#fff0ec; color:#c1502f; border:none; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap;">🗑️ 刪除此候選</button>`:'');
+  const delBtn = customMeta ? `<button class="structural-edit-control" onclick="event.stopPropagation(); delCustomSpot(${customMeta.dayIdx}, ${customMeta.i})" style="background:#fff0ec; color:#c1502f; border:none; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap;">🗑️ 刪除此景點</button>` : ((spot._candidate||spot.deletable)?`<button class="structural-edit-control" onclick="event.stopPropagation(); hideCandidateSpot('${idx}','${jsQuote(spot.name)}')" style="background:#fff0ec; color:#c1502f; border:none; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap;">🗑️ 刪除此${spot._candidate?'候選':'景點'}</button>`:'');
   const editBtn = customMeta ? `<button class="structural-edit-control" onclick="event.stopPropagation(); toggleEditSpot('${idx}')" style="background:#eef3fb; color:var(--blue); border:none; padding:4px 10px; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap;">✏️ 編輯簡介</button>` : '';
   const customBar = (customMeta || orderInfo) ? `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px; flex-wrap:wrap;"><span style="display:flex; gap:6px; flex-wrap:wrap;">${customMeta ? `<span class="badge" style="background:#eef3fb; color:var(--blue);">${genLabel}</span>` : ''}</span><span style="display:flex; gap:6px; flex-wrap:wrap;">${orderBtns}${moveDateSelect}${editBtn}${delBtn}</span></div>` : '';
   const editSpotAreaHTML = customMeta ? `<div id="spot-edit-${idx}" style="display:none; margin-bottom:10px; background:#f7f9fc; border:1px dashed #c7d6ea; border-radius:8px; padding:10px;" onclick="event.stopPropagation()">
@@ -2812,15 +2819,11 @@ async function migrateLegacyMediaToCloud(){
 }
 
 async function startFamilyCloud(){
-  try{
-    const maySync=await waitForUpdateSafetyDecision();
-    if(!maySync)return;
-    updateSyncStatus(null,'connecting');
-    await migrateLegacyMediaToCloud();
-    await initCloudSync();
-    await flushMediaUploadQueue();
-    warmEssentialOfflineMedia();
-  }catch(err){console.error('圖片搬移／同步啟動失敗',err);updateSyncStatus(err);}
+  /* v81 緊急資料保護：停止所有雲端讀取、寫入、媒體搬移與輪詢。 */
+  cloudSync.enabled=false;
+  cloudSync.ready=false;
+  clearInterval(cloudSync.pollTimer);
+  updateSyncStatus(null,'disabled');
 }
 
 /* 將使用者上傳的憑證、路線圖、清單附圖與景點照片預先放進瀏覽器快取。
@@ -2863,6 +2866,27 @@ function createLocalSnapshot(reason='auto'){
     const signature=JSON.stringify(snapshot.data),unique=list.filter(s=>JSON.stringify(s?.data)!==signature);
     unique.unshift(snapshot);localStorage.setItem('nz_local_snapshots',JSON.stringify(unique.slice(0,10)));localStorage.setItem('nz_last_snapshot_day',new Date().toISOString().slice(0,10));return true;
   }catch(e){console.warn('本機快照建立失敗',e);return false;}
+}
+function snapshotDataCount(snapshot,key){
+  try{const value=JSON.parse(snapshot?.data?.[key]||'null');if(Array.isArray(value))return value.length;if(value&&typeof value==='object')return Object.values(value).reduce((n,v)=>n+(Array.isArray(v)?v.length:1),0);}catch(e){}return 0;
+}
+function snapshotSummary(snapshot){return `自訂景點 ${snapshotDataCount(snapshot,'nz_custom_spots')}・簡介／評論 ${snapshotDataCount(snapshot,'nz_notes')}・照片 ${snapshotDataCount(snapshot,'nz_photos')}・購物 ${snapshotDataCount(snapshot,'nz_shop')}・打包 ${snapshotDataCount(snapshot,'nz_pack')}`;}
+function openLocalSnapshotManager(){
+  const modal=document.getElementById('snapshotManager'),list=document.getElementById('snapshotManagerList');if(!modal||!list)return;
+  const snapshots=safeLocalJSON('nz_local_snapshots',[])||[];
+  list.innerHTML=snapshots.length?snapshots.map((s,i)=>`<article class="snapshot-item"><div><b>${new Date(s.createdAt||0).toLocaleString()}</b><small>${escapeHtml(s.reason||'自動保存')}</small><p>${escapeHtml(snapshotSummary(s))}</p></div><div><button type="button" onclick="downloadLocalSnapshot(${i})">下載這份</button><button class="restore" type="button" onclick="restoreLocalSnapshot(${i})">完整還原</button></div></article>`).join(''):'<div class="snapshot-empty">這支裝置目前找不到本機快照。請改用先前下載的 JSON 備份檔。</div>';
+  modal.hidden=false;
+}
+function closeLocalSnapshotManager(){const modal=document.getElementById('snapshotManager');if(modal)modal.hidden=true;}
+function downloadJsonFile(value,name){const blob=new Blob([JSON.stringify(value,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+function downloadLocalSnapshot(index){const snapshots=safeLocalJSON('nz_local_snapshots',[])||[],snapshot=snapshots[index];if(!snapshot)return;downloadJsonFile(snapshot,`NZ-Trip-snapshot-${String(index+1).padStart(2,'0')}-${new Date(snapshot.createdAt||Date.now()).toISOString().slice(0,10)}.json`);}
+function restoreLocalSnapshot(index){
+  const snapshots=safeLocalJSON('nz_local_snapshots',[])||[],snapshot=snapshots[index];if(!snapshot?.data)return;
+  const when=new Date(snapshot.createdAt||0).toLocaleString();
+  if(!confirm(`要完整還原 ${when} 的本機快照嗎？\n${snapshotSummary(snapshot)}\n\n目前畫面會先另存一份快照；家人同步仍保持停用。`))return;
+  createLocalSnapshot('before-snapshot-restore');
+  BACKUP_KEYS.forEach(key=>{const value=snapshot.data[key];if(typeof value==='string')localStorage.setItem(key,value);else localStorage.removeItem(key);});
+  localStorage.setItem(SYNC_OUTBOX_KEY,'{}');location.reload();
 }
 async function manualSaveNow(button){
   const btn=button||document.getElementById('manualSaveBtn'),time=new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',hour12:false});

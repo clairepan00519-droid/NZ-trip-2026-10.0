@@ -258,7 +258,7 @@
     <div class="section-card backup-card structural-edit-control">
       <h3>🛟 資料備份與還原</h3>
       <div class="sub">建議出發前下載一次完整備份；網站每天首次開啟也會自動保留最近 3 份本機快照。</div>
-      <div class="backup-actions"><button type="button" onclick="exportTripBackup()">⬇️ 下載完整備份</button><button type="button" onclick="document.getElementById('backupImportFile').click()">⬆️ 從備份還原</button><button type="button" onclick="recoverMissingSpotDataFromSnapshots()">🛟 找回遺失景點資料</button><button type="button" onclick="recoverOrphanSpotPhotosFromCloud()">☁️ 掃描雲端照片原檔</button></div>
+      <div class="backup-actions"><button type="button" onclick="exportTripBackup()">⬇️ 下載完整備份</button><button type="button" onclick="document.getElementById('backupImportFile').click()">⬆️ 從備份還原</button><button type="button" onclick="openLocalSnapshotManager()">🕘 查看本機快照</button><button type="button" onclick="recoverMissingSpotDataFromSnapshots()">🛟 合併遺失景點</button></div>
     </div>
 
   </div>
@@ -313,6 +313,14 @@
   <img id="attachModalImg" alt="放大的旅程圖片" onclick="event.stopPropagation()">
   <button class="attach-modal-nav attach-modal-next" id="attachModalNext" aria-label="下一張圖片" onclick="event.stopPropagation(); changeAttachPhoto(1)">›</button>
   <div class="attach-modal-count" id="attachModalCount" aria-live="polite"></div>
+</div>
+
+<div id="snapshotManager" class="snapshot-manager" hidden onclick="if(event.target===this)closeLocalSnapshotManager()">
+  <section class="snapshot-manager-card" role="dialog" aria-modal="true" aria-labelledby="snapshotManagerTitle">
+    <div class="snapshot-manager-head"><div><small>僅讀取這支裝置</small><h2 id="snapshotManagerTitle">🕘 本機快照</h2></div><button type="button" onclick="closeLocalSnapshotManager()" aria-label="關閉">✕</button></div>
+    <p>家人同步目前完全停用。請比較時間與資料數量，再選擇下載或完整還原；網站不會自動替你選。</p>
+    <div id="snapshotManagerList" class="snapshot-manager-list"></div>
+  </section>
 </div>
 
 <script src="app.js"></script>
